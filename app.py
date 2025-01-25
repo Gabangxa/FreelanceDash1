@@ -35,10 +35,12 @@ login_manager.login_view = 'auth.login'
 from auth.routes import auth_bp
 from projects.routes import projects_bp
 from invoices.routes import invoices_bp
+from clients.routes import clients_bp
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(invoices_bp)
+app.register_blueprint(clients_bp)
 
 # Create database tables
 with app.app_context():
