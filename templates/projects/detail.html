@@ -28,10 +28,10 @@
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Client</dt>
                     <dd class="col-sm-8">{{ project.client.name }}</dd>
-                    
+
                     <dt class="col-sm-4">Start Date</dt>
                     <dd class="col-sm-8">{{ project.start_date.strftime('%Y-%m-%d') }}</dd>
-                    
+
                     <dt class="col-sm-4">End Date</dt>
                     <dd class="col-sm-8">
                         {% if project.end_date %}
@@ -40,7 +40,7 @@
                             Ongoing
                         {% endif %}
                     </dd>
-                    
+
                     <dt class="col-sm-4">Status</dt>
                     <dd class="col-sm-8">
                         <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }}">
@@ -90,9 +90,10 @@
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <button class="btn btn-sm btn-outline-primary">
+                                        <a href="{{ url_for('projects.edit_task', id=task.id) }}" 
+                                           class="btn btn-sm btn-outline-primary">
                                             <i class="fas fa-edit"></i>
-                                        </button>
+                                        </a>
                                         <button class="btn btn-sm btn-outline-danger">
                                             <i class="fas fa-trash"></i>
                                         </button>

@@ -25,7 +25,7 @@ def list_projects():
 def create_project():
     form = ProjectForm()
     form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
-    
+
     if form.validate_on_submit():
         project = Project(
             name=form.name.data,
@@ -39,7 +39,7 @@ def create_project():
         db.session.commit()
         flash('Project created successfully')
         return redirect(url_for('projects.list_projects'))
-    
+
     return render_template('projects/detail.html', form=form, title='New Project')
 
 @projects_bp.route('/projects/<int:id>')
@@ -56,27 +56,51 @@ def view_project(id):
 def create_task():
     form = TaskForm()
     form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(user_id=current_user.id)]
-    
+
     if form.validate_on_submit():
         task = Task(
             title=form.title.data,
             description=form.description.data,
             due_date=form.due_date.data,
+            status=form.status.data,
             project_id=form.project_id.data
         )
         db.session.add(task)
         db.session.commit()
         flash('Task created successfully')
         return redirect(url_for('projects.view_project', id=form.project_id.data))
-    
-    return render_template('projects/task_form.html', form=form)
+
+    return render_template('projects/task_form.html', form=form, title='New Task')
+
+@projects_bp.route('/tasks/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_task(id):
+    task = Task.query.join(Project).filter(
+        Task.id == id,
+        Project.user_id == current_user.id
+    ).first_or_404()
+
+    form = TaskForm(obj=task)
+    form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(user_id=current_user.id)]
+
+    if form.validate_on_submit():
+        task.title = form.title.data
+        task.description = form.description.data
+        task.due_date = form.due_date.data
+        task.status = form.status.data
+        task.project_id = form.project_id.data
+        db.session.commit()
+        flash('Task updated successfully')
+        return redirect(url_for('projects.view_project', id=task.project_id))
+
+    return render_template('projects/task_form.html', form=form, task=task, title='Edit Task')
 
 @projects_bp.route('/time-entries/new', methods=['GET', 'POST'])
 @login_required
 def create_time_entry():
     form = TimeEntryForm()
     form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(user_id=current_user.id)]
-    
+
     if form.validate_on_submit():
         entry = TimeEntry(
             start_time=form.start_time.data,
@@ -89,5 +113,5 @@ def create_time_entry():
         db.session.commit()
         flash('Time entry recorded successfully')
         return redirect(url_for('projects.dashboard'))
-    
+
     return render_template('projects/time_entry_form.html', form=form)

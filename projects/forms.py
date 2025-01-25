@@ -15,7 +15,13 @@ class TaskForm(FlaskForm):
     description = TextAreaField('Description')
     due_date = DateTimeField('Due Date', format='%Y-%m-%d')
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
-    submit = SubmitField('Create Task')
+    status = SelectField('Status', choices=[
+        ('pending', 'Pending'),
+        ('in_progress', 'In Progress'),
+        ('completed', 'Completed'),
+        ('on_hold', 'On Hold')
+    ])
+    submit = SubmitField('Save Task')
 
 class TimeEntryForm(FlaskForm):
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])

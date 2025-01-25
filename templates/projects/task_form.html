@@ -1,13 +1,13 @@
 {% extends "base.html" %}
 
-{% block title %}New Task - Freelancer Suite{% endblock %}
+{% block title %}{{ title }} - Freelancer Suite{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0">New Task</h4>
+                <h4 class="mb-0">{{ title }}</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
@@ -27,6 +27,13 @@
                         {{ form.project_id.label(class="form-label") }}
                         {{ form.project_id(class="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
                         {% for error in form.project_id.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+                    <div class="mb-3">
+                        {{ form.status.label(class="form-label") }}
+                        {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else "")) }}
+                        {% for error in form.status.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
                     </div>
