@@ -110,8 +110,16 @@
                         <tbody>
                             {% for task in tasks[:5] %}
                             <tr>
-                                <td>{{ task.title }}</td>
-                                <td>{{ task.project.name }}</td>
+                                <td>
+                                    <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="text-decoration-none">
+                                        {{ task.title }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('projects.view_project', id=task.project.id) }}" class="text-decoration-none">
+                                        {{ task.project.name }}
+                                    </a>
+                                </td>
                                 <td>
                                     {% if task.due_date %}
                                         {{ task.due_date.strftime('%Y-%m-%d') }}
