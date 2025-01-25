@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
+from datetime import datetime
 from app import db
 from models import Project, Task, TimeEntry, Client
 from projects.forms import ProjectForm, TaskForm, TimeEntryForm
@@ -95,23 +96,24 @@ def edit_task(id):
 
     return render_template('projects/task_form.html', form=form, task=task, title='Edit Task')
 
-@projects_bp.route('/time-entries/new', methods=['GET', 'POST'])
+@projects_bp.route('/time-entries/new', methods=['POST'])
 @login_required
 def create_time_entry():
-    form = TimeEntryForm()
-    form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(user_id=current_user.id)]
+    project = Project.query.filter_by(
+        id=request.form.get('project_id', type=int),
+        user_id=current_user.id
+    ).first_or_404()
 
-    if form.validate_on_submit():
-        entry = TimeEntry(
-            start_time=form.start_time.data,
-            end_time=form.end_time.data,
-            description=form.description.data,
-            project_id=form.project_id.data,
-            task_id=form.task_id.data if form.task_id.data else None
-        )
-        db.session.add(entry)
-        db.session.commit()
-        flash('Time entry recorded successfully')
-        return redirect(url_for('projects.dashboard'))
+    entry = TimeEntry(
+        project_id=project.id,
+        task_id=request.form.get('task_id', type=int),
+        start_time=datetime.utcnow(),
+        duration=request.form.get('duration', type=int),
+        description=request.form.get('description')
+    )
 
-    return render_template('projects/time_entry_form.html', form=form)
+    db.session.add(entry)
+    db.session.commit()
+    flash('Time entry recorded successfully')
+
+    return redirect(url_for('projects.view_project', id=project.id))

@@ -50,6 +50,44 @@
                 </dl>
             </div>
         </div>
+
+        <!-- Time Tracking -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Time Tracking</h5>
+            </div>
+            <div class="card-body">
+                <div class="text-center mb-4">
+                    <h3 id="timer-display" class="display-4 mb-3">00:00:00</h3>
+                    <button id="start-timer" class="btn btn-success me-2" onclick="startTimer()">
+                        <i class="fas fa-play me-2"></i>Start Timer
+                    </button>
+                    <button id="stop-timer" class="btn btn-danger" onclick="stopTimer()" style="display: none;">
+                        <i class="fas fa-stop me-2"></i>Stop Timer
+                    </button>
+                </div>
+                <form method="POST" action="{{ url_for('projects.create_time_entry') }}" class="mt-3">
+                    <input type="hidden" name="project_id" value="{{ project.id }}">
+                    <input type="hidden" name="duration" value="0">
+                    <div class="mb-3">
+                        <label class="form-label">Task (Optional)</label>
+                        <select name="task_id" class="form-select">
+                            <option value="">Select Task</option>
+                            {% for task in project.tasks %}
+                            <option value="{{ task.id }}">{{ task.title }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="2"></textarea>
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Save Time Entry</button>
+                    </div>
+                </form>
+            </div>
+        </div>
     </div>
 
     <!-- Tasks -->
@@ -110,6 +148,43 @@
                 </div>
             </div>
         </div>
+
+        <!-- Time Entries -->
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5 class="mb-0">Time Entries</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Task</th>
+                                <th>Duration</th>
+                                <th>Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in project.time_entries %}
+                            <tr>
+                                <td>{{ entry.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
+                                <td>
+                                    {% if entry.task %}
+                                        {{ entry.task.title }}
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>{{ entry.duration }} mins</td>
+                                <td>{{ entry.description or '-' }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -159,4 +234,37 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    let timerInterval;
+    let startTime;
+
+    function startTimer() {
+        startTime = Date.now();
+        timerInterval = setInterval(() => {
+            const elapsedTime = Math.floor((Date.now() - startTime) / 1000);
+            const hours = Math.floor(elapsedTime / 3600);
+            const minutes = Math.floor((elapsedTime % 3600) / 60);
+            const seconds = elapsedTime % 60;
+            document.getElementById('timer-display').textContent = 
+                `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+        }, 1000);
+
+        document.getElementById('start-timer').style.display = 'none';
+        document.getElementById('stop-timer').style.display = 'inline-block';
+    }
+
+    function stopTimer() {
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            const duration = Math.floor((Date.now() - startTime) / 60000); // Duration in minutes
+
+            document.querySelector('input[name="duration"]').value = duration;
+            document.getElementById('start-timer').style.display = 'inline-block';
+            document.getElementById('stop-timer').style.display = 'none';
+        }
+    }
+</script>
 {% endblock %}
