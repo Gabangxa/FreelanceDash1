@@ -155,14 +155,15 @@
 {% block scripts %}
 <script>
     // Time tracking chart
+    const timeData = {{ time_tracking_data|tojson }};
     const ctx = document.getElementById('timeTrackingChart').getContext('2d');
     new Chart(ctx, {
         type: 'bar',
         data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+            labels: timeData.labels,
             datasets: [{
                 label: 'Hours Worked',
-                data: [5, 7, 6, 8, 4, 2, 0],
+                data: timeData.hours,
                 backgroundColor: 'rgba(13, 110, 253, 0.5)',
                 borderColor: 'rgb(13, 110, 253)',
                 borderWidth: 1
@@ -172,7 +173,11 @@
             responsive: true,
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Hours'
+                    }
                 }
             }
         }
