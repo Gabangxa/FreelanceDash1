@@ -50,7 +50,7 @@ def view_project(id):
     if project.user_id != current_user.id:
         flash('Access denied')
         return redirect(url_for('projects.list_projects'))
-    return render_template('projects/detail.html', project=project)
+    return render_template('projects/detail.html', project=project, today=datetime.utcnow().strftime('%Y-%m-%d'))
 
 @projects_bp.route('/tasks/new', methods=['GET', 'POST'])
 @login_required
@@ -104,10 +104,16 @@ def create_time_entry():
         user_id=current_user.id
     ).first_or_404()
 
+    start_time = request.form.get('start_time')
+    if start_time:
+        start_time = datetime.strptime(start_time, '%Y-%m-%d')
+    else:
+        start_time = datetime.utcnow()
+
     entry = TimeEntry(
         project_id=project.id,
         task_id=request.form.get('task_id', type=int),
-        start_time=datetime.utcnow(),
+        start_time=start_time,
         duration=request.form.get('duration', type=int),
         description=request.form.get('description')
     )
