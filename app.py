@@ -45,4 +45,5 @@ app.register_blueprint(clients_bp)
 # Create database tables
 with app.app_context():
     import models
+    db.drop_all()  # Only during development to recreate tables
     db.create_all()
