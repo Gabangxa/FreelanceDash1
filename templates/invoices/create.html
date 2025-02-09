@@ -58,20 +58,20 @@
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-12 mb-3">
-                                        {{ item_form.description.label(class="form-label") }}
-                                        {{ item_form.description(class="form-control") }}
+                                        <label class="form-label">Description</label>
+                                        {{ item_form.form.description(class="form-control") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        {{ item_form.quantity.label(class="form-label") }}
-                                        {{ item_form.quantity(class="form-control quantity") }}
+                                        <label class="form-label">Quantity</label>
+                                        {{ item_form.form.quantity(class="form-control quantity") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        {{ item_form.rate.label(class="form-label") }}
-                                        {{ item_form.rate(class="form-control rate") }}
+                                        <label class="form-label">Rate</label>
+                                        {{ item_form.form.rate(class="form-control rate") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        {{ item_form.amount.label(class="form-label") }}
-                                        {{ item_form.amount(class="form-control amount", readonly=true) }}
+                                        <label class="form-label">Amount</label>
+                                        {{ item_form.form.amount(class="form-control amount", readonly=true) }}
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-danger remove-item">Remove Item</button>

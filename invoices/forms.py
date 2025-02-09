@@ -8,6 +8,9 @@ class InvoiceItemForm(FlaskForm):
     rate = FloatField('Rate', validators=[DataRequired()])
     amount = FloatField('Amount')
 
+    class Meta:
+        csrf = False  # Disable CSRF for nested form
+
 class InvoiceForm(FlaskForm):
     client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
