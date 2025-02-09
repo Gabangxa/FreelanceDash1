@@ -1,8 +1,8 @@
 import os
 import logging
-from flask import Flask
+from flask import Flask, render_template
 from flask_sqlalchemy import SQLAlchemy
-from flask_login import LoginManager
+from flask_login import LoginManager, current_user
 from sqlalchemy.orm import DeclarativeBase
 
 # Configure logging
@@ -31,6 +31,11 @@ db.init_app(app)
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 
+# Add root route for landing page
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 # Register blueprints
 from auth.routes import auth_bp
 from projects.routes import projects_bp
@@ -45,5 +50,4 @@ app.register_blueprint(clients_bp)
 # Create database tables
 with app.app_context():
     import models
-    db.drop_all()  # Only during development to recreate tables
     db.create_all()
