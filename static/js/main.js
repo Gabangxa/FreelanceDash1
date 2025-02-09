@@ -24,14 +24,21 @@ function initInvoiceItems() {
             const items = invoiceItems.querySelectorAll('.invoice-item');
             const newIndex = items.length;
 
+            if (items.length === 0) {
+                console.error('No template item found');
+                return;
+            }
+
             const newItem = items[0].cloneNode(true);
             clearInputs(newItem);
 
             // Update input names for the new index
             newItem.querySelectorAll('input').forEach(input => {
                 const nameParts = input.name.split('-');
-                input.name = `items-${newIndex}-${nameParts[2]}`;
-                input.id = `items-${newIndex}-${nameParts[2]}`;
+                if (nameParts.length >= 3) {
+                    input.name = `items-${newIndex}-${nameParts[2]}`;
+                    input.id = `items-${newIndex}-${nameParts[2]}`;
+                }
             });
 
             attachItemListeners(newItem);
@@ -47,11 +54,14 @@ function initInvoiceItems() {
 }
 
 function attachItemListeners(item) {
+    if (!item) return;
+
     // Remove item
     const removeBtn = item.querySelector('.remove-item');
     if (removeBtn) {
         removeBtn.addEventListener('click', function() {
-            if (document.querySelectorAll('.invoice-item').length > 1) {
+            const items = document.querySelectorAll('.invoice-item');
+            if (items.length > 1) {
                 item.remove();
                 updateTotalAmount();
             }
@@ -77,20 +87,27 @@ function attachItemListeners(item) {
 }
 
 function clearInputs(item) {
+    if (!item) return;
     item.querySelectorAll('input').forEach(input => {
         input.value = '';
     });
 }
 
 function updateTotalAmount() {
-    const amounts = document.querySelectorAll('.amount');
-    const total = Array.from(amounts)
-        .map(input => parseFloat(input.value) || 0)
-        .reduce((sum, current) => sum + current, 0);
+    try {
+        const amounts = document.querySelectorAll('.amount');
+        if (!amounts.length) return;
 
-    const totalElement = document.getElementById('preview-total');
-    if (totalElement) {
-        totalElement.textContent = `$${total.toFixed(2)}`;
+        const total = Array.from(amounts)
+            .map(input => parseFloat(input.value) || 0)
+            .reduce((sum, current) => sum + current, 0);
+
+        const totalElement = document.getElementById('preview-total');
+        if (totalElement) {
+            totalElement.textContent = `$${total.toFixed(2)}`;
+        }
+    } catch (error) {
+        console.error('Error updating total amount:', error);
     }
 }
 

@@ -59,19 +59,19 @@
                                 <div class="row">
                                     <div class="col-md-12 mb-3">
                                         <label class="form-label">Description</label>
-                                        {{ item_form.form.description(class="form-control") }}
+                                        {{ item_form.form.description(class="form-control", name="items-" ~ loop.index0 ~ "-description") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Quantity</label>
-                                        {{ item_form.form.quantity(class="form-control quantity") }}
+                                        {{ item_form.form.quantity(class="form-control quantity", name="items-" ~ loop.index0 ~ "-quantity") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Rate</label>
-                                        {{ item_form.form.rate(class="form-control rate") }}
+                                        {{ item_form.form.rate(class="form-control rate", name="items-" ~ loop.index0 ~ "-rate") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Amount</label>
-                                        {{ item_form.form.amount(class="form-control amount", readonly=true) }}
+                                        {{ item_form.form.amount(class="form-control amount", readonly=true, name="items-" ~ loop.index0 ~ "-amount") }}
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-danger remove-item">Remove Item</button>
@@ -158,7 +158,14 @@ document.addEventListener('DOMContentLoaded', function() {
     const clientSelect = document.getElementById('client_id');
     const projectSelect = document.getElementById('project_id');
     const previewBtn = document.getElementById('preview-invoice');
-    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
+    const previewModal = document.getElementById('previewModal');
+
+    if (!clientSelect || !projectSelect || !previewBtn || !previewModal) {
+        console.error('Required elements not found');
+        return;
+    }
+
+    const modal = new bootstrap.Modal(previewModal);
 
     // Function to update projects dropdown
     function updateProjects(clientId) {
@@ -199,43 +206,68 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Preview functionality
     previewBtn.addEventListener('click', function() {
-        const form = document.getElementById('invoice-form');
-        const formData = new FormData(form);
+        try {
+            const form = document.getElementById('invoice-form');
+            if (!form) return;
 
-        // Update preview modal content
-        document.getElementById('preview-invoice-number').textContent = 'New Invoice';
-        document.getElementById('preview-status').textContent = formData.get('status');
-        document.getElementById('preview-due-date').textContent = formData.get('due_date');
-        document.getElementById('preview-client').textContent = clientSelect.options[clientSelect.selectedIndex].text;
-        document.getElementById('preview-project').textContent = projectSelect.options[projectSelect.selectedIndex].text;
-        document.getElementById('preview-notes').textContent = formData.get('notes') || 'No notes';
+            const formData = new FormData(form);
 
-        // Clear and populate items
-        const itemsContainer = document.getElementById('preview-items');
-        itemsContainer.innerHTML = '';
-        let total = 0;
+            // Update preview modal content
+            document.getElementById('preview-invoice-number').textContent = 'New Invoice';
+            document.getElementById('preview-status').textContent = formData.get('status') || 'Draft';
+            document.getElementById('preview-due-date').textContent = formData.get('due_date') || '';
 
-        document.querySelectorAll('.invoice-item').forEach((item, index) => {
-            const description = item.querySelector('[name="items-' + index + '-description"]').value;
-            const quantity = parseFloat(item.querySelector('[name="items-' + index + '-quantity"]').value) || 0;
-            const rate = parseFloat(item.querySelector('[name="items-' + index + '-rate"]').value) || 0;
-            const amount = quantity * rate;
-            total += amount;
+            const selectedClient = clientSelect.options[clientSelect.selectedIndex];
+            const selectedProject = projectSelect.options[projectSelect.selectedIndex];
 
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${description}</td>
-                <td class="text-end">${quantity}</td>
-                <td class="text-end">$${rate.toFixed(2)}</td>
-                <td class="text-end">$${amount.toFixed(2)}</td>
-            `;
-            itemsContainer.appendChild(row);
-        });
+            document.getElementById('preview-client').textContent = selectedClient ? selectedClient.text : '';
+            document.getElementById('preview-project').textContent = selectedProject ? selectedProject.text : '';
+            document.getElementById('preview-notes').textContent = formData.get('notes') || 'No notes';
 
-        document.getElementById('preview-total').textContent = `$${total.toFixed(2)}`;
+            // Clear and populate items
+            const itemsContainer = document.getElementById('preview-items');
+            if (!itemsContainer) return;
 
-        // Show modal
-        previewModal.show();
+            itemsContainer.innerHTML = '';
+            let total = 0;
+
+            document.querySelectorAll('.invoice-item').forEach((item, index) => {
+                try {
+                    const descInput = item.querySelector(`[name="items-${index}-description"]`);
+                    const qtyInput = item.querySelector(`[name="items-${index}-quantity"]`);
+                    const rateInput = item.querySelector(`[name="items-${index}-rate"]`);
+
+                    if (!descInput || !qtyInput || !rateInput) return;
+
+                    const description = descInput.value || '';
+                    const quantity = parseFloat(qtyInput.value) || 0;
+                    const rate = parseFloat(rateInput.value) || 0;
+                    const amount = quantity * rate;
+                    total += amount;
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${description}</td>
+                        <td class="text-end">${quantity}</td>
+                        <td class="text-end">$${rate.toFixed(2)}</td>
+                        <td class="text-end">$${amount.toFixed(2)}</td>
+                    `;
+                    itemsContainer.appendChild(row);
+                } catch (itemError) {
+                    console.error('Error processing item:', itemError);
+                }
+            });
+
+            const totalElement = document.getElementById('preview-total');
+            if (totalElement) {
+                totalElement.textContent = `$${total.toFixed(2)}`;
+            }
+
+            // Show modal
+            modal.show();
+        } catch (error) {
+            console.error('Error in preview generation:', error);
+        }
     });
 });
 </script>
