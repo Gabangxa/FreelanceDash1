@@ -14,16 +14,16 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
-                        {{ form.client_id.label(class="form-label") }}
-                        {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
+                        {{ form.client_id.label(class_="form-label") }}
+                        {{ form.client_id(class_="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
                         {% for error in form.client_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
                     </div>
 
                     <div class="mb-3">
-                        {{ form.project_id.label(class="form-label") }}
-                        {{ form.project_id(class="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
+                        {{ form.project_id.label(class_="form-label") }}
+                        {{ form.project_id(class_="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
                         {% for error in form.project_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
@@ -31,22 +31,22 @@
 
                     <div class="row">
                         <div class="col-md-4 mb-3">
-                            {{ form.currency.label(class="form-label") }}
-                            {{ form.currency(class="form-select" + (" is-invalid" if form.currency.errors else "")) }}
+                            {{ form.currency.label(class_="form-label") }}
+                            {{ form.currency(class_="form-select" + (" is-invalid" if form.currency.errors else "")) }}
                             {% for error in form.currency.errors %}
                                 <div class="invalid-feedback">{{ error }}</div>
                             {% endfor %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            {{ form.status.label(class="form-label") }}
-                            {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else "")) }}
+                            {{ form.status.label(class_="form-label") }}
+                            {{ form.status(class_="form-select" + (" is-invalid" if form.status.errors else "")) }}
                             {% for error in form.status.errors %}
                                 <div class="invalid-feedback">{{ error }}</div>
                             {% endfor %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            {{ form.due_date.label(class="form-label") }}
-                            {{ form.due_date(class="form-control", type="date") }}
+                            {{ form.due_date.label(class_="form-label") }}
+                            {{ form.due_date(class_="form-control", type="date") }}
                             {% for error in form.due_date.errors %}
                                 <div class="invalid-feedback">{{ error }}</div>
                             {% endfor %}
@@ -54,8 +54,8 @@
                     </div>
 
                     <div class="mb-3">
-                        {{ form.notes.label(class="form-label") }}
-                        {{ form.notes(class="form-control", rows="3") }}
+                        {{ form.notes.label(class_="form-label") }}
+                        {{ form.notes(class_="form-control", rows="3") }}
                     </div>
 
                     <h5 class="mt-4">Invoice Items</h5>
@@ -66,19 +66,19 @@
                                 <div class="row">
                                     <div class="col-md-12 mb-3">
                                         <label class="form-label">Description</label>
-                                        {{ item_form.description(class="form-control description") }}
+                                        {{ item_form.description(class_="form-control description") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Quantity</label>
-                                        {{ item_form.quantity(class="form-control quantity") }}
+                                        {{ item_form.quantity(class_="form-control quantity") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Rate</label>
-                                        {{ item_form.rate(class="form-control rate") }}
+                                        {{ item_form.rate(class_="form-control rate") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Amount</label>
-                                        {{ item_form.amount(class="form-control amount", readonly=true) }}
+                                        {{ item_form.amount(class_="form-control amount", readonly=true) }}
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-danger remove-item">Remove Item</button>
@@ -92,7 +92,7 @@
                     <div class="text-end mt-4">
                         <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-secondary me-2">Cancel</a>
                         <button type="button" class="btn btn-info me-2" id="preview-invoice">Preview Invoice</button>
-                        {{ form.submit(class="btn btn-primary") }}
+                        {{ form.submit(class_="btn btn-primary") }}
                     </div>
                 </form>
             </div>
@@ -158,10 +158,10 @@
         </div>
     </div>
 </div>
-
 {% endblock %}
 
 {% block scripts %}
+{{ super() }}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const clientSelect = document.getElementById('client_id');
@@ -177,6 +177,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     const modal = new bootstrap.Modal(previewModal);
+
+    // Initialize invoice items management
+    initInvoiceItems();
 
     // Function to update projects dropdown
     function updateProjects(clientId) {
@@ -212,9 +215,6 @@ document.addEventListener('DOMContentLoaded', function() {
         updateProjects(clientSelect.value);
     }
 
-    // Initialize invoice items management
-    initInvoiceItems();
-
     function getCurrencySymbol(currencyCode) {
         const symbols = {
             'USD': '$',
@@ -230,15 +230,13 @@ document.addEventListener('DOMContentLoaded', function() {
     // Preview functionality
     previewBtn.addEventListener('click', function() {
         try {
-            if (!invoiceForm) return;
-
             const currencyCode = currencySelect.value;
             const currencySymbol = getCurrencySymbol(currencyCode);
 
             // Update preview modal content
             document.getElementById('preview-invoice-number').textContent = 'New Invoice';
-            document.getElementById('preview-status').textContent = invoiceForm.querySelector('#status').value || 'Draft';
-            document.getElementById('preview-due-date').textContent = invoiceForm.querySelector('#due_date').value || '';
+            document.getElementById('preview-status').textContent = document.getElementById('status').value || 'Draft';
+            document.getElementById('preview-due-date').textContent = document.getElementById('due_date').value || '';
             document.getElementById('preview-currency').textContent = currencySelect.options[currencySelect.selectedIndex].text;
 
             const selectedClient = clientSelect.options[clientSelect.selectedIndex];
@@ -246,7 +244,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             document.getElementById('preview-client').textContent = selectedClient ? selectedClient.text : '';
             document.getElementById('preview-project').textContent = selectedProject ? selectedProject.text : '';
-            document.getElementById('preview-notes').textContent = invoiceForm.querySelector('#notes').value || 'No notes';
+            document.getElementById('preview-notes').textContent = document.getElementById('notes').value || 'No notes';
 
             // Clear and populate items
             const itemsContainer = document.getElementById('preview-items');

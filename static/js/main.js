@@ -21,25 +21,29 @@ function initInvoiceItems() {
     if (invoiceItems && addItemBtn) {
         // Add new item
         addItemBtn.addEventListener('click', function() {
-            const items = invoiceItems.querySelectorAll('.invoice-item');
-            const newIndex = items.length;
-
+            const items = invoiceItems.getElementsByClassName('invoice-item');
             if (items.length === 0) {
                 console.error('No template item found');
                 return;
             }
 
             const newItem = items[0].cloneNode(true);
-            clearInputs(newItem);
+            const newIndex = items.length;
 
-            // Update WTForms field names for the new index
-            newItem.querySelectorAll('input').forEach(input => {
-                if (input.id) {
-                    const baseName = input.id.split('-')[0];
-                    input.id = `items-${newIndex}-${baseName}`;
+            // Update form field names for the new index
+            newItem.querySelectorAll('input, textarea').forEach(input => {
+                const oldName = input.getAttribute('name');
+                if (oldName) {
+                    // Extract the field name from the current format "items-0-fieldname"
+                    const fieldName = oldName.split('-')[2];
+                    // Create new name with updated index
+                    const newName = `items-${newIndex}-${fieldName}`;
+                    input.setAttribute('name', newName);
+                    input.setAttribute('id', newName);
                 }
             });
 
+            clearInputs(newItem);
             attachItemListeners(newItem);
             invoiceItems.appendChild(newItem);
             updateTotalAmount();
@@ -62,6 +66,8 @@ function attachItemListeners(item) {
             const items = document.querySelectorAll('.invoice-item');
             if (items.length > 1) {
                 item.remove();
+                // Reindex remaining items
+                reindexItems();
                 updateTotalAmount();
             }
         });
@@ -87,8 +93,25 @@ function attachItemListeners(item) {
 
 function clearInputs(item) {
     if (!item) return;
-    item.querySelectorAll('input').forEach(input => {
-        input.value = '';
+    item.querySelectorAll('input, textarea').forEach(input => {
+        if (input.type !== 'hidden') {
+            input.value = '';
+        }
+    });
+}
+
+function reindexItems() {
+    const items = document.querySelectorAll('.invoice-item');
+    items.forEach((item, index) => {
+        item.querySelectorAll('input, textarea').forEach(input => {
+            const oldName = input.getAttribute('name');
+            if (oldName) {
+                const fieldName = oldName.split('-')[2];
+                const newName = `items-${index}-${fieldName}`;
+                input.setAttribute('name', newName);
+                input.setAttribute('id', newName);
+            }
+        });
     });
 }
 
@@ -103,11 +126,25 @@ function updateTotalAmount() {
 
         const totalElement = document.getElementById('preview-total');
         if (totalElement) {
-            totalElement.textContent = `$${total.toFixed(2)}`;
+            const currencySelect = document.getElementById('currency');
+            const currencySymbol = getCurrencySymbol(currencySelect.value);
+            totalElement.textContent = `${currencySymbol}${total.toFixed(2)}`;
         }
     } catch (error) {
         console.error('Error updating total amount:', error);
     }
+}
+
+function getCurrencySymbol(currencyCode) {
+    const symbols = {
+        'USD': '$',
+        'EUR': '€',
+        'GBP': '£',
+        'JPY': '¥',
+        'CAD': 'CAD$',
+        'AUD': 'A$'
+    };
+    return symbols[currencyCode] || currencyCode;
 }
 
 // Time Tracking
@@ -126,7 +163,7 @@ function startTimer() {
             const hours = Math.floor(elapsedTime / 3600);
             const minutes = Math.floor((elapsedTime % 3600) / 60);
             const seconds = elapsedTime % 60;
-            timerDisplay.textContent = 
+            timerDisplay.textContent =
                 `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }, 1000);
 
