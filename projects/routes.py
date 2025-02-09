@@ -1,8 +1,8 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
-from datetime import datetime
+from datetime import datetime, timedelta
 from app import db
-from models import Project, Task, TimeEntry, Client
+from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
 from projects.forms import ProjectForm, TaskForm, TimeEntryForm
 
 projects_bp = Blueprint('projects', __name__)
@@ -11,9 +11,51 @@ projects_bp = Blueprint('projects', __name__)
 @projects_bp.route('/dashboard')
 @login_required
 def dashboard():
+    # Get start and end of current week
+    today = datetime.utcnow()
+    start_of_week = today - timedelta(days=today.weekday())
+    end_of_week = start_of_week + timedelta(days=6)
+
+    # Query all projects for current user
     projects = Project.query.filter_by(user_id=current_user.id).all()
-    tasks = Task.query.join(Project).filter(Project.user_id == current_user.id).all()
-    return render_template('dashboard.html', projects=projects, tasks=tasks)
+
+    # Get tasks with status information
+    tasks = Task.query.join(Project).filter(
+        Project.user_id == current_user.id,
+        Task.status != 'completed'
+    ).order_by(Task.due_date.asc()).all()
+
+    # Calculate weekly hours
+    weekly_time_entries = TimeEntry.query.join(Project).filter(
+        Project.user_id == current_user.id,
+        TimeEntry.start_time >= start_of_week,
+        TimeEntry.start_time <= end_of_week
+    ).all()
+
+    weekly_hours = sum(entry.duration for entry in weekly_time_entries) / 60.0
+
+    # Get daily hours for chart
+    daily_hours = [0] * 7
+    for entry in weekly_time_entries:
+        day_index = entry.start_time.weekday()
+        daily_hours[day_index] += entry.duration / 60.0
+
+    # Count pending invoices - modified to handle missing invoices relationship
+    pending_invoices = 0
+    for project in projects:
+        pending_project_invoices = Invoice.query.filter_by(
+            project_id=project.id,
+            status='draft'
+        ).count()
+        pending_invoices += pending_project_invoices
+
+    return render_template('dashboard.html',
+                         projects=projects,
+                         tasks=tasks,
+                         weekly_hours=weekly_hours,
+                         daily_hours=daily_hours,
+                         pending_invoices=pending_invoices,
+                         today=today.date())
 
 @projects_bp.route('/projects')
 @login_required

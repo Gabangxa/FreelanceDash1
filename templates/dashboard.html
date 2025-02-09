@@ -104,12 +104,13 @@
                             <tr>
                                 <th>Task</th>
                                 <th>Project</th>
+                                <th>Status</th>
                                 <th>Due Date</th>
                             </tr>
                         </thead>
                         <tbody>
                             {% for task in tasks[:5] %}
-                            <tr>
+                            <tr class="{{ 'table-warning' if task.status == 'pending' and task.due_date and task.due_date.date() <= today }}">
                                 <td>
                                     <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="text-decoration-none">
                                         {{ task.title }}
@@ -119,6 +120,11 @@
                                     <a href="{{ url_for('projects.view_project', id=task.project.id) }}" class="text-decoration-none">
                                         {{ task.project.name }}
                                     </a>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ {'pending': 'warning', 'in_progress': 'info', 'completed': 'success', 'on_hold': 'secondary'}[task.status] }}">
+                                        {{ task.status|replace('_', ' ')|title }}
+                                    </span>
                                 </td>
                                 <td>
                                     {% if task.due_date %}
@@ -162,7 +168,7 @@
             labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
             datasets: [{
                 label: 'Hours Worked',
-                data: [5, 7, 6, 8, 4, 2, 0],
+                data: {{ daily_hours|tojson }},
                 backgroundColor: 'rgba(13, 110, 253, 0.5)',
                 borderColor: 'rgb(13, 110, 253)',
                 borderWidth: 1
@@ -172,7 +178,20 @@
             responsive: true,
             scales: {
                 y: {
-                    beginAtZero: true
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Hours'
+                    }
+                }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `${context.parsed.y.toFixed(1)} hours`;
+                        }
+                    }
                 }
             }
         }

@@ -51,6 +51,7 @@ class Project(db.Model):
     # Relationships
     tasks = db.relationship('Task', backref='project', lazy=True)
     time_entries = db.relationship('TimeEntry', backref='project', lazy=True)
+    invoices = db.relationship('Invoice', backref='project', lazy=True)
 
 class Task(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -82,8 +83,9 @@ class Invoice(db.Model):
     due_date = db.Column(db.DateTime)
     notes = db.Column(db.Text)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False)
+    project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)  
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    
+
     # Relationships
     items = db.relationship('InvoiceItem', backref='invoice', lazy=True)
 
