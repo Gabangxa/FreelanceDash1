@@ -19,11 +19,17 @@ def list_invoices():
 @login_required
 def create_invoice():
     form = InvoiceForm()
+
     # Get all clients for the current user
-    form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
+    clients = Client.query.filter_by(user_id=current_user.id).all()
+    form.client_id.choices = [(c.id, c.name) for c in clients]
+
+    # If client_id is provided, populate projects
+    if request.method == 'POST' and form.client_id.data:
+        projects = Project.query.filter_by(client_id=form.client_id.data).all()
+        form.project_id.choices = [(p.id, p.name) for p in projects]
 
     if form.validate_on_submit():
-        # Ensure project_id is properly passed from the form
         project = Project.query.get(form.project_id.data)
         if not project or project.client_id != form.client_id.data:
             flash('Invalid project selection')

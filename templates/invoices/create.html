@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
     const projectSelect = document.getElementById('project_id');
 
     // Function to update projects dropdown
-    function updateProjects(clientId, selectedProjectId = null) {
+    function updateProjects(clientId) {
         if (!clientId) {
             projectSelect.innerHTML = '<option value="">Select Project</option>';
             return;
@@ -86,11 +86,12 @@ document.addEventListener('DOMContentLoaded', function() {
                     const option = document.createElement('option');
                     option.value = id;
                     option.textContent = name;
-                    if (selectedProjectId && id === selectedProjectId) {
-                        option.selected = true;
-                    }
                     projectSelect.appendChild(option);
                 });
+            })
+            .catch(error => {
+                console.error('Error fetching projects:', error);
+                projectSelect.innerHTML = '<option value="">Error loading projects</option>';
             });
     }
 
@@ -101,7 +102,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initial load of projects if client is selected
     if (clientSelect.value) {
-        updateProjects(clientSelect.value, projectSelect.value);
+        updateProjects(clientSelect.value);
     }
 });
 </script>

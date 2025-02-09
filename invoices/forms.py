@@ -10,6 +10,11 @@ class InvoiceForm(FlaskForm):
     notes = TextAreaField('Notes')
     submit = SubmitField('Create Invoice')
 
+    def __init__(self, *args, **kwargs):
+        super(InvoiceForm, self).__init__(*args, **kwargs)
+        # Initialize project_id choices with empty list to avoid None error
+        self.project_id.choices = []
+
 class InvoiceItemForm(FlaskForm):
     description = TextAreaField('Description', validators=[DataRequired()])
     quantity = FloatField('Quantity', validators=[DataRequired()])
