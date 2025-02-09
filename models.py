@@ -79,7 +79,7 @@ class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(20), unique=True, nullable=False)
     amount = db.Column(db.Float, nullable=False)
-    currency = db.Column(db.String(3), nullable=False, default='USD')  # Add currency field
+    currency = db.Column(db.String(3), nullable=False, default='USD')
     status = db.Column(db.String(20), default='draft')
     due_date = db.Column(db.DateTime)
     notes = db.Column(db.Text)
@@ -87,8 +87,8 @@ class Invoice(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False)  
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
-    # Relationships
-    items = db.relationship('InvoiceItem', backref='invoice', lazy=True)
+    # Updated relationship with cascade delete
+    items = db.relationship('InvoiceItem', backref='invoice', lazy=True, cascade='all, delete-orphan')
 
 class InvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
