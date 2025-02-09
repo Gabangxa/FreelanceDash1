@@ -19,10 +19,13 @@ def list_invoices():
 @login_required
 def create_invoice():
     form = InvoiceForm()
+    # Get all clients for the current user
     form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
 
-    # Set project choices based on selected client
-    client_id = request.form.get('client_id', type=int)
+    # Get client_id from either form data (POST) or query parameters (GET)
+    client_id = request.form.get('client_id', type=int) or request.args.get('client_id', type=int)
+
+    # If we have a client_id, populate the projects dropdown
     if client_id:
         projects = Project.query.filter_by(client_id=client_id).all()
         form.project_id.choices = [(p.id, p.name) for p in projects]
