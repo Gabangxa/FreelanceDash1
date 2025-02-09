@@ -7,13 +7,13 @@ from reportlab.pdfgen import canvas
 from io import BytesIO
 import uuid
 
-invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices')
+invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices', template_folder='../templates/invoices')
 
 @invoices_bp.route('/')
 @login_required
 def list_invoices():
     invoices = Invoice.query.join(Client).filter(Client.user_id == current_user.id).all()
-    return render_template('invoices/list.html', invoices=invoices)
+    return render_template('list.html', invoices=invoices)
 
 @invoices_bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -22,17 +22,13 @@ def create_invoice():
     # Get all clients for the current user
     form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
 
-    # Get client_id from either form data (POST) or query parameters (GET)
-    client_id = request.form.get('client_id', type=int) or request.args.get('client_id', type=int)
-
-    # If we have a client_id, populate the projects dropdown
-    if client_id:
-        projects = Project.query.filter_by(client_id=client_id).all()
-        form.project_id.choices = [(p.id, p.name) for p in projects]
-    else:
-        form.project_id.choices = []
-
     if form.validate_on_submit():
+        # Ensure project_id is properly passed from the form
+        project = Project.query.get(form.project_id.data)
+        if not project or project.client_id != form.client_id.data:
+            flash('Invalid project selection')
+            return redirect(url_for('invoices.create_invoice'))
+
         invoice = Invoice(
             invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
             amount=form.amount.data,
@@ -47,7 +43,7 @@ def create_invoice():
         flash('Invoice created successfully')
         return redirect(url_for('invoices.view_invoice', id=invoice.id))
 
-    return render_template('invoices/create.html', form=form)
+    return render_template('create.html', form=form)
 
 @invoices_bp.route('/get-projects/<int:client_id>')
 @login_required
@@ -62,7 +58,7 @@ def view_invoice(id):
         Invoice.id == id,
         Client.user_id == current_user.id
     ).first_or_404()
-    return render_template('invoices/detail.html', invoice=invoice)
+    return render_template('detail.html', invoice=invoice)
 
 @invoices_bp.route('/<int:id>/pdf')
 @login_required
@@ -72,7 +68,6 @@ def generate_pdf(id):
         Client.user_id == current_user.id
     ).first_or_404()
 
-    # Create PDF using ReportLab
     buffer = BytesIO()
     p = canvas.Canvas(buffer)
 
@@ -83,9 +78,9 @@ def generate_pdf(id):
 
     # Add client details
     p.drawString(50, 740, f"Client: {invoice.client.name}")
-    p.drawString(50, 720, f"Email: {invoice.client.email}")
+    if invoice.client.email:
+        p.drawString(50, 720, f"Email: {invoice.client.email}")
 
-    # Save PDF
     p.showPage()
     p.save()
 
