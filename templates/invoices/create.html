@@ -145,11 +145,12 @@
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
-                <button type="button" class="btn btn-primary" onclick="document.getElementById('invoice-form').submit()">Create Invoice</button>
+                <button type="submit" form="invoice-form" class="btn btn-primary">Create Invoice</button>
             </div>
         </div>
     </div>
 </div>
+
 {% endblock %}
 
 {% block scripts %}
@@ -159,8 +160,9 @@ document.addEventListener('DOMContentLoaded', function() {
     const projectSelect = document.getElementById('project_id');
     const previewBtn = document.getElementById('preview-invoice');
     const previewModal = document.getElementById('previewModal');
+    const invoiceForm = document.getElementById('invoice-form');
 
-    if (!clientSelect || !projectSelect || !previewBtn || !previewModal) {
+    if (!clientSelect || !projectSelect || !previewBtn || !previewModal || !invoiceForm) {
         console.error('Required elements not found');
         return;
     }
@@ -207,20 +209,19 @@ document.addEventListener('DOMContentLoaded', function() {
     // Preview functionality
     previewBtn.addEventListener('click', function() {
         try {
-            const form = document.getElementById('invoice-form');
-            if (!form) return;
+            if (!invoiceForm) return;
 
             // Update preview modal content
             document.getElementById('preview-invoice-number').textContent = 'New Invoice';
-            document.getElementById('preview-status').textContent = form.querySelector('#status').value || 'Draft';
-            document.getElementById('preview-due-date').textContent = form.querySelector('#due_date').value || '';
+            document.getElementById('preview-status').textContent = invoiceForm.querySelector('#status').value || 'Draft';
+            document.getElementById('preview-due-date').textContent = invoiceForm.querySelector('#due_date').value || '';
 
             const selectedClient = clientSelect.options[clientSelect.selectedIndex];
             const selectedProject = projectSelect.options[projectSelect.selectedIndex];
 
             document.getElementById('preview-client').textContent = selectedClient ? selectedClient.text : '';
             document.getElementById('preview-project').textContent = selectedProject ? selectedProject.text : '';
-            document.getElementById('preview-notes').textContent = form.querySelector('#notes').value || 'No notes';
+            document.getElementById('preview-notes').textContent = invoiceForm.querySelector('#notes').value || 'No notes';
 
             // Clear and populate items
             const itemsContainer = document.getElementById('preview-items');
@@ -229,7 +230,7 @@ document.addEventListener('DOMContentLoaded', function() {
             itemsContainer.innerHTML = '';
             let total = 0;
 
-            document.querySelectorAll('.invoice-item').forEach((item, index) => {
+            document.querySelectorAll('.invoice-item').forEach((item) => {
                 try {
                     const descInput = item.querySelector('.description');
                     const qtyInput = item.querySelector('.quantity');
