@@ -1,22 +1,28 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateTimeField, SelectField, FloatField, SubmitField
+from wtforms import StringField, TextAreaField, DateTimeField, SelectField, FloatField, SubmitField, FieldList, FormField
 from wtforms.validators import DataRequired
-
-class InvoiceForm(FlaskForm):
-    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
-    amount = FloatField('Amount', validators=[DataRequired()])
-    due_date = DateTimeField('Due Date', validators=[DataRequired()], format='%Y-%m-%d')
-    notes = TextAreaField('Notes')
-    submit = SubmitField('Create Invoice')
-
-    def __init__(self, *args, **kwargs):
-        super(InvoiceForm, self).__init__(*args, **kwargs)
-        # Initialize project_id choices with empty list to avoid None error
-        self.project_id.choices = []
 
 class InvoiceItemForm(FlaskForm):
     description = TextAreaField('Description', validators=[DataRequired()])
     quantity = FloatField('Quantity', validators=[DataRequired()])
     rate = FloatField('Rate', validators=[DataRequired()])
-    submit = SubmitField('Add Item')
+    amount = FloatField('Amount')
+
+class InvoiceForm(FlaskForm):
+    client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    status = SelectField('Status', choices=[
+        ('draft', 'Draft'),
+        ('pending', 'Pending'),
+        ('paid', 'Paid'),
+        ('cancelled', 'Cancelled')
+    ])
+    due_date = DateTimeField('Due Date', validators=[DataRequired()], format='%Y-%m-%d')
+    notes = TextAreaField('Notes')
+    items = FieldList(FormField(InvoiceItemForm), min_entries=1)
+    submit = SubmitField('Save Invoice')
+
+    def __init__(self, *args, **kwargs):
+        super(InvoiceForm, self).__init__(*args, **kwargs)
+        # Initialize project_id choices with empty list to avoid None error
+        self.project_id.choices = []

@@ -15,22 +15,28 @@
                 </div>
             </div>
             <div class="card-body">
+                <form method="POST" class="mb-4">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <label class="form-label mb-0">Status:</label>
+                        </div>
+                        <div class="col-auto">
+                            <select name="status" class="form-select" onchange="this.form.submit()">
+                                <option value="draft" {% if invoice.status == 'draft' %}selected{% endif %}>Draft</option>
+                                <option value="pending" {% if invoice.status == 'pending' %}selected{% endif %}>Pending</option>
+                                <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>Paid</option>
+                                <option value="cancelled" {% if invoice.status == 'cancelled' %}selected{% endif %}>Cancelled</option>
+                            </select>
+                        </div>
+                    </div>
+                </form>
+
                 <dl class="row mb-0">
                     <dt class="col-sm-4">Client</dt>
                     <dd class="col-sm-8">{{ invoice.client.name }}</dd>
 
                     <dt class="col-sm-4">Project</dt>
                     <dd class="col-sm-8">{{ invoice.project.name }}</dd>
-
-                    <dt class="col-sm-4">Amount</dt>
-                    <dd class="col-sm-8">${{ "%.2f"|format(invoice.amount) }}</dd>
-
-                    <dt class="col-sm-4">Status</dt>
-                    <dd class="col-sm-8">
-                        <span class="badge bg-{{ 'success' if invoice.status == 'paid' else 'warning' }}">
-                            {{ invoice.status }}
-                        </span>
-                    </dd>
 
                     <dt class="col-sm-4">Due Date</dt>
                     <dd class="col-sm-8">{{ invoice.due_date.strftime('%Y-%m-%d') }}</dd>
@@ -39,10 +45,35 @@
                     <dt class="col-sm-4">Notes</dt>
                     <dd class="col-sm-8">{{ invoice.notes }}</dd>
                     {% endif %}
-
-                    <dt class="col-sm-4">Created At</dt>
-                    <dd class="col-sm-8">{{ invoice.created_at.strftime('%Y-%m-%d %H:%M') }}</dd>
                 </dl>
+
+                <h5 class="mt-4">Invoice Items</h5>
+                <div class="table-responsive">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Description</th>
+                                <th class="text-end">Quantity</th>
+                                <th class="text-end">Rate</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in invoice.items %}
+                            <tr>
+                                <td>{{ item.description }}</td>
+                                <td class="text-end">{{ item.quantity }}</td>
+                                <td class="text-end">${{ "%.2f"|format(item.rate) }}</td>
+                                <td class="text-end">${{ "%.2f"|format(item.amount) }}</td>
+                            </tr>
+                            {% endfor %}
+                            <tr class="table-light">
+                                <td colspan="3" class="text-end"><strong>Total</strong></td>
+                                <td class="text-end"><strong>${{ "%.2f"|format(invoice.amount) }}</strong></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
 
                 <div class="text-end mt-4">
                     <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-secondary">Back to Invoices</a>
