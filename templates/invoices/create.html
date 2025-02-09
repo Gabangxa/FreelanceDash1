@@ -10,7 +10,7 @@
                 <h4 class="mb-0">New Invoice</h4>
             </div>
             <div class="card-body">
-                <form method="POST">
+                <form method="POST" id="invoice-form">
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
@@ -84,9 +84,68 @@
 
                     <div class="text-end mt-4">
                         <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-secondary me-2">Cancel</a>
+                        <button type="button" class="btn btn-info me-2" id="preview-invoice">Preview Invoice</button>
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
                 </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Preview Modal -->
+<div class="modal fade" id="previewModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Invoice Preview</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="preview-content">
+                    <div class="row mb-4">
+                        <div class="col-6">
+                            <h4 id="preview-invoice-number"></h4>
+                            <p class="mb-1">Status: <span id="preview-status"></span></p>
+                            <p class="mb-1">Due Date: <span id="preview-due-date"></span></p>
+                        </div>
+                        <div class="col-6 text-end">
+                            <h4>Client Details</h4>
+                            <p class="mb-1" id="preview-client"></p>
+                            <p class="mb-1" id="preview-project"></p>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Description</th>
+                                    <th class="text-end">Quantity</th>
+                                    <th class="text-end">Rate</th>
+                                    <th class="text-end">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody id="preview-items">
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Total</strong></td>
+                                    <td class="text-end"><strong id="preview-total"></strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="mt-3">
+                        <h5>Notes</h5>
+                        <p id="preview-notes"></p>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" onclick="document.getElementById('invoice-form').submit()">Create Invoice</button>
             </div>
         </div>
     </div>
@@ -98,6 +157,8 @@
 document.addEventListener('DOMContentLoaded', function() {
     const clientSelect = document.getElementById('client_id');
     const projectSelect = document.getElementById('project_id');
+    const previewBtn = document.getElementById('preview-invoice');
+    const previewModal = new bootstrap.Modal(document.getElementById('previewModal'));
 
     // Function to update projects dropdown
     function updateProjects(clientId) {
@@ -135,6 +196,47 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Initialize invoice items management
     initInvoiceItems();
+
+    // Preview functionality
+    previewBtn.addEventListener('click', function() {
+        const form = document.getElementById('invoice-form');
+        const formData = new FormData(form);
+
+        // Update preview modal content
+        document.getElementById('preview-invoice-number').textContent = 'New Invoice';
+        document.getElementById('preview-status').textContent = formData.get('status');
+        document.getElementById('preview-due-date').textContent = formData.get('due_date');
+        document.getElementById('preview-client').textContent = clientSelect.options[clientSelect.selectedIndex].text;
+        document.getElementById('preview-project').textContent = projectSelect.options[projectSelect.selectedIndex].text;
+        document.getElementById('preview-notes').textContent = formData.get('notes') || 'No notes';
+
+        // Clear and populate items
+        const itemsContainer = document.getElementById('preview-items');
+        itemsContainer.innerHTML = '';
+        let total = 0;
+
+        document.querySelectorAll('.invoice-item').forEach((item, index) => {
+            const description = item.querySelector('[name="items-' + index + '-description"]').value;
+            const quantity = parseFloat(item.querySelector('[name="items-' + index + '-quantity"]').value) || 0;
+            const rate = parseFloat(item.querySelector('[name="items-' + index + '-rate"]').value) || 0;
+            const amount = quantity * rate;
+            total += amount;
+
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td>${description}</td>
+                <td class="text-end">${quantity}</td>
+                <td class="text-end">$${rate.toFixed(2)}</td>
+                <td class="text-end">$${amount.toFixed(2)}</td>
+            `;
+            itemsContainer.appendChild(row);
+        });
+
+        document.getElementById('preview-total').textContent = `$${total.toFixed(2)}`;
+
+        // Show modal
+        previewModal.show();
+    });
 });
 </script>
 {% endblock %}

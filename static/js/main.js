@@ -21,10 +21,22 @@ function initInvoiceItems() {
     if (invoiceItems && addItemBtn) {
         // Add new item
         addItemBtn.addEventListener('click', function() {
-            const newItem = document.querySelector('.invoice-item').cloneNode(true);
+            const items = invoiceItems.querySelectorAll('.invoice-item');
+            const newIndex = items.length;
+
+            const newItem = items[0].cloneNode(true);
             clearInputs(newItem);
+
+            // Update input names for the new index
+            newItem.querySelectorAll('input').forEach(input => {
+                const nameParts = input.name.split('-');
+                input.name = `items-${newIndex}-${nameParts[2]}`;
+                input.id = `items-${newIndex}-${nameParts[2]}`;
+            });
+
             attachItemListeners(newItem);
             invoiceItems.appendChild(newItem);
+            updateTotalAmount();
         });
 
         // Initialize existing items
@@ -75,10 +87,10 @@ function updateTotalAmount() {
     const total = Array.from(amounts)
         .map(input => parseFloat(input.value) || 0)
         .reduce((sum, current) => sum + current, 0);
-    
-    const totalInput = document.querySelector('input[name="amount"]');
-    if (totalInput) {
-        totalInput.value = total.toFixed(2);
+
+    const totalElement = document.getElementById('preview-total');
+    if (totalElement) {
+        totalElement.textContent = `$${total.toFixed(2)}`;
     }
 }
 
@@ -111,7 +123,7 @@ function stopTimer() {
     if (timerInterval) {
         clearInterval(timerInterval);
         const duration = Math.floor((Date.now() - startTime) / 60000); // Duration in minutes
-        
+
         // Update hidden input for form submission
         const durationInput = document.querySelector('input[name="duration"]');
         if (durationInput) {
