@@ -142,7 +142,15 @@ function getCurrencySymbol(currencyCode) {
         'GBP': '£',
         'JPY': '¥',
         'CAD': 'CAD$',
-        'AUD': 'A$'
+        'AUD': 'A$',
+        'ZAR': 'R',
+        'NGN': '₦',
+        'KES': 'KSh',
+        'GHS': '₵',
+        'BRL': 'R$',
+        'MXN': 'Mex$',
+        'SGD': 'S$',
+        'AED': 'د.إ'
     };
     return symbols[currencyCode] || currencyCode;
 }

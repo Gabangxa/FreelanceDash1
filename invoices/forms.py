@@ -20,7 +20,15 @@ class InvoiceForm(FlaskForm):
         ('GBP', 'GBP - British Pound'),
         ('JPY', 'JPY - Japanese Yen'),
         ('CAD', 'CAD - Canadian Dollar'),
-        ('AUD', 'AUD - Australian Dollar')
+        ('AUD', 'AUD - Australian Dollar'),
+        ('ZAR', 'ZAR - South African Rand'),
+        ('NGN', 'NGN - Nigerian Naira'),
+        ('KES', 'KES - Kenyan Shilling'),
+        ('GHS', 'GHS - Ghanaian Cedi'),
+        ('BRL', 'BRL - Brazilian Real'),
+        ('MXN', 'MXN - Mexican Peso'),
+        ('SGD', 'SGD - Singapore Dollar'),
+        ('AED', 'AED - United Arab Emirates Dirham')
     ], default='USD')
     status = SelectField('Status', choices=[
         ('draft', 'Draft'),
