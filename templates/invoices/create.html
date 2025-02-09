@@ -12,11 +12,19 @@
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    
+
                     <div class="mb-3">
                         {{ form.client_id.label(class="form-label") }}
-                        {{ form.client_id(class="form-select") }}
+                        {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
                         {% for error in form.client_id.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
+
+                    <div class="mb-3">
+                        {{ form.project_id.label(class="form-label") }}
+                        {{ form.project_id(class="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
+                        {% for error in form.project_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
                     </div>
@@ -89,9 +97,27 @@
 
 {% block scripts %}
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // Initialize invoice items handling
-        initInvoiceItems();
+document.addEventListener('DOMContentLoaded', function() {
+    const clientSelect = document.getElementById('client_id');
+    const projectSelect = document.getElementById('project_id');
+
+    clientSelect.addEventListener('change', function() {
+        const clientId = this.value;
+        projectSelect.innerHTML = '<option value="">Select Project</option>';
+
+        if (clientId) {
+            fetch(`/invoices/get-projects/${clientId}`)
+                .then(response => response.json())
+                .then(projects => {
+                    projects.forEach(([id, name]) => {
+                        const option = document.createElement('option');
+                        option.value = id;
+                        option.textContent = name;
+                        projectSelect.appendChild(option);
+                    });
+                });
+        }
     });
+});
 </script>
 {% endblock %}

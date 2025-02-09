@@ -4,6 +4,7 @@ from wtforms.validators import DataRequired
 
 class InvoiceForm(FlaskForm):
     client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
     amount = FloatField('Amount', validators=[DataRequired()])
     due_date = DateTimeField('Due Date', validators=[DataRequired()], format='%Y-%m-%d')
     notes = TextAreaField('Notes')
