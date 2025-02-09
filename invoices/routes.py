@@ -138,3 +138,16 @@ def generate_pdf(id):
     response.headers['Content-Disposition'] = f'attachment; filename=invoice_{invoice.invoice_number}.pdf'
 
     return response
+
+@invoices_bp.route('/<int:id>/delete', methods=['POST'])
+@login_required
+def delete_invoice(id):
+    invoice = Invoice.query.join(Client).filter(
+        Invoice.id == id,
+        Client.user_id == current_user.id
+    ).first_or_404()
+
+    db.session.delete(invoice)
+    db.session.commit()
+    flash('Invoice deleted successfully')
+    return redirect(url_for('invoices.list_invoices'))
