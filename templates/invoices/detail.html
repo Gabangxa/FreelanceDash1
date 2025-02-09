@@ -38,6 +38,9 @@
                     <dt class="col-sm-4">Project</dt>
                     <dd class="col-sm-8">{{ invoice.project.name }}</dd>
 
+                    <dt class="col-sm-4">Currency</dt>
+                    <dd class="col-sm-8">{{ invoice.currency }}</dd>
+
                     <dt class="col-sm-4">Due Date</dt>
                     <dd class="col-sm-8">{{ invoice.due_date.strftime('%Y-%m-%d') }}</dd>
 
@@ -63,13 +66,13 @@
                             <tr>
                                 <td>{{ item.description }}</td>
                                 <td class="text-end">{{ item.quantity }}</td>
-                                <td class="text-end">${{ "%.2f"|format(item.rate) }}</td>
-                                <td class="text-end">${{ "%.2f"|format(item.amount) }}</td>
+                                <td class="text-end">{{ invoice.currency }} {{ "%.2f"|format(item.rate) }}</td>
+                                <td class="text-end">{{ invoice.currency }} {{ "%.2f"|format(item.amount) }}</td>
                             </tr>
                             {% endfor %}
                             <tr class="table-light">
                                 <td colspan="3" class="text-end"><strong>Total</strong></td>
-                                <td class="text-end"><strong>${{ "%.2f"|format(invoice.amount) }}</strong></td>
+                                <td class="text-end"><strong>{{ invoice.currency }} {{ "%.2f"|format(invoice.amount) }}</strong></td>
                             </tr>
                         </tbody>
                     </table>

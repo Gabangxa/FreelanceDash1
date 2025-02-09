@@ -30,14 +30,21 @@
                     </div>
 
                     <div class="row">
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
+                            {{ form.currency.label(class="form-label") }}
+                            {{ form.currency(class="form-select" + (" is-invalid" if form.currency.errors else "")) }}
+                            {% for error in form.currency.errors %}
+                                <div class="invalid-feedback">{{ error }}</div>
+                            {% endfor %}
+                        </div>
+                        <div class="col-md-4 mb-3">
                             {{ form.status.label(class="form-label") }}
                             {{ form.status(class="form-select" + (" is-invalid" if form.status.errors else "")) }}
                             {% for error in form.status.errors %}
                                 <div class="invalid-feedback">{{ error }}</div>
                             {% endfor %}
                         </div>
-                        <div class="col-md-6 mb-3">
+                        <div class="col-md-4 mb-3">
                             {{ form.due_date.label(class="form-label") }}
                             {{ form.due_date(class="form-control", type="date") }}
                             {% for error in form.due_date.errors %}
@@ -108,6 +115,7 @@
                             <h4 id="preview-invoice-number"></h4>
                             <p class="mb-1">Status: <span id="preview-status"></span></p>
                             <p class="mb-1">Due Date: <span id="preview-due-date"></span></p>
+                            <p class="mb-1">Currency: <span id="preview-currency"></span></p>
                         </div>
                         <div class="col-6 text-end">
                             <h4>Client Details</h4>
@@ -158,11 +166,12 @@
 document.addEventListener('DOMContentLoaded', function() {
     const clientSelect = document.getElementById('client_id');
     const projectSelect = document.getElementById('project_id');
+    const currencySelect = document.getElementById('currency');
     const previewBtn = document.getElementById('preview-invoice');
     const previewModal = document.getElementById('previewModal');
     const invoiceForm = document.getElementById('invoice-form');
 
-    if (!clientSelect || !projectSelect || !previewBtn || !previewModal || !invoiceForm) {
+    if (!clientSelect || !projectSelect || !previewBtn || !previewModal || !invoiceForm || !currencySelect) {
         console.error('Required elements not found');
         return;
     }
@@ -206,15 +215,31 @@ document.addEventListener('DOMContentLoaded', function() {
     // Initialize invoice items management
     initInvoiceItems();
 
+    function getCurrencySymbol(currencyCode) {
+        const symbols = {
+            'USD': '$',
+            'EUR': '€',
+            'GBP': '£',
+            'JPY': '¥',
+            'CAD': 'CAD$',
+            'AUD': 'A$'
+        };
+        return symbols[currencyCode] || currencyCode;
+    }
+
     // Preview functionality
     previewBtn.addEventListener('click', function() {
         try {
             if (!invoiceForm) return;
 
+            const currencyCode = currencySelect.value;
+            const currencySymbol = getCurrencySymbol(currencyCode);
+
             // Update preview modal content
             document.getElementById('preview-invoice-number').textContent = 'New Invoice';
             document.getElementById('preview-status').textContent = invoiceForm.querySelector('#status').value || 'Draft';
             document.getElementById('preview-due-date').textContent = invoiceForm.querySelector('#due_date').value || '';
+            document.getElementById('preview-currency').textContent = currencySelect.options[currencySelect.selectedIndex].text;
 
             const selectedClient = clientSelect.options[clientSelect.selectedIndex];
             const selectedProject = projectSelect.options[projectSelect.selectedIndex];
@@ -248,8 +273,8 @@ document.addEventListener('DOMContentLoaded', function() {
                     row.innerHTML = `
                         <td>${description}</td>
                         <td class="text-end">${quantity}</td>
-                        <td class="text-end">$${rate.toFixed(2)}</td>
-                        <td class="text-end">$${amount.toFixed(2)}</td>
+                        <td class="text-end">${currencySymbol}${rate.toFixed(2)}</td>
+                        <td class="text-end">${currencySymbol}${amount.toFixed(2)}</td>
                     `;
                     itemsContainer.appendChild(row);
                 } catch (itemError) {
@@ -259,7 +284,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
             const totalElement = document.getElementById('preview-total');
             if (totalElement) {
-                totalElement.textContent = `$${total.toFixed(2)}`;
+                totalElement.textContent = `${currencySymbol}${total.toFixed(2)}`;
             }
 
             // Show modal
@@ -267,6 +292,19 @@ document.addEventListener('DOMContentLoaded', function() {
         } catch (error) {
             console.error('Error in preview generation:', error);
         }
+    });
+
+    // Update currency display when currency changes
+    currencySelect.addEventListener('change', function() {
+        const currencyCode = this.value;
+        const currencySymbol = getCurrencySymbol(currencyCode);
+        document.querySelectorAll('.invoice-item').forEach(item => {
+            const amountElement = item.querySelector('.amount');
+            if (amountElement && amountElement.value) {
+                const amount = parseFloat(amountElement.value);
+                amountElement.value = amount.toFixed(2);
+            }
+        });
     });
 });
 </script>

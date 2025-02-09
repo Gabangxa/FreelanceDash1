@@ -39,6 +39,7 @@ def create_invoice():
         invoice = Invoice(
             invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
             amount=0,  # Will be calculated from items
+            currency=form.currency.data,  # Add currency field
             due_date=form.due_date.data,
             notes=form.notes.data,
             client_id=form.client_id.data,

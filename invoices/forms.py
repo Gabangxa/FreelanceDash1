@@ -14,6 +14,14 @@ class InvoiceItemForm(FlaskForm):
 class InvoiceForm(FlaskForm):
     client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    currency = SelectField('Currency', choices=[
+        ('USD', 'USD - US Dollar'),
+        ('EUR', 'EUR - Euro'),
+        ('GBP', 'GBP - British Pound'),
+        ('JPY', 'JPY - Japanese Yen'),
+        ('CAD', 'CAD - Canadian Dollar'),
+        ('AUD', 'AUD - Australian Dollar')
+    ], default='USD')
     status = SelectField('Status', choices=[
         ('draft', 'Draft'),
         ('pending', 'Pending'),
