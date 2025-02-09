@@ -32,12 +32,11 @@ function initInvoiceItems() {
             const newItem = items[0].cloneNode(true);
             clearInputs(newItem);
 
-            // Update input names for the new index
+            // Update WTForms field names for the new index
             newItem.querySelectorAll('input').forEach(input => {
-                const nameParts = input.name.split('-');
-                if (nameParts.length >= 3) {
-                    input.name = `items-${newIndex}-${nameParts[2]}`;
-                    input.id = `items-${newIndex}-${nameParts[2]}`;
+                if (input.id) {
+                    const baseName = input.id.split('-')[0];
+                    input.id = `items-${newIndex}-${baseName}`;
                 }
             });
 

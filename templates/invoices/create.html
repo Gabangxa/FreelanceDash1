@@ -59,19 +59,19 @@
                                 <div class="row">
                                     <div class="col-md-12 mb-3">
                                         <label class="form-label">Description</label>
-                                        {{ item_form.form.description(class="form-control", name="items-" ~ loop.index0 ~ "-description") }}
+                                        {{ item_form.form.description(class="form-control description") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Quantity</label>
-                                        {{ item_form.form.quantity(class="form-control quantity", name="items-" ~ loop.index0 ~ "-quantity") }}
+                                        {{ item_form.form.quantity(class="form-control quantity") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Rate</label>
-                                        {{ item_form.form.rate(class="form-control rate", name="items-" ~ loop.index0 ~ "-rate") }}
+                                        {{ item_form.form.rate(class="form-control rate") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
                                         <label class="form-label">Amount</label>
-                                        {{ item_form.form.amount(class="form-control amount", readonly=true, name="items-" ~ loop.index0 ~ "-amount") }}
+                                        {{ item_form.form.amount(class="form-control amount", readonly=true) }}
                                     </div>
                                 </div>
                                 <button type="button" class="btn btn-danger remove-item">Remove Item</button>
@@ -210,19 +210,17 @@ document.addEventListener('DOMContentLoaded', function() {
             const form = document.getElementById('invoice-form');
             if (!form) return;
 
-            const formData = new FormData(form);
-
             // Update preview modal content
             document.getElementById('preview-invoice-number').textContent = 'New Invoice';
-            document.getElementById('preview-status').textContent = formData.get('status') || 'Draft';
-            document.getElementById('preview-due-date').textContent = formData.get('due_date') || '';
+            document.getElementById('preview-status').textContent = form.querySelector('#status').value || 'Draft';
+            document.getElementById('preview-due-date').textContent = form.querySelector('#due_date').value || '';
 
             const selectedClient = clientSelect.options[clientSelect.selectedIndex];
             const selectedProject = projectSelect.options[projectSelect.selectedIndex];
 
             document.getElementById('preview-client').textContent = selectedClient ? selectedClient.text : '';
             document.getElementById('preview-project').textContent = selectedProject ? selectedProject.text : '';
-            document.getElementById('preview-notes').textContent = formData.get('notes') || 'No notes';
+            document.getElementById('preview-notes').textContent = form.querySelector('#notes').value || 'No notes';
 
             // Clear and populate items
             const itemsContainer = document.getElementById('preview-items');
@@ -233,9 +231,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
             document.querySelectorAll('.invoice-item').forEach((item, index) => {
                 try {
-                    const descInput = item.querySelector(`[name="items-${index}-description"]`);
-                    const qtyInput = item.querySelector(`[name="items-${index}-quantity"]`);
-                    const rateInput = item.querySelector(`[name="items-${index}-rate"]`);
+                    const descInput = item.querySelector('.description');
+                    const qtyInput = item.querySelector('.quantity');
+                    const rateInput = item.querySelector('.rate');
 
                     if (!descInput || !qtyInput || !rateInput) return;
 
