@@ -44,14 +44,14 @@ def dashboard():
             day_index = entry.start_time.weekday()
             daily_hours[day_index] += entry.duration / 60.0
 
-        # Count pending invoices - modified to handle missing invoices relationship
-        pending_invoices = 0
-        for project in projects:
-            pending_project_invoices = Invoice.query.filter_by(
-                project_id=project.id,
-                status='draft'
-            ).count()
-            pending_invoices += pending_project_invoices
+        # Count pending invoices - Using a more efficient query and including both pending and draft invoices
+        # This ensures the dashboard "Pending Invoices" tile matches what users see on the invoices page
+        pending_invoices = Invoice.query.join(
+            Project, Invoice.project_id == Project.id
+        ).filter(
+            Project.user_id == current_user.id,
+            Invoice.status.in_(['pending', 'draft'])  # Count both pending and draft as they need attention
+        ).count()
 
         return render_template('dashboard.html',
                              projects=projects,
