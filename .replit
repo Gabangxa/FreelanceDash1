@@ -17,10 +17,10 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "Flask Web App"
+args = "Production Server"
 
 [[workflows.workflow]]
-name = "Flask Web App"
+name = "Production Server"
 author = "agent"
 
 [workflows.workflow.metadata]
@@ -31,7 +31,7 @@ task = "packager.installForAll"
 
 [[workflows.workflow.tasks]]
 task = "shell.exec"
-args = "python main.py"
+args = "gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --access-logfile - --error-logfile - main:app"
 waitForPort = 5000
 
 [[ports]]
