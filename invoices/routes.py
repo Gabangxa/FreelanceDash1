@@ -55,9 +55,17 @@ def create_invoice():
 
             # Start a database transaction
             try:
+                # Create invoice with UUID-based invoice number
+                invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+
+                # Check for duplicate invoice numbers just to be safe
+                existing = Invoice.query.filter_by(invoice_number=invoice_number).first()
+                if existing:
+                    invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+
                 # Create invoice
                 invoice = Invoice(
-                    invoice_number=f"INV-{uuid.uuid4().hex[:8].upper()}",
+                    invoice_number=invoice_number,
                     amount=0,  # Will be calculated from items
                     currency=form.currency.data,
                     due_date=form.due_date.data,
@@ -67,9 +75,12 @@ def create_invoice():
                     status=form.status.data
                 )
                 db.session.add(invoice)
+                db.session.flush()  # Get the invoice.id without committing
 
                 # Add invoice items
                 total_amount = 0
+                items_added = False
+
                 for item_data in form.items.data:
                     # Validate item data
                     if not item_data['description'] or item_data['quantity'] <= 0 or item_data['rate'] <= 0:
@@ -84,14 +95,22 @@ def create_invoice():
                         quantity=quantity,
                         rate=rate,
                         amount=item_amount,
-                        invoice=invoice
+                        invoice_id=invoice.id  # Ensure invoice_id is set
                     )
                     db.session.add(item)
                     total_amount += item_amount
+                    items_added = True
+
+                # Validate we have at least one item
+                if not items_added:
+                    db.session.rollback()
+                    flash('Invoice must have at least one valid item', 'danger')
+                    return render_template('create.html', form=form)
 
                 # Update invoice total
                 invoice.amount = total_amount
                 db.session.commit()
+                logger.info(f"Invoice #{invoice.invoice_number} created by user {current_user.id}")
                 flash('Invoice created successfully', 'success')
                 return redirect(url_for('invoices.view_invoice', id=invoice.id))
 
@@ -129,6 +148,7 @@ def view_invoice(id):
                 try:
                     invoice.status = new_status
                     db.session.commit()
+                    logger.info(f"Invoice #{invoice.invoice_number} status updated to {new_status} by user {current_user.id}")
                     flash('Invoice status updated successfully', 'success')
                 except SQLAlchemyError as e:
                     db.session.rollback()
@@ -152,6 +172,7 @@ def get_projects(client_id):
         # Verify client belongs to current user
         client = Client.query.filter_by(id=client_id, user_id=current_user.id).first()
         if not client:
+            logger.warning(f"Unauthorized project list request for client {client_id} by user {current_user.id}")
             return jsonify([]), 403
 
         projects = Project.query.filter_by(client_id=client_id).all()
@@ -209,6 +230,7 @@ def generate_pdf(id):
         response.mimetype = 'application/pdf'
         response.headers['Content-Disposition'] = f'attachment; filename=invoice_{invoice.invoice_number}.pdf'
 
+        logger.info(f"PDF generated for invoice #{invoice.invoice_number} by user {current_user.id}")
         return response
 
     except SQLAlchemyError as e:
@@ -231,8 +253,11 @@ def delete_invoice(id):
                   .filter(Invoice.id == id, Client.user_id == current_user.id)
                   .first_or_404())
 
+        invoice_number = invoice.invoice_number  # Store for logging
+
         db.session.delete(invoice)
         db.session.commit()
+        logger.info(f"Invoice #{invoice_number} deleted by user {current_user.id}")
         flash('Invoice deleted successfully', 'success')
     except SQLAlchemyError as e:
         db.session.rollback()

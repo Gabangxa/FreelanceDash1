@@ -6,11 +6,13 @@ from app import db, logger
 from models import User
 from auth.forms import LoginForm, RegistrationForm
 from werkzeug.security import generate_password_hash
+from errors import handle_db_errors, UserFriendlyError
 import re
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
+@handle_db_errors
 def login():
     if current_user.is_authenticated:
         return redirect(url_for('projects.dashboard'))
@@ -27,7 +29,7 @@ def login():
 
             # Successfully authenticated
             login_user(user, remember=form.remember_me.data)
-            logger.info(f"User logged in: {user.username}")
+            logger.info(f"User logged in: {user.username} (ID: {user.id})")
 
             # Security: Safe redirect handling
             next_page = request.args.get('next')
@@ -37,11 +39,13 @@ def login():
 
         except SQLAlchemyError as e:
             logger.error(f"Database error during login: {str(e)}")
+            db.session.rollback()
             flash('A system error occurred. Please try again later.', 'danger')
 
     return render_template('auth/login.html', title='Sign In', form=form)
 
 @auth_bp.route('/register', methods=['GET', 'POST'])
+@handle_db_errors
 def register():
     if current_user.is_authenticated:
         return redirect(url_for('projects.dashboard'))
@@ -50,11 +54,11 @@ def register():
     if form.validate_on_submit():
         try:
             # Additional validation for username and password strength
-            if not re.match(r'^[a-zA-Z0-9_]+$', form.username.data):
+            if not form.username.data or not re.match(r'^[a-zA-Z0-9_]+$', form.username.data):
                 flash('Username must contain only letters, numbers, and underscores', 'danger')
                 return render_template('auth/register.html', title='Register', form=form)
 
-            if len(form.password.data) < 8:
+            if not form.password.data or len(form.password.data) < 8:
                 flash('Password must be at least 8 characters long', 'danger')
                 return render_template('auth/register.html', title='Register', form=form)
 
@@ -68,7 +72,7 @@ def register():
             db.session.add(user)
             db.session.commit()
 
-            logger.info(f"New user registered: {user.username}")
+            logger.info(f"New user registered: {user.username} (ID: {user.id})")
             flash('Registration successful! You can now log in.', 'success')
             return redirect(url_for('auth.login'))
 
@@ -83,8 +87,9 @@ def register():
 @login_required
 def logout():
     if current_user.is_authenticated:
+        user_id = current_user.id
         username = current_user.username
         logout_user()
-        logger.info(f"User logged out: {username}")
+        logger.info(f"User logged out: {username} (ID: {user_id})")
         flash('You have been logged out successfully', 'info')
     return redirect(url_for('auth.login'))
