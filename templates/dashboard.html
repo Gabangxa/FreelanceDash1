@@ -12,7 +12,7 @@
 <div class="row g-4 mb-4">
     <!-- Quick Stats -->
     <div class="col-md-3">
-        <div class="card bg-primary text-white h-100">
+        <div class="card bg-primary text-white h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Number of projects currently in active status">
             <div class="card-body">
                 <h6 class="card-title">Active Projects</h6>
                 <h2 class="mb-0">{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</h2>
@@ -20,7 +20,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-success text-white h-100">
+        <div class="card bg-success text-white h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Tasks waiting to be started or currently in progress">
             <div class="card-body">
                 <h6 class="card-title">Pending Tasks</h6>
                 <h2 class="mb-0">{{ tasks|selectattr('status', 'equalto', 'pending')|list|length }}</h2>
@@ -28,7 +28,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-info text-white h-100">
+        <div class="card bg-info text-white h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Total hours recorded for all projects this week">
             <div class="card-body">
                 <h6 class="card-title">Time Tracked (This Week)</h6>
                 <h2 class="mb-0">{{ '%0.1f'|format(weekly_hours|default(0)) }}h</h2>
@@ -36,7 +36,7 @@
         </div>
     </div>
     <div class="col-md-3">
-        <div class="card bg-warning text-white h-100">
+        <div class="card bg-warning text-white h-100" data-bs-toggle="tooltip" data-bs-placement="top" title="Invoices in 'Draft' or 'Pending' status requiring your attention">
             <div class="card-body">
                 <h6 class="card-title">Pending Invoices</h6>
                 <h2 class="mb-0">{{ pending_invoices|default(0) }}</h2>
@@ -195,6 +195,14 @@
                 }
             }
         }
+    });
+
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
     });
 </script>
 {% endblock %}
