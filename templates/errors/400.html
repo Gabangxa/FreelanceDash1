@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block title %}Bad Request - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body py-5">
+                    <h1 class="display-1 text-muted">400</h1>
+                    <h2 class="mb-4">Bad Request</h2>
+                    <p class="lead mb-4">The server could not understand your request. Please check your input and try again.</p>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

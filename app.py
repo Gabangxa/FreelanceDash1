@@ -6,8 +6,9 @@ from flask_login import LoginManager, current_user
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 import secrets
+from errors import setup_logging, register_error_handlers, register_user_friendly_error_handler
 
-# Configure logging with more details for production
+# Initialize basic logging for startup
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -62,6 +63,9 @@ login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'  # Bootstrap message styling
 
+# Setup advanced logging
+logger = setup_logging(app)
+
 # Request handlers for logging
 @app.before_request
 def log_request_info():
@@ -77,15 +81,9 @@ def add_security_headers(response):
     response.headers['X-XSS-Protection'] = '1; mode=block'
     return response
 
-# Error handlers
-@app.errorhandler(404)
-def page_not_found(e):
-    return render_template('errors/404.html'), 404
-
-@app.errorhandler(500)
-def internal_server_error(e):
-    logger.error('Server Error: %s', str(e))
-    return render_template('errors/500.html'), 500
+# Register error handlers
+register_error_handlers(app)
+register_user_friendly_error_handler(app)
 
 # Add root route for landing page
 @app.route('/')

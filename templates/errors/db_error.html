@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+
+{% block title %}Database Error - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container py-5 text-center">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-body py-5">
+                    <h1 class="display-1 text-muted">
+                        <i class="fas fa-database"></i>
+                    </h1>
+                    <h2 class="mb-4">Database Error</h2>
+                    <p class="lead mb-4">{{ error|default('A problem occurred while processing your request.') }}</p>
+                    <p class="text-muted mb-4">Our team has been notified and is working to resolve the issue. Please try again later.</p>
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>Back to Home
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

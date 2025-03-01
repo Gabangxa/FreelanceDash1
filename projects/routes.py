@@ -5,12 +5,14 @@ from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
 from projects.forms import ProjectForm, TaskForm, TimeEntryForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from errors import handle_db_errors, UserFriendlyError
 
 projects_bp = Blueprint('projects', __name__)
 
 @projects_bp.route('/')
 @projects_bp.route('/dashboard')
 @login_required
+@handle_db_errors
 def dashboard():
     try:
         # Get start and end of current week
@@ -71,6 +73,7 @@ def dashboard():
 
 @projects_bp.route('/projects')
 @login_required
+@handle_db_errors
 def list_projects():
     try:
         # Optimized query with eager loading
@@ -83,6 +86,7 @@ def list_projects():
 
 @projects_bp.route('/projects/new', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def create_project():
     form = ProjectForm()
 
@@ -116,6 +120,7 @@ def create_project():
 
 @projects_bp.route('/projects/<int:id>')
 @login_required
+@handle_db_errors
 def view_project(id):
     try:
         # Enhanced query with security check and eager loading
@@ -128,6 +133,7 @@ def view_project(id):
 
 @projects_bp.route('/tasks/new', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def create_task():
     form = TaskForm()
 
@@ -166,6 +172,7 @@ def create_task():
 
 @projects_bp.route('/tasks/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def edit_task(id):
     try:
         # Secured query with join to ensure task belongs to user's project
@@ -207,6 +214,7 @@ def edit_task(id):
 
 @projects_bp.route('/time-entries/new', methods=['POST'])
 @login_required
+@handle_db_errors
 def create_time_entry():
     try:
         # Verify project belongs to user

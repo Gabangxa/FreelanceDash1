@@ -4,11 +4,13 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app import db, logger
 from models import Client, Project
 from clients.forms import ClientForm
+from errors import handle_db_errors, UserFriendlyError
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
 
 @clients_bp.route('/')
 @login_required
+@handle_db_errors
 def list_clients():
     try:
         # Optimized query with eager loading
@@ -21,6 +23,7 @@ def list_clients():
 
 @clients_bp.route('/new', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def create_client():
     form = ClientForm()
 
@@ -52,6 +55,7 @@ def create_client():
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def edit_client(id):
     try:
         # Secure query ensuring client belongs to current user
@@ -82,6 +86,7 @@ def edit_client(id):
 
 @clients_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
+@handle_db_errors
 def delete_client(id):
     try:
         # Secure query ensuring client belongs to current user

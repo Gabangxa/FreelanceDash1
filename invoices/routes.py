@@ -8,11 +8,13 @@ from reportlab.pdfgen import canvas
 from io import BytesIO
 import uuid
 from datetime import datetime
+from errors import handle_db_errors, UserFriendlyError
 
 invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices', template_folder='../templates/invoices')
 
 @invoices_bp.route('/')
 @login_required
+@handle_db_errors
 def list_invoices():
     try:
         # Optimized query with eager loading
@@ -30,6 +32,7 @@ def list_invoices():
 
 @invoices_bp.route('/new', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def create_invoice():
     form = InvoiceForm()
 
@@ -110,6 +113,7 @@ def create_invoice():
 
 @invoices_bp.route('/<int:id>', methods=['GET', 'POST'])
 @login_required
+@handle_db_errors
 def view_invoice(id):
     try:
         # Secured query with joins and eager loading
@@ -142,6 +146,7 @@ def view_invoice(id):
 
 @invoices_bp.route('/get-projects/<int:client_id>')
 @login_required
+@handle_db_errors
 def get_projects(client_id):
     try:
         # Verify client belongs to current user
@@ -157,6 +162,7 @@ def get_projects(client_id):
 
 @invoices_bp.route('/<int:id>/pdf')
 @login_required
+@handle_db_errors
 def generate_pdf(id):
     try:
         # Secured query with joins
@@ -216,6 +222,7 @@ def generate_pdf(id):
 
 @invoices_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
+@handle_db_errors
 def delete_invoice(id):
     try:
         # Secured query with joins
