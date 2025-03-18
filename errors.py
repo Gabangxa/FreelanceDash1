@@ -21,20 +21,25 @@ def setup_logging(app):
     
     # Configure the root logger
     logger = logging.getLogger()
+    
+    # Clear existing handlers to avoid duplicate logs
+    if logger.handlers:
+        logger.handlers.clear()
+    
     logger.setLevel(logging.INFO if not app.debug else logging.DEBUG)
     
     # Create formatters
     verbose_formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] - %(name)s - %(message)s [in %(pathname)s:%(lineno)d]'
+        '%(asctime)s [%(levelname)s] [%(name)s] %(message)s [in %(pathname)s:%(lineno)d]'
     )
     simple_formatter = logging.Formatter(
-        '%(asctime)s [%(levelname)s] - %(message)s'
+        '%(asctime)s [%(levelname)s] %(message)s'
     )
     
-    # Console handler - for development
+    # Console handler - for all environments
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(simple_formatter)
-    console_handler.setLevel(logging.INFO)
+    console_handler.setLevel(logging.DEBUG if app.debug else logging.INFO)
     logger.addHandler(console_handler)
     
     # File handler - info level and above
@@ -57,13 +62,49 @@ def setup_logging(app):
     error_file_handler.setFormatter(verbose_formatter)
     logger.addHandler(error_file_handler)
     
-    # Set SQLAlchemy logging level
+    # Security log file for authentication and critical operations
+    security_file_handler = RotatingFileHandler(
+        os.path.join(logs_dir, 'security.log'), 
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=10  # Keep more security logs
+    )
+    security_file_handler.setLevel(logging.INFO)
+    security_file_handler.setFormatter(verbose_formatter)
+    
+    # Create and configure security logger
+    security_logger = logging.getLogger('security')
+    security_logger.setLevel(logging.INFO)
+    security_logger.addHandler(security_file_handler)
+    
+    # Set package-specific log levels
     logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+    logging.getLogger('werkzeug').setLevel(logging.WARNING)
+    
+    # Specific loggers for application components
+    setup_component_loggers(logs_dir, verbose_formatter)
     
     # Log startup
     app.logger.info(f"Application logging configured. Mode: {'Debug' if app.debug else 'Production'}")
     
     return logger
+
+def setup_component_loggers(logs_dir, formatter):
+    """Set up loggers for specific application components."""
+    components = ['auth', 'projects', 'invoices', 'clients']
+    
+    for component in components:
+        component_logger = logging.getLogger(component)
+        component_logger.propagate = True  # Propagate to root logger
+        
+        # Component-specific file handler
+        handler = RotatingFileHandler(
+            os.path.join(logs_dir, f'{component}.log'),
+            maxBytes=5*1024*1024,  # 5MB
+            backupCount=3
+        )
+        handler.setFormatter(formatter)
+        handler.setLevel(logging.INFO)
+        component_logger.addHandler(handler)
 
 # Register error handlers
 def register_error_handlers(app):
@@ -71,25 +112,50 @@ def register_error_handlers(app):
     
     @app.errorhandler(404)
     def not_found_error(error):
+        # Log 404 errors with request details
+        app.logger.info(f"404 Not Found: {request.method} {request.path} | Referrer: {request.referrer or 'None'} | IP: {request.remote_addr}")
+        
         if request.path.startswith('/api/'):
             return jsonify({"error": "Resource not found"}), 404
-        return render_template('errors/404.html'), 404
+        return render_template('errors/404.html', requested_url=request.path), 404
 
     @app.errorhandler(403)
     def forbidden_error(error):
+        # Log access attempts that are forbidden
+        user_id = getattr(getattr(current_app, 'current_user', None), 'id', 'Unknown')
+        app.logger.warning(f"403 Forbidden access: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}")
+        
         if request.path.startswith('/api/'):
             return jsonify({"error": "Access forbidden"}), 403
         return render_template('errors/403.html'), 403
     
     @app.errorhandler(500)
     def internal_error(error):
-        app.logger.error(f"Internal server error: {str(error)}\n{traceback.format_exc()}")
+        # Add request context to error logs
+        request_info = {
+            'path': request.path,
+            'method': request.method,
+            'user_agent': request.user_agent.string,
+            'ip': request.remote_addr
+        }
+        app.logger.error(
+            f"500 Internal Server Error: {str(error)}\n"
+            f"Request: {request_info}\n"
+            f"{traceback.format_exc()}"
+        )
+        
         if request.path.startswith('/api/'):
             return jsonify({"error": "Internal server error"}), 500
         return render_template('errors/500.html'), 500
     
     @app.errorhandler(400)
     def bad_request_error(error):
+        # Log bad requests with request data
+        app.logger.warning(
+            f"400 Bad Request: {request.method} {request.path} | "
+            f"Form Data: {request.form or 'None'} | IP: {request.remote_addr}"
+        )
+        
         if request.path.startswith('/api/'):
             return jsonify({"error": "Bad request"}), 400
         return render_template('errors/400.html'), 400
@@ -100,8 +166,20 @@ def register_error_handlers(app):
         if isinstance(error, HTTPException):
             return error
         
-        # Log the error
-        app.logger.error(f"Unhandled exception: {str(error)}\n{traceback.format_exc()}")
+        # Enhanced unhandled exception logging
+        user_id = 'Unknown'
+        try:
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                user_id = current_user.id
+        except Exception:
+            pass
+        
+        app.logger.error(
+            f"Unhandled exception: {error.__class__.__name__}: {str(error)}\n"
+            f"Route: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}\n"
+            f"{traceback.format_exc()}"
+        )
         
         # Return a JSON response for API requests
         if request.path.startswith('/api/'):
