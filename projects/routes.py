@@ -1,3 +1,4 @@
+import logging
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
@@ -216,44 +217,100 @@ def edit_task(id):
 @login_required
 @handle_db_errors
 def create_time_entry():
+    # Get component logger
+    proj_logger = logging.getLogger('projects')
+    proj_logger.info(f"User {current_user.id} creating new time entry")
+    
     try:
         # Verify project belongs to user
+        project_id = request.form.get('project_id', type=int)
         project = Project.query.filter_by(
-            id=request.form.get('project_id', type=int),
+            id=project_id,
             user_id=current_user.id
         ).first_or_404()
 
-        # Handle and validate form input
-        start_time = request.form.get('start_time')
-        if start_time:
+        # Handle and validate form input for start_time
+        start_time_str = request.form.get('start_time')
+        if start_time_str:
             try:
-                start_time = datetime.strptime(start_time, '%Y-%m-%d')
-            except ValueError:
-                flash('Invalid date format', 'danger')
+                # Try to parse with time if provided
+                if ' ' in start_time_str:
+                    start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M')
+                else:
+                    start_time = datetime.strptime(start_time_str, '%Y-%m-%d')
+            except ValueError as e:
+                proj_logger.warning(f"Invalid start_time format: {start_time_str} - {str(e)}")
+                flash('Invalid start time format. Please use YYYY-MM-DD or YYYY-MM-DD HH:MM', 'danger')
                 return redirect(url_for('projects.view_project', id=project.id))
         else:
             start_time = datetime.utcnow()
+            proj_logger.info(f"No start_time provided, using current time: {start_time}")
 
-        duration = request.form.get('duration', type=int)
-        if not duration or duration <= 0:
-            flash('Duration must be a positive number', 'danger')
+        # Check if we have end_time and calculate duration, or use provided duration
+        end_time = None
+        duration = None
+        
+        end_time_str = request.form.get('end_time')
+        duration_input = request.form.get('duration', type=int)
+        
+        # If end_time is provided, parse and calculate duration
+        if end_time_str:
+            try:
+                # Try to parse with time if provided
+                if ' ' in end_time_str:
+                    end_time = datetime.strptime(end_time_str, '%Y-%m-%d %H:%M')
+                else:
+                    end_time = datetime.strptime(end_time_str, '%Y-%m-%d')
+                    
+                # Calculate duration in minutes
+                time_diff = end_time - start_time
+                if time_diff.total_seconds() <= 0:
+                    proj_logger.warning(f"End time ({end_time}) is before start time ({start_time})")
+                    flash('End time must be after start time', 'danger')
+                    return redirect(url_for('projects.view_project', id=project.id))
+                
+                # Calculate duration in minutes
+                duration = int(time_diff.total_seconds() / 60)
+                proj_logger.info(f"Calculated duration: {duration} minutes from {start_time} to {end_time}")
+                
+            except ValueError as e:
+                proj_logger.warning(f"Invalid end_time format: {end_time_str} - {str(e)}")
+                flash('Invalid end time format. Please use YYYY-MM-DD or YYYY-MM-DD HH:MM', 'danger')
+                return redirect(url_for('projects.view_project', id=project.id))
+        # If no end_time but duration is provided, use it
+        elif duration_input:
+            if duration_input <= 0:
+                proj_logger.warning(f"Invalid duration: {duration_input}")
+                flash('Duration must be a positive number', 'danger')
+                return redirect(url_for('projects.view_project', id=project.id))
+            duration = duration_input
+        # If neither end_time nor duration is provided
+        else:
+            proj_logger.warning("Neither end_time nor duration provided")
+            flash('Please provide either an end time or a duration', 'danger')
             return redirect(url_for('projects.view_project', id=project.id))
 
+        # Create and save the time entry
         try:
+            task_id = request.form.get('task_id', type=int)
+            description = request.form.get('description', '')
+            
             entry = TimeEntry(
                 project_id=project.id,
-                task_id=request.form.get('task_id', type=int),
+                task_id=task_id,
                 start_time=start_time,
+                end_time=end_time,
                 duration=duration,
-                description=request.form.get('description')
+                description=description
             )
 
             db.session.add(entry)
             db.session.commit()
+            proj_logger.info(f"Time entry created successfully: id={entry.id}, project={project.id}, duration={duration}")
             flash('Time entry recorded successfully', 'success')
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Error creating time entry: {str(e)}")
+            proj_logger.error(f"Error creating time entry: {str(e)}")
             flash('Error recording time entry. Please try again.', 'danger')
 
         return redirect(url_for('projects.view_project', id=project.id))
