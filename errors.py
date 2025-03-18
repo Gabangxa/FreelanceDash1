@@ -90,6 +90,7 @@ def setup_logging(app):
 
 def setup_component_loggers(logs_dir, formatter):
     """Set up loggers for specific application components."""
+    # Application modules
     components = ['auth', 'projects', 'invoices', 'clients']
     
     for component in components:
@@ -105,6 +106,32 @@ def setup_component_loggers(logs_dir, formatter):
         handler.setFormatter(formatter)
         handler.setLevel(logging.INFO)
         component_logger.addHandler(handler)
+    
+    # Database logger - for SQL and ORM operations
+    db_logger = logging.getLogger('database')
+    db_logger.propagate = True
+    
+    db_handler = RotatingFileHandler(
+        os.path.join(logs_dir, 'database.log'),
+        maxBytes=10*1024*1024,  # 10MB
+        backupCount=5
+    )
+    db_handler.setFormatter(formatter)
+    db_handler.setLevel(logging.INFO)
+    db_logger.addHandler(db_handler)
+    
+    # Performance logger - for tracking slow operations
+    perf_logger = logging.getLogger('performance')
+    perf_logger.propagate = True
+    
+    perf_handler = RotatingFileHandler(
+        os.path.join(logs_dir, 'performance.log'),
+        maxBytes=5*1024*1024,  # 5MB
+        backupCount=3
+    )
+    perf_handler.setFormatter(formatter)
+    perf_handler.setLevel(logging.INFO)
+    perf_logger.addHandler(perf_handler)
 
 # Register error handlers
 def register_error_handlers(app):
@@ -196,7 +223,42 @@ def handle_db_errors(f):
         try:
             return f(*args, **kwargs)
         except IntegrityError as e:
-            current_app.logger.error(f"IntegrityError in {f.__name__}: {str(e)}")
+            # Get detailed error information
+            error_details = {
+                'function': f.__name__,
+                'module': f.__module__,
+                'error_type': 'IntegrityError',
+                'error_message': str(e)
+            }
+            
+            # Get user info if available
+            user_id = 'Unknown'
+            try:
+                from flask_login import current_user
+                if current_user.is_authenticated:
+                    user_id = current_user.id
+                    error_details['user_id'] = user_id
+            except Exception:
+                pass
+            
+            # Get request details if available
+            try:
+                from flask import request
+                error_details['path'] = request.path
+                error_details['method'] = request.method
+                error_details['remote_addr'] = request.remote_addr
+            except Exception:
+                pass
+            
+            # Log with all details
+            db_logger = logging.getLogger('database')
+            db_logger.error(
+                f"IntegrityError in {f.__name__}: {str(e)}\n"
+                f"Details: {error_details}\n"
+                f"{traceback.format_exc()}"
+            )
+            
+            # Determine user-friendly error message
             if "duplicate key" in str(e):
                 error_message = "This record already exists."
             elif "foreign key constraint" in str(e):
@@ -204,13 +266,58 @@ def handle_db_errors(f):
             else:
                 error_message = "A database constraint was violated."
             
+            # Rollback transaction
             from app import db
             db.session.rollback()
+            
+            # Return appropriate error response
+            if request.path.startswith('/api/'):
+                return jsonify({"error": error_message}), 400
             return render_template('errors/db_error.html', error=error_message), 400
+            
         except SQLAlchemyError as e:
-            current_app.logger.error(f"SQLAlchemyError in {f.__name__}: {str(e)}")
+            # Get detailed error information
+            error_details = {
+                'function': f.__name__,
+                'module': f.__module__,
+                'error_type': 'SQLAlchemyError',
+                'error_message': str(e)
+            }
+            
+            # Get user info if available
+            user_id = 'Unknown'
+            try:
+                from flask_login import current_user
+                if current_user.is_authenticated:
+                    user_id = current_user.id
+                    error_details['user_id'] = user_id
+            except Exception:
+                pass
+            
+            # Get request details if available
+            try:
+                from flask import request
+                error_details['path'] = request.path
+                error_details['method'] = request.method
+                error_details['remote_addr'] = request.remote_addr
+            except Exception:
+                pass
+            
+            # Log with all details
+            db_logger = logging.getLogger('database')
+            db_logger.error(
+                f"SQLAlchemyError in {f.__name__}: {str(e)}\n"
+                f"Details: {error_details}\n"
+                f"{traceback.format_exc()}"
+            )
+            
+            # Rollback transaction
             from app import db
             db.session.rollback()
+            
+            # Return appropriate error response
+            if request.path.startswith('/api/'):
+                return jsonify({"error": "A database error occurred."}), 500
             return render_template('errors/db_error.html', error="A database error occurred."), 500
     return decorated_function
 

@@ -1,12 +1,15 @@
 import os
 import logging
-from flask import Flask, render_template, request
+import time
+from datetime import datetime
+from flask import Flask, render_template, request, g
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 import secrets
 from errors import setup_logging, register_error_handlers, register_user_friendly_error_handler
+from performance import PerformanceMonitor
 
 # Initialize basic logging for startup
 logging.basicConfig(
@@ -66,19 +69,47 @@ login_manager.login_message_category = 'info'  # Bootstrap message styling
 # Setup advanced logging
 logger = setup_logging(app)
 
+# Initialize performance monitoring
+# Set higher thresholds for production to reduce noise
+slow_request_threshold = 2.0 if not app.debug else 1.0
+slow_db_threshold = 1.0 if not app.debug else 0.5
+
+# Create and initialize the performance monitor
+performance_monitor = PerformanceMonitor(
+    app=app,
+    slow_request_threshold=slow_request_threshold,
+    slow_db_threshold=slow_db_threshold
+)
+
+# Store thresholds on app for access by other components
+app.slow_db_threshold = slow_db_threshold
+
 # Request handlers for logging
 @app.before_request
 def log_request_info():
+    # Add timestamp for application-level tracking
+    g.request_start_time = time.time()
+    
     if app.debug:
         logger.debug('Request Headers: %s', request.headers)
         logger.debug('Request Body: %s', request.get_data())
 
 @app.after_request
-def add_security_headers(response):
+def add_security_headers_and_log_timing(response):
     # Add security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'
     response.headers['X-XSS-Protection'] = '1; mode=block'
+    
+    # Add server timing header for non-static resources in debug mode
+    if hasattr(g, 'request_start_time') and app.debug and not request.path.startswith('/static/'):
+        duration = time.time() - g.request_start_time
+        response.headers['Server-Timing'] = f'total;dur={duration * 1000:.2f}'
+        
+        # Log response times in development for easier debugging
+        if app.debug and duration > 0.5:  # Only log slow requests in debug mode
+            logger.debug(f"Response time: {duration:.4f}s for {request.method} {request.path}")
+            
     return response
 
 # Register error handlers
