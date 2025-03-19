@@ -4,10 +4,10 @@ from urllib.parse import urlparse
 from sqlalchemy.exc import SQLAlchemyError
 from app import db, logger
 from models import User
-from auth.forms import LoginForm, RegistrationForm
+from auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm
 from werkzeug.security import generate_password_hash
 from errors import handle_db_errors, UserFriendlyError
-from mail import send_welcome_email
+from mail import send_welcome_email, send_password_reset_email
 import re
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -111,3 +111,84 @@ def logout():
         logger.info(f"User logged out: {username} (ID: {user_id})")
         flash('You have been logged out successfully', 'info')
     return redirect(url_for('auth.login'))
+
+@auth_bp.route('/reset_password_request', methods=['GET', 'POST'])
+@handle_db_errors
+def reset_password_request():
+    # Redirect if user is already logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.dashboard'))
+        
+    form = ResetPasswordRequestForm()
+    if form.validate_on_submit():
+        try:
+            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+            
+            # Always show success message even if email not found for security
+            if user:
+                # Generate a secure reset token
+                token = user.generate_reset_token()
+                db.session.commit()
+                
+                # Send password reset email
+                email_sent = send_password_reset_email(user, token)
+                
+                if email_sent:
+                    logger.info(f"Password reset email sent to {user.email}")
+                else:
+                    logger.warning(f"Failed to send password reset email to {user.email}")
+                    
+            flash('If your email address exists in our database, you will receive a password reset link shortly.', 'info')
+            return redirect(url_for('auth.login'))
+            
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error during password reset request: {str(e)}")
+            flash('A system error occurred. Please try again later.', 'danger')
+            
+    return render_template('auth/reset_password_request.html', title='Reset Password', form=form)
+    
+@auth_bp.route('/reset_password/<token>', methods=['GET', 'POST'])
+@handle_db_errors
+def reset_password(token):
+    # Redirect if user is already logged in
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.dashboard'))
+        
+    # Find user with this token
+    user = None
+    try:
+        # Search for user with this reset token
+        user = User.query.filter(User.reset_token == token).first()
+        
+        # Check if token is valid
+        if not user or not user.verify_reset_token(token):
+            logger.warning(f"Invalid or expired password reset token: {token}")
+            flash('The password reset link is invalid or has expired.', 'danger')
+            return redirect(url_for('auth.reset_password_request'))
+            
+    except SQLAlchemyError as e:
+        logger.error(f"Database error during password reset token verification: {str(e)}")
+        flash('A system error occurred. Please try again later.', 'danger')
+        return redirect(url_for('auth.reset_password_request'))
+    
+    # Token is valid, proceed with password reset
+    form = ResetPasswordForm()
+    if form.validate_on_submit():
+        try:
+            # Update password
+            user.set_password(form.password.data)
+            # Clear the reset token
+            user.clear_reset_token()
+            db.session.commit()
+            
+            logger.info(f"Password reset successful for user: {user.username} (ID: {user.id})")
+            flash('Your password has been reset successfully. You can now log in with your new password.', 'success')
+            return redirect(url_for('auth.login'))
+            
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error during password reset: {str(e)}")
+            flash('A system error occurred. Please try again later.', 'danger')
+    
+    return render_template('auth/reset_password.html', title='Reset Password', form=form, token=token)
