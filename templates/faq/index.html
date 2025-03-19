@@ -1,0 +1,138 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <h1 class="mb-4">Frequently Asked Questions</h1>
+    
+    <div class="mb-4">
+        <p class="lead">Find answers to common questions about using the Freelancer Suite application.</p>
+    </div>
+    
+    <!-- Search box for FAQs -->
+    <div class="mb-5">
+        <div class="input-group">
+            <span class="input-group-text"><i class="fas fa-search"></i></span>
+            <input type="text" id="faq-search" class="form-control" placeholder="Search for questions or topics...">
+        </div>
+    </div>
+    
+    <!-- FAQ Categories -->
+    <div class="accordion faq-accordion" id="faqAccordion">
+        {% for category in faq_categories %}
+        <div class="accordion-item mb-4 faq-category">
+            <h2 class="accordion-header" id="heading{{ loop.index }}">
+                <button class="accordion-button fs-4 {% if not loop.first %}collapsed{% endif %}" type="button" data-bs-toggle="collapse" data-bs-target="#collapse{{ loop.index }}" aria-expanded="{{ 'true' if loop.first else 'false' }}" aria-controls="collapse{{ loop.index }}">
+                    {{ category.title }}
+                </button>
+            </h2>
+            <div id="collapse{{ loop.index }}" class="accordion-collapse collapse {% if loop.first %}show{% endif %}" aria-labelledby="heading{{ loop.index }}" data-bs-parent="#faqAccordion">
+                <div class="accordion-body">
+                    <!-- Nested accordion for Q&A -->
+                    <div class="accordion" id="qaAccordion{{ loop.index }}">
+                        {% for item in category.items %}
+                        <div class="accordion-item mb-2 faq-item">
+                            <h3 class="accordion-header" id="qaHeading{{ loop.index }}-{{ loop.parent.loop.index }}">
+                                <button class="accordion-button collapsed fs-6" type="button" data-bs-toggle="collapse" data-bs-target="#qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}" aria-expanded="false" aria-controls="qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}">
+                                    {{ item.question }}
+                                </button>
+                            </h3>
+                            <div id="qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}" class="accordion-collapse collapse" aria-labelledby="qaHeading{{ loop.index }}-{{ loop.parent.loop.index }}" data-bs-parent="#qaAccordion{{ loop.parent.loop.index }}">
+                                <div class="accordion-body">
+                                    <p>{{ item.answer }}</p>
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Still Need Help Section -->
+    <div class="mt-5 p-4 bg-light rounded">
+        <h2 class="mb-3">Still Need Help?</h2>
+        <p>If you couldn't find the answer to your question, feel free to contact our support team for assistance.</p>
+        <a href="mailto:support@freelancersuite.com" class="btn btn-primary">Contact Support</a>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // FAQ Search functionality
+    const searchInput = document.getElementById('faq-search');
+    const faqItems = document.querySelectorAll('.faq-item');
+    const faqCategories = document.querySelectorAll('.faq-category');
+    
+    searchInput.addEventListener('input', function() {
+        const searchTerm = this.value.toLowerCase().trim();
+        
+        if (!searchTerm) {
+            // Reset the view when search is cleared
+            faqItems.forEach(item => {
+                item.style.display = '';
+                item.classList.remove('search-match');
+            });
+            
+            faqCategories.forEach(category => {
+                category.style.display = '';
+            });
+            
+            return;
+        }
+        
+        // Track if each category has any matching items
+        let categoryMatches = {};
+        
+        // Search through all FAQ items
+        faqItems.forEach(item => {
+            const question = item.querySelector('.accordion-button').textContent.toLowerCase();
+            const answer = item.querySelector('.accordion-body p').textContent.toLowerCase();
+            const categoryItem = item.closest('.faq-category');
+            const categoryIndex = categoryItem.querySelector('.accordion-button').getAttribute('data-bs-target').replace('#collapse', '');
+            
+            if (question.includes(searchTerm) || answer.includes(searchTerm)) {
+                item.style.display = '';
+                item.classList.add('search-match');
+                
+                // Expand the item if it matches
+                const itemCollapse = item.querySelector('.accordion-collapse');
+                const bsCollapse = new bootstrap.Collapse(itemCollapse, {
+                    toggle: false
+                });
+                bsCollapse.show();
+                
+                // Mark that this category has a match
+                categoryMatches[categoryIndex] = true;
+            } else {
+                item.style.display = 'none';
+                item.classList.remove('search-match');
+            }
+        });
+        
+        // Show/hide categories based on if they have any matches
+        faqCategories.forEach(category => {
+            const categoryIndex = category.querySelector('.accordion-button').getAttribute('data-bs-target').replace('#collapse', '');
+            
+            if (categoryMatches[categoryIndex]) {
+                category.style.display = '';
+                
+                // Expand the category if it has matches
+                const categoryCollapse = category.querySelector('.accordion-collapse');
+                const bsCollapse = new bootstrap.Collapse(categoryCollapse, {
+                    toggle: false
+                });
+                bsCollapse.show();
+            } else {
+                category.style.display = 'none';
+            }
+        });
+    });
+});
+</script>
+{% endblock %}
