@@ -10,7 +10,7 @@ def index():
     faq_categories = [
         {
             'title': 'Account Management',
-            'items': [
+            'questions': [
                 {
                     'question': 'How do I reset my password?',
                     'answer': 'Click on the "Forgot Password" link on the login page. You will receive an email with instructions to reset your password.'
@@ -27,7 +27,7 @@ def index():
         },
         {
             'title': 'Clients',
-            'items': [
+            'questions': [
                 {
                     'question': 'How do I add a new client?',
                     'answer': 'Navigate to the Clients section and click the "Add Client" button. Fill in the required information and save.'
@@ -44,7 +44,7 @@ def index():
         },
         {
             'title': 'Projects',
-            'items': [
+            'questions': [
                 {
                     'question': 'How do I track time for a project?',
                     'answer': 'Navigate to the project detail page and use the "Add Time Entry" button to record time. You can specify the start and end time, or use the timer feature.'
@@ -61,7 +61,7 @@ def index():
         },
         {
             'title': 'Invoices',
-            'items': [
+            'questions': [
                 {
                     'question': 'How are invoice numbers generated?',
                     'answer': 'Invoice numbers are automatically generated with a unique sequential identifier. You can customize the format in your account settings.'
@@ -82,7 +82,7 @@ def index():
         },
         {
             'title': 'Technical Support',
-            'items': [
+            'questions': [
                 {
                     'question': 'What should I do if I encounter an error?',
                     'answer': 'Try refreshing the page first. If the error persists, please contact our support team with a screenshot and description of what you were doing when the error occurred.'

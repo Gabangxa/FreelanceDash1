@@ -31,7 +31,7 @@
                 <div class="accordion-body">
                     <!-- Nested accordion for Q&A -->
                     <div class="accordion" id="qaAccordion{{ loop.index }}">
-                        {% for item in category.items %}
+                        {% for item in category.questions %}
                         <div class="accordion-item mb-2 faq-item">
                             <h3 class="accordion-header" id="qaHeading{{ loop.index }}-{{ loop.parent.loop.index }}">
                                 <button class="accordion-button collapsed fs-6" type="button" data-bs-toggle="collapse" data-bs-target="#qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}" aria-expanded="false" aria-controls="qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}">
