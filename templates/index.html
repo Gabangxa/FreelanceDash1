@@ -10,10 +10,15 @@
             <h1 class="display-4 fw-bold mb-4">Manage Your Freelance Business with Confidence</h1>
             <p class="lead mb-4">Freelancer Suite is your all-in-one platform for managing projects, tracking time, and handling invoices seamlessly.</p>
             {% if not current_user.is_authenticated %}
-            <div class="d-grid gap-2 d-md-flex">
+            <div class="d-grid gap-2 d-md-flex mb-3">
                 <a href="{{ url_for('auth.register') }}" class="btn btn-primary btn-lg px-4">Get Started</a>
                 <a href="{{ url_for('auth.login') }}" class="btn btn-outline-primary btn-lg px-4">Sign In</a>
             </div>
+            <p class="small">
+                <a href="{{ url_for('faq.index') }}" class="text-decoration-none">
+                    <i class="fas fa-question-circle me-1"></i>Have questions? Check our FAQ
+                </a>
+            </p>
             {% else %}
             <a href="{{ url_for('projects.dashboard') }}" class="btn btn-primary btn-lg px-4">Go to Dashboard</a>
             {% endif %}
