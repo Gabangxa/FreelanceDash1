@@ -77,31 +77,48 @@ def send_email(subject, recipients, text_body, html_body=None, sender=None):
 
 def send_welcome_email(user):
     """Send a welcome email to a newly registered user."""
+    from datetime import datetime
+    
     subject = "Welcome to Freelancer Suite!"
     
-    # Basic text version
-    text_body = f"""
-    Hello {user.username},
+    # Prepare context data for templates
+    context = {
+        'user': user,
+        'login_url': f"{os.environ.get('APP_URL', 'http://localhost:5000')}/auth/login",
+        'current_year': datetime.utcnow().year
+    }
     
-    Welcome to Freelancer Suite! Your account has been successfully created.
+    # Render templates with context
+    text_body = render_template('email/welcome.txt', **context)
+    html_body = render_template('email/welcome.html', **context)
     
-    You can now log in at {os.environ.get('APP_URL', 'http://localhost:5000')}/auth/login
+    return send_email(
+        subject=subject,
+        recipients=[user.email],
+        text_body=text_body,
+        html_body=html_body
+    )
     
-    Thank you for registering!
+def send_password_reset_email(user, token):
+    """Send a password reset email to a user."""
+    from datetime import datetime
     
-    Regards,
-    The Freelancer Suite Team
-    """
+    subject = "Password Reset Request"
     
-    # HTML version (simple for now)
-    html_body = f"""
-    <h2>Welcome to Freelancer Suite!</h2>
-    <p>Hello {user.username},</p>
-    <p>Your account has been successfully created.</p>
-    <p>You can now <a href="{os.environ.get('APP_URL', 'http://localhost:5000')}/auth/login">log in</a> and start using the application.</p>
-    <p>Thank you for registering!</p>
-    <p>Regards,<br>The Freelancer Suite Team</p>
-    """
+    # Build the password reset URL
+    reset_url = f"{os.environ.get('APP_URL', 'http://localhost:5000')}/auth/reset_password/{token}"
+    
+    # Prepare context data for templates
+    context = {
+        'user': user,
+        'reset_url': reset_url,
+        'current_year': datetime.utcnow().year,
+        'expiry_hours': 1  # Token expiry in hours
+    }
+    
+    # Render templates with context
+    text_body = render_template('email/reset_password.txt', **context)
+    html_body = render_template('email/reset_password.html', **context)
     
     return send_email(
         subject=subject,

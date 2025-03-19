@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Welcome to Freelancer Suite</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background-color: #4a6ed3;
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 5px 5px 0 0;
+        }
+        .content {
+            background-color: #f9f9f9;
+            padding: 20px;
+            border-radius: 0 0 5px 5px;
+            border: 1px solid #ddd;
+            border-top: none;
+        }
+        .button {
+            display: inline-block;
+            background-color: #4a6ed3;
+            color: white;
+            padding: 10px 20px;
+            text-decoration: none;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .footer {
+            text-align: center;
+            font-size: 12px;
+            color: #777;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Welcome to Freelancer Suite!</h1>
+    </div>
+    <div class="content">
+        <p>Hello {{ user.username }},</p>
+        
+        <p>Thank you for registering with Freelancer Suite! Your account has been successfully created.</p>
+        
+        <p>Freelancer Suite offers powerful tools to help you manage your freelance business:</p>
+        <ul>
+            <li>Project management</li>
+            <li>Time tracking</li>
+            <li>Client management</li>
+            <li>Invoice generation</li>
+        </ul>
+        
+        <p>Get started by logging into your account:</p>
+        <a href="{{ login_url }}" class="button">Log In Now</a>
+        
+        <p>If you have any questions or need assistance, please don't hesitate to contact our support team.</p>
+        
+        <p>Best regards,<br>
+        The Freelancer Suite Team</p>
+    </div>
+    <div class="footer">
+        <p>This is an automated message. Please do not reply to this email.</p>
+        <p>&copy; {{ current_year }} Freelancer Suite. All rights reserved.</p>
+    </div>
+</body>
+</html>

@@ -1,0 +1,23 @@
+Welcome to Freelancer Suite!
+
+Hello {{ user.username }},
+
+Thank you for registering with Freelancer Suite! Your account has been successfully created.
+
+Freelancer Suite offers powerful tools to help you manage your freelance business:
+- Project management
+- Time tracking
+- Client management
+- Invoice generation
+
+Get started by logging into your account:
+{{ login_url }}
+
+If you have any questions or need assistance, please don't hesitate to contact our support team.
+
+Best regards,
+The Freelancer Suite Team
+
+---
+This is an automated message. Please do not reply to this email.
+© {{ current_year }} Freelancer Suite. All rights reserved.

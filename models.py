@@ -1,8 +1,10 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import Index
+import secrets
+import time
 
 @login_manager.user_loader
 def load_user(id):
@@ -14,6 +16,8 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False, index=True)
     password_hash = db.Column(db.String(256))
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    reset_token = db.Column(db.String(100), nullable=True, index=True)
+    reset_token_expiry = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     projects = db.relationship('Project', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -24,6 +28,27 @@ class User(UserMixin, db.Model):
 
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
+        
+    def generate_reset_token(self, expires_in=3600):
+        """Generate a secure password reset token valid for 'expires_in' seconds."""
+        self.reset_token = secrets.token_urlsafe(32)
+        self.reset_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+        return self.reset_token
+        
+    def verify_reset_token(self, token):
+        """Check if the reset token is valid and not expired."""
+        if self.reset_token is None or self.reset_token_expiry is None:
+            return False
+        if self.reset_token != token:
+            return False
+        if datetime.utcnow() > self.reset_token_expiry:
+            return False
+        return True
+        
+    def clear_reset_token(self):
+        """Clear the reset token after it's been used."""
+        self.reset_token = None
+        self.reset_token_expiry = None
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
