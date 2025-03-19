@@ -49,6 +49,14 @@ class User(UserMixin, db.Model):
         """Clear the reset token after it's been used."""
         self.reset_token = None
         self.reset_token_expiry = None
+        
+    def get_or_create_settings(self):
+        """Get the user settings or create default settings if none exist."""
+        if not hasattr(self, 'settings') or self.settings is None:
+            settings = UserSettings(user_id=self.id)
+            db.session.add(settings)
+            db.session.commit()
+        return self.settings
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -149,3 +157,32 @@ class InvoiceItem(db.Model):
     rate = db.Column(db.Float, nullable=False)
     amount = db.Column(db.Float, nullable=False)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False, index=True)
+
+
+class UserSettings(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    company_name = db.Column(db.String(100))
+    company_address = db.Column(db.Text)
+    company_phone = db.Column(db.String(20))
+    company_email = db.Column(db.String(120))
+    company_website = db.Column(db.String(120))
+    invoice_logo = db.Column(db.LargeBinary)
+    invoice_logo_mimetype = db.Column(db.String(30))
+    invoice_template = db.Column(db.String(20), default='default')
+    invoice_color_primary = db.Column(db.String(10), default='#3498db')
+    invoice_color_secondary = db.Column(db.String(10), default='#f8f9fa')
+    invoice_footer_text = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('settings', uselist=False, cascade='all, delete-orphan'))
+    
+    def get_logo_data_uri(self):
+        """Return the logo as a data URI for embedding in HTML/PDF"""
+        if not self.invoice_logo:
+            return None
+        
+        import base64
+        encoded = base64.b64encode(self.invoice_logo).decode('utf-8')
+        return f"data:{self.invoice_logo_mimetype};base64,{encoded}"

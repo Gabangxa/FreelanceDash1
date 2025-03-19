@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice Template Settings - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Invoice Template Settings</h1>
+    
+    <nav class="nav nav-tabs mb-4">
+        <a class="nav-link" href="{{ url_for('settings.company_settings') }}">Company Information</a>
+        <a class="nav-link active" href="{{ url_for('settings.invoice_template') }}">Invoice Templates</a>
+    </nav>
+    
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Invoice Customization</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" enctype="multipart/form-data">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="mb-4">
+                            <label class="form-label">Current Logo</label>
+                            <div class="mb-2">
+                                {% if logo_data_uri %}
+                                    <img src="{{ logo_data_uri }}" alt="Company Logo" class="img-thumbnail mb-2" style="max-height: 100px;">
+                                    <div class="form-check mb-3">
+                                        <input type="checkbox" class="form-check-input" id="remove_logo" onchange="document.getElementById('remove_logo_hidden').value = this.checked ? '1' : '0';">
+                                        <label class="form-check-label" for="remove_logo">Remove logo</label>
+                                        {{ form.remove_logo(id="remove_logo_hidden", value="0") }}
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted">No logo uploaded</p>
+                                {% endif %}
+                            </div>
+                            
+                            {{ form.invoice_logo.label(class="form-label") }}
+                            {{ form.invoice_logo(class="form-control") }}
+                            {% if form.invoice_logo.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.invoice_logo.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">For best results, upload a square or rectangular image with a transparent background (PNG). Max size: 2MB.</small>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.invoice_template.label(class="form-label") }}
+                            {{ form.invoice_template(class="form-select") }}
+                            {% if form.invoice_template.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.invoice_template.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.invoice_color_primary.label(class="form-label") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <input type="color" id="color_picker_primary" value="{{ form.invoice_color_primary.data or '#3498db' }}" onchange="document.getElementById('invoice_color_primary').value = this.value;">
+                                    </span>
+                                    {{ form.invoice_color_primary(class="form-control", id="invoice_color_primary") }}
+                                </div>
+                                {% if form.invoice_color_primary.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.invoice_color_primary.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.invoice_color_secondary.label(class="form-label") }}
+                                <div class="input-group">
+                                    <span class="input-group-text">
+                                        <input type="color" id="color_picker_secondary" value="{{ form.invoice_color_secondary.data or '#f8f9fa' }}" onchange="document.getElementById('invoice_color_secondary').value = this.value;">
+                                    </span>
+                                    {{ form.invoice_color_secondary(class="form-control", id="invoice_color_secondary") }}
+                                </div>
+                                {% if form.invoice_color_secondary.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.invoice_color_secondary.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.invoice_footer_text.label(class="form-label") }}
+                            {{ form.invoice_footer_text(class="form-control", rows=3) }}
+                            {% if form.invoice_footer_text.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.invoice_footer_text.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                            <small class="form-text text-muted">This text will appear at the bottom of your invoices. You can include payment terms, thank you messages, etc.</small>
+                        </div>
+                        
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            {{ form.submit(class="btn btn-primary") }}
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-4">
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Template Preview</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-flex justify-content-center align-items-center mb-3">
+                        <div id="template-preview" class="border p-3 w-100" style="min-height: 250px; background-color: {{ settings.invoice_color_secondary }};">
+                            {% if logo_data_uri %}
+                                <div class="mb-3">
+                                    <img src="{{ logo_data_uri }}" alt="Company Logo" style="max-height: 50px;">
+                                </div>
+                            {% endif %}
+                            <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; border-bottom: 2px solid {{ settings.invoice_color_primary }}; margin-bottom: 10px;">
+                                INVOICE
+                            </div>
+                            <div class="small" style="margin-bottom: 20px;">
+                                <div>{{ settings.company_name or 'Your Company Name' }}</div>
+                                <div>{{ settings.company_address or 'Company Address' }}</div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                                <div>
+                                    <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; font-size: 0.8em;">BILL TO</div>
+                                    <div class="small">Client Name</div>
+                                </div>
+                                <div>
+                                    <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; font-size: 0.8em;">INVOICE INFO</div>
+                                    <div class="small">Invoice #: INV-001</div>
+                                    <div class="small">Date: 2023-01-01</div>
+                                </div>
+                            </div>
+                            <div class="small text-center mt-3 text-muted">
+                                <div>{{ settings.invoice_footer_text or 'Thank you for your business!' }}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <p class="small text-muted">This is a simplified preview. The actual invoice will contain more details.</p>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Template Tips</h5>
+                </div>
+                <div class="card-body">
+                    <ul class="small">
+                        <li>Choose colors that match your brand identity</li>
+                        <li>For logo, use PNG files with transparent backgrounds</li>
+                        <li>Keep footer text concise and professional</li>
+                        <li>Use the preview to check how your template looks</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Update template preview when template selection changes
+    const templateSelect = document.getElementById('invoice_template');
+    const templatePreview = document.getElementById('template-preview');
+    const primaryColorInput = document.getElementById('invoice_color_primary');
+    const secondaryColorInput = document.getElementById('invoice_color_secondary');
+    const primaryColorPicker = document.getElementById('color_picker_primary');
+    const secondaryColorPicker = document.getElementById('color_picker_secondary');
+    
+    // Update color inputs when pickers change
+    primaryColorPicker.addEventListener('input', function() {
+        primaryColorInput.value = this.value;
+        updatePreviewColors();
+    });
+    
+    secondaryColorPicker.addEventListener('input', function() {
+        secondaryColorInput.value = this.value;
+        updatePreviewColors();
+    });
+    
+    // Update preview colors when inputs change
+    primaryColorInput.addEventListener('input', function() {
+        primaryColorPicker.value = this.value;
+        updatePreviewColors();
+    });
+    
+    secondaryColorInput.addEventListener('input', function() {
+        secondaryColorPicker.value = this.value;
+        updatePreviewColors();
+    });
+    
+    function updatePreviewColors() {
+        const primaryColor = primaryColorInput.value || '#3498db';
+        const secondaryColor = secondaryColorInput.value || '#f8f9fa';
+        
+        // Update preview styles
+        templatePreview.style.backgroundColor = secondaryColor;
+        
+        // Update text colors
+        const headings = templatePreview.querySelectorAll('[style*="color:"]');
+        headings.forEach(heading => {
+            heading.style.color = primaryColor;
+        });
+        
+        // Update border colors
+        const borders = templatePreview.querySelectorAll('[style*="border-bottom:"]');
+        borders.forEach(border => {
+            border.style.borderBottomColor = primaryColor;
+        });
+    }
+    
+    // Handle template changes
+    templateSelect.addEventListener('change', function() {
+        const template = this.value;
+        
+        // Apply template-specific styles to the preview
+        switch(template) {
+            case 'modern':
+                primaryColorInput.value = '#2c3e50';
+                secondaryColorInput.value = '#ffffff';
+                templatePreview.style.fontFamily = "'Arial', sans-serif";
+                break;
+                
+            case 'classic':
+                primaryColorInput.value = '#800000';
+                secondaryColorInput.value = '#f5f5f5';
+                templatePreview.style.fontFamily = "'Times New Roman', serif";
+                break;
+                
+            case 'creative':
+                primaryColorInput.value = '#9c27b0';
+                secondaryColorInput.value = '#f3e5f5';
+                templatePreview.style.fontFamily = "'Segoe UI', sans-serif";
+                break;
+                
+            default: // default template
+                primaryColorInput.value = '#3498db';
+                secondaryColorInput.value = '#f8f9fa';
+                templatePreview.style.fontFamily = "'Helvetica', sans-serif";
+                break;
+        }
+        
+        // Update color pickers
+        primaryColorPicker.value = primaryColorInput.value;
+        secondaryColorPicker.value = secondaryColorInput.value;
+        
+        // Update preview colors
+        updatePreviewColors();
+    });
+});
+</script>
+{% endblock %}
