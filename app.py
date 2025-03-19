@@ -10,6 +10,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import secrets
 from errors import setup_logging, register_error_handlers, register_user_friendly_error_handler
 from performance import PerformanceMonitor
+import mail
 
 # Initialize basic logging for startup
 logging.basicConfig(
@@ -68,6 +69,9 @@ login_manager.login_message_category = 'info'  # Bootstrap message styling
 
 # Setup advanced logging
 logger = setup_logging(app)
+
+# Initialize mail service
+mail.init_app(app)
 
 # Initialize performance monitoring
 # Set higher thresholds for production to reduce noise

@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
 from urllib.parse import urlparse
 from sqlalchemy.exc import SQLAlchemyError
@@ -7,6 +7,7 @@ from models import User
 from auth.forms import LoginForm, RegistrationForm
 from werkzeug.security import generate_password_hash
 from errors import handle_db_errors, UserFriendlyError
+from mail import send_welcome_email
 import re
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -72,8 +73,25 @@ def register():
             db.session.add(user)
             db.session.commit()
 
+            # Send welcome email
+            email_sent = False
+            try:
+                email_sent = send_welcome_email(user)
+                if email_sent:
+                    logger.info(f"Welcome email sent to {user.email}")
+                else:
+                    logger.warning(f"Failed to send welcome email to {user.email}")
+            except Exception as e:
+                logger.error(f"Error sending welcome email: {str(e)}")
+
             logger.info(f"New user registered: {user.username} (ID: {user.id})")
-            flash('Registration successful! You can now log in.', 'success')
+            
+            # Update the flash message based on email status
+            if email_sent:
+                flash('Registration successful! A welcome email has been sent to your email address. You can now log in.', 'success')
+            else:
+                flash('Registration successful! You can now log in.', 'success')
+                
             return redirect(url_for('auth.login'))
 
         except SQLAlchemyError as e:
