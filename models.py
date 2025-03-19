@@ -18,9 +18,6 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     reset_token = db.Column(db.String(100), nullable=True, index=True)
     reset_token_expiry = db.Column(db.DateTime, nullable=True)
-    is_active = db.Column(db.Boolean, default=False)
-    activation_token = db.Column(db.String(100), nullable=True, index=True)
-    activation_token_expiry = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     projects = db.relationship('Project', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -52,28 +49,6 @@ class User(UserMixin, db.Model):
         """Clear the reset token after it's been used."""
         self.reset_token = None
         self.reset_token_expiry = None
-        
-    def generate_activation_token(self, expires_in=86400):  # 24 hours by default
-        """Generate a secure account activation token valid for 'expires_in' seconds."""
-        self.activation_token = secrets.token_urlsafe(32)
-        self.activation_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
-        return self.activation_token
-        
-    def verify_activation_token(self, token):
-        """Check if the activation token is valid and not expired."""
-        if self.activation_token is None or self.activation_token_expiry is None:
-            return False
-        if self.activation_token != token:
-            return False
-        if datetime.utcnow() > self.activation_token_expiry:
-            return False
-        return True
-        
-    def activate_account(self):
-        """Activate user account and clear activation token."""
-        self.is_active = True
-        self.activation_token = None
-        self.activation_token_expiry = None
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
