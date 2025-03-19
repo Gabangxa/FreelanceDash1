@@ -24,9 +24,16 @@ def init_app(app):
     # Use the mail_username as the default sender if MAIL_DEFAULT_SENDER is not provided
     mail_default_sender = os.environ.get('MAIL_DEFAULT_SENDER', mail_username)
     
-    # If mail_default_sender contains a variable placeholder, replace with actual value
-    if mail_default_sender and '${' in mail_default_sender:
-        mail_default_sender = mail_default_sender.replace('${MAIL_USERNAME}', mail_username or '')
+    # Parse and format the mail_default_sender appropriately
+    if mail_default_sender:
+        # Replace any environment variable placeholders
+        if '${' in mail_default_sender:
+            mail_default_sender = mail_default_sender.replace('${MAIL_USERNAME}', mail_username or '')
+        if '$MAIL_USERNAME' in mail_default_sender:
+            mail_default_sender = mail_default_sender.replace('$MAIL_USERNAME', mail_username or '')
+            
+        # Log the configured sender for debugging
+        logger.info(f"Configured mail sender: {mail_default_sender}")
     
     app.config.update(
         MAIL_SERVER=mail_server,
