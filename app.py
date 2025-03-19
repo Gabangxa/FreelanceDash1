@@ -11,6 +11,13 @@ import secrets
 from errors import setup_logging, register_error_handlers, register_user_friendly_error_handler
 from performance import PerformanceMonitor
 import mail
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+env_path = Path('.') / '.env'
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
 
 # Initialize basic logging for startup
 logging.basicConfig(
