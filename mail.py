@@ -20,7 +20,13 @@ def init_app(app):
     mail_use_tls = os.environ.get('MAIL_USE_TLS', 'true').lower() in ['true', 'yes', '1']
     mail_username = os.environ.get('MAIL_USERNAME', None)
     mail_password = os.environ.get('MAIL_PASSWORD', None)
+    
+    # Use the mail_username as the default sender if MAIL_DEFAULT_SENDER is not provided
     mail_default_sender = os.environ.get('MAIL_DEFAULT_SENDER', mail_username)
+    
+    # If mail_default_sender contains a variable placeholder, replace with actual value
+    if mail_default_sender and '${' in mail_default_sender:
+        mail_default_sender = mail_default_sender.replace('${MAIL_USERNAME}', mail_username or '')
     
     app.config.update(
         MAIL_SERVER=mail_server,
@@ -28,7 +34,11 @@ def init_app(app):
         MAIL_USE_TLS=mail_use_tls,
         MAIL_USERNAME=mail_username,
         MAIL_PASSWORD=mail_password,
-        MAIL_DEFAULT_SENDER=mail_default_sender
+        MAIL_DEFAULT_SENDER=mail_default_sender,
+        MAIL_DEBUG=app.debug,
+        MAIL_USE_SSL=False,  # Force TLS over SSL for Gmail
+        MAIL_MAX_EMAILS=None,  # No limit
+        MAIL_ASCII_ATTACHMENTS=False
     )
     
     # Initialize mail extension
@@ -44,10 +54,32 @@ def send_email_async(app, msg):
     """Send an email asynchronously."""
     with app.app_context():
         try:
+            # Log detailed debugging information
+            logger.info(f"Attempting to send email to {msg.recipients}")
+            logger.info(f"Email server: {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
+            logger.info(f"TLS enabled: {app.config.get('MAIL_USE_TLS')}")
+            logger.info(f"SSL enabled: {app.config.get('MAIL_USE_SSL')}")
+            logger.info(f"Sender: {msg.sender}")
+            
+            # Send the email
             mail.send(msg)
-            logger.info(f"Email sent to {msg.recipients}")
+            logger.info(f"Email successfully sent to {msg.recipients}")
+            
         except Exception as e:
             logger.error(f"Failed to send email: {str(e)}")
+            
+            # Provide more detailed error information
+            if "Username and Password not accepted" in str(e):
+                logger.error("Email authentication failed. If using Gmail, make sure you're using an App Password, not your regular password.")
+                logger.error("For Gmail, go to your Google account → Security → 2-Step Verification → App passwords")
+            elif "SMTP connection failed" in str(e):
+                logger.error(f"Could not connect to SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
+            elif "SMTP AUTH extension not supported" in str(e):
+                logger.error("SMTP server doesn't support authentication or TLS/SSL settings are incorrect")
+                
+            # Re-raise exception if we're in debug mode
+            if app.debug:
+                raise
 
 def send_email(subject, recipients, text_body, html_body=None, sender=None):
     """
