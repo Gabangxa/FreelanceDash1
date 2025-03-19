@@ -33,12 +33,12 @@
                     <div class="accordion" id="qaAccordion{{ loop.index }}">
                         {% for item in category.questions %}
                         <div class="accordion-item mb-2 faq-item">
-                            <h3 class="accordion-header" id="qaHeading{{ loop.index }}-{{ loop.parent.loop.index }}">
-                                <button class="accordion-button collapsed fs-6" type="button" data-bs-toggle="collapse" data-bs-target="#qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}" aria-expanded="false" aria-controls="qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}">
+                            <h3 class="accordion-header" id="qaHeading{{ loop.index }}-{{ category.title | replace(' ', '') }}">
+                                <button class="accordion-button collapsed fs-6" type="button" data-bs-toggle="collapse" data-bs-target="#qaCollapse{{ loop.index }}-{{ category.title | replace(' ', '') }}" aria-expanded="false" aria-controls="qaCollapse{{ loop.index }}-{{ category.title | replace(' ', '') }}">
                                     {{ item.question }}
                                 </button>
                             </h3>
-                            <div id="qaCollapse{{ loop.index }}-{{ loop.parent.loop.index }}" class="accordion-collapse collapse" aria-labelledby="qaHeading{{ loop.index }}-{{ loop.parent.loop.index }}" data-bs-parent="#qaAccordion{{ loop.parent.loop.index }}">
+                            <div id="qaCollapse{{ loop.index }}-{{ category.title | replace(' ', '') }}" class="accordion-collapse collapse" aria-labelledby="qaHeading{{ loop.index }}-{{ category.title | replace(' ', '') }}" data-bs-parent="#qaAccordion{{ loop.index0 + 1 }}">
                                 <div class="accordion-body">
                                     <p>{{ item.answer }}</p>
                                 </div>
