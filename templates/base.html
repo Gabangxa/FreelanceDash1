@@ -43,6 +43,23 @@
                             <i class="fas fa-file-invoice-dollar me-1"></i>Invoices
                         </a>
                     </li>
+                    <li class="nav-item dropdown">
+                        <a class="nav-link dropdown-toggle" href="#" id="timeDropdown" role="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-clock me-1"></i>Time Tracking
+                        </a>
+                        <ul class="dropdown-menu">
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('projects.time_entry_statistics') }}">
+                                    <i class="fas fa-chart-bar me-2"></i>Time Statistics
+                                </a>
+                            </li>
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('projects.batch_time_entries') }}">
+                                    <i class="fas fa-tasks me-2"></i>Batch Time Entries
+                                </a>
+                            </li>
+                        </ul>
+                    </li>
                     <li class="nav-item">
                         <a class="nav-link" href="{{ url_for('faq.index') }}">
                             <i class="fas fa-question-circle me-1"></i>FAQ
