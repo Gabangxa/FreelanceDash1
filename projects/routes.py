@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
-from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm
+from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
 import calendar
