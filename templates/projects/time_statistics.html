@@ -70,7 +70,7 @@
 
     <!-- Statistics Overview -->
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title">Total Time</h5>
@@ -79,16 +79,25 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title">Billable Time</h5>
-                    <h2 class="display-4 mt-3 mb-0">{{ billable_formatted }}</h2>
+                    <h2 class="display-4 mt-3 mb-0 text-success">{{ billable_formatted }}</h2>
                     <p class="text-muted">{{ "%.1f"|format(billable_percentage) }}% of total time</p>
                 </div>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Non-Billable Time</h5>
+                    <h2 class="display-4 mt-3 mb-0 text-secondary">{{ non_billable_formatted }}</h2>
+                    <p class="text-muted">{{ "%.1f"|format(100 - billable_percentage) }}% of total time</p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
             <div class="card h-100">
                 <div class="card-body text-center">
                     <h5 class="card-title">Avg. Daily Hours</h5>
@@ -106,6 +115,25 @@
 
     <!-- Charts -->
     <div class="row mb-4">
+        <!-- Billable vs. Non-Billable -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Billable vs. Non-Billable Time</h5>
+                </div>
+                <div class="card-body">
+                    {% if total_duration > 0 %}
+                        <canvas id="billableChart" height="300"></canvas>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-chart-pie fa-3x mb-3"></i>
+                            <p>No billable data available for the selected period.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
         <!-- Project Distribution -->
         <div class="col-md-6 mb-4">
             <div class="card h-100">
@@ -124,7 +152,9 @@
                 </div>
             </div>
         </div>
+    </div>
 
+    <div class="row mb-4">
         <!-- Daily Distribution -->
         <div class="col-md-6 mb-4">
             <div class="card h-100">
@@ -143,9 +173,7 @@
                 </div>
             </div>
         </div>
-    </div>
 
-    <div class="row mb-4">
         <!-- Weekday Distribution -->
         <div class="col-md-6 mb-4">
             <div class="card h-100">
@@ -159,6 +187,27 @@
                         <div class="text-center py-5 text-muted">
                             <i class="fas fa-calendar-week fa-3x mb-3"></i>
                             <p>No weekday data available for the selected period.</p>
+                        </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mb-4">
+        <!-- Project Billable Analysis -->
+        <div class="col-md-6 mb-4">
+            <div class="card h-100">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Billable Time by Project</h5>
+                </div>
+                <div class="card-body">
+                    {% if project_billable_data and project_billable_data|length > 0 %}
+                        <canvas id="projectBillableChart" height="300"></canvas>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-money-bill fa-3x mb-3"></i>
+                            <p>No billable project data available for the selected period.</p>
                         </div>
                     {% endif %}
                 </div>
@@ -292,6 +341,125 @@ function loadTasks(projectId) {
 }
 
 document.addEventListener('DOMContentLoaded', function() {
+    // Billable Chart
+    const billableCtx = document.getElementById('billableChart');
+    if (billableCtx) {
+        const billableData = {{ billable_data|tojson }};
+        
+        if (Object.keys(billableData).length > 0) {
+            const billableLabels = Object.keys(billableData);
+            const billableValues = Object.values(billableData);
+            
+            // Convert minutes to hours for display
+            const billableHours = billableValues.map(minutes => minutes / 60);
+            
+            new Chart(billableCtx, {
+                type: 'pie',
+                data: {
+                    labels: billableLabels,
+                    datasets: [{
+                        data: billableHours,
+                        backgroundColor: [
+                            '#1cc88a', // Billable (green)
+                            '#6c757d'  // Non-billable (gray)
+                        ],
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.label || '';
+                                    const value = context.raw || 0;
+                                    const percentage = (context.parsed / context.dataset.data.reduce((a, b) => a + b, 0)) * 100;
+                                    return `${label}: ${value.toFixed(1)}h (${percentage.toFixed(1)}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
+    // Project Billable Chart
+    const projectBillableCtx = document.getElementById('projectBillableChart');
+    if (projectBillableCtx) {
+        const projectBillableData = {{ project_billable_data|tojson }};
+        
+        if (Object.keys(projectBillableData).length > 0) {
+            // Prepare data for stacked bar chart
+            const projectNames = Object.keys(projectBillableData);
+            const billableValues = [];
+            const nonBillableValues = [];
+            
+            projectNames.forEach(name => {
+                billableValues.push(projectBillableData[name].billable / 60); // Convert to hours
+                nonBillableValues.push(projectBillableData[name].non_billable / 60); // Convert to hours
+            });
+            
+            new Chart(projectBillableCtx, {
+                type: 'bar',
+                data: {
+                    labels: projectNames,
+                    datasets: [
+                        {
+                            label: 'Billable',
+                            data: billableValues,
+                            backgroundColor: '#1cc88a',
+                            borderColor: '#1cc88a',
+                            borderWidth: 1
+                        },
+                        {
+                            label: 'Non-Billable',
+                            data: nonBillableValues,
+                            backgroundColor: '#6c757d',
+                            borderColor: '#6c757d',
+                            borderWidth: 1
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            title: {
+                                display: true,
+                                text: 'Project'
+                            }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
+                        }
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const value = context.raw || 0;
+                                    return `${label}: ${value.toFixed(1)}h`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    }
+    
     // Project Chart
     const projectCtx = document.getElementById('projectChart');
     if (projectCtx) {

@@ -527,15 +527,34 @@ def time_entry_statistics():
         # Calculate statistics
         total_duration = sum(entry.duration for entry in time_entries)
         billable_duration = sum(entry.duration for entry in time_entries if entry.billable)
+        non_billable_duration = total_duration - billable_duration
         billable_percentage = (billable_duration / total_duration * 100) if total_duration > 0 else 0
+        
+        # Billable status distribution
+        billable_data = {
+            'Billable': billable_duration,
+            'Non-Billable': non_billable_duration
+        }
         
         # Project time distribution
         project_data = {}
+        project_billable_data = {}
+        
         for entry in time_entries:
             project_name = entry.project.name
+            
+            # Total time by project
             if project_name not in project_data:
                 project_data[project_name] = 0
+                project_billable_data[project_name] = {'billable': 0, 'non_billable': 0}
+                
             project_data[project_name] += entry.duration
+            
+            # Track billable vs non-billable time by project
+            if entry.billable:
+                project_billable_data[project_name]['billable'] += entry.duration
+            else:
+                project_billable_data[project_name]['non_billable'] += entry.duration
             
         # Daily distribution (for chart)
         daily_data = {}
@@ -576,6 +595,9 @@ def time_entry_statistics():
         total_formatted = format_duration(total_duration)
         billable_formatted = format_duration(billable_duration)
         
+        # Format non-billable duration
+        non_billable_formatted = format_duration(non_billable_duration)
+        
         return render_template(
             'projects/time_statistics.html',
             filter_form=filter_form,
@@ -584,8 +606,12 @@ def time_entry_statistics():
             total_formatted=total_formatted,
             billable_duration=billable_duration,
             billable_formatted=billable_formatted,
+            non_billable_duration=non_billable_duration,
+            non_billable_formatted=non_billable_formatted,
             billable_percentage=billable_percentage,
+            billable_data=billable_data,
             project_data=project_data,
+            project_billable_data=project_billable_data,
             daily_labels=daily_labels,
             daily_values=daily_values,
             weekday_labels=weekday_labels,
