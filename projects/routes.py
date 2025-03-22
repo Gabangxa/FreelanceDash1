@@ -316,8 +316,8 @@ def create_time_entry():
             task_id = request.form.get('task_id', type=int)
             description = request.form.get('description', '')
             
-            # Get billable status if provided, default to True
-            billable = request.form.get('billable', 'true').lower() == 'true'
+            # Get billable status (checkboxes are only present in the form data when checked)
+            billable = 'billable' in request.form
             
             entry = TimeEntry(
                 project_id=project.id,
