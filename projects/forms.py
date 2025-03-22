@@ -1,6 +1,7 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField
-from wtforms.validators import DataRequired
+from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField
+from wtforms.validators import DataRequired, Optional, NumberRange
+from datetime import datetime
 
 class ProjectForm(FlaskForm):
     name = StringField('Project Name', validators=[DataRequired()])
@@ -29,4 +30,41 @@ class TimeEntryForm(FlaskForm):
     start_time = DateTimeField('Start Time', validators=[DataRequired()], format='%Y-%m-%d %H:%M')
     end_time = DateTimeField('End Time', format='%Y-%m-%d %H:%M')
     description = TextAreaField('Description')
+    billable = BooleanField('Billable', default=True)
     submit = SubmitField('Record Time')
+
+class BatchTimeEntryForm(FlaskForm):
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    task_id = SelectField('Task', coerce=int)
+    date = DateTimeField('Date', validators=[DataRequired()], format='%Y-%m-%d', default=datetime.now)
+    description = TextAreaField('Description')
+    billable = BooleanField('Billable', default=True)
+    
+    # For batch editing
+    action = SelectField('Action', choices=[
+        ('delete', 'Delete Selected Entries'),
+        ('change_project', 'Move to Project'),
+        ('change_task', 'Assign to Task'),
+        ('mark_billable', 'Mark as Billable'),
+        ('mark_non_billable', 'Mark as Non-Billable')
+    ])
+    
+    target_project_id = SelectField('Target Project', coerce=int)
+    target_task_id = SelectField('Target Task', coerce=int)
+    
+    submit = SubmitField('Apply to Selected')
+
+class TimeEntryFilterForm(FlaskForm):
+    date_from = DateTimeField('From Date', format='%Y-%m-%d', validators=[Optional()])
+    date_to = DateTimeField('To Date', format='%Y-%m-%d', validators=[Optional()])
+    project_id = SelectField('Project', coerce=int, validators=[Optional()], default=0)
+    task_id = SelectField('Task', coerce=int, validators=[Optional()], default=0)
+    billable = SelectField('Billable Status', choices=[
+        (0, 'All Entries'),
+        (1, 'Billable Only'),
+        (2, 'Non-Billable Only')
+    ], coerce=int, default=0)
+    duration_min = IntegerField('Min Duration (minutes)', validators=[Optional(), NumberRange(min=0)])
+    duration_max = IntegerField('Max Duration (minutes)', validators=[Optional(), NumberRange(min=0)])
+    
+    submit = SubmitField('Apply Filters')

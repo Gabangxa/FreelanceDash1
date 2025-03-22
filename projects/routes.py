@@ -2,11 +2,13 @@ import logging
 from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
+from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
-from projects.forms import ProjectForm, TaskForm, TimeEntryForm
+from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
+import calendar
 
 projects_bp = Blueprint('projects', __name__)
 
@@ -453,6 +455,268 @@ def delete_time_entry(id):
         logger.error(f"Error deleting time entry {id}: {str(e)}")
         flash('An error occurred while deleting the time entry. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
+
+@projects_bp.route('/time-entries/statistics')
+@login_required
+@handle_db_errors
+def time_entry_statistics():
+    """Display detailed statistics about time entries"""
+    try:
+        # Initialize filter form
+        filter_form = TimeEntryFilterForm()
+        
+        # Populate project choices for filter
+        user_projects = Project.query.filter_by(user_id=current_user.id).all()
+        filter_form.project_id.choices = [(0, 'All Projects')] + [(p.id, p.name) for p in user_projects]
+        
+        # Default to all tasks
+        filter_form.task_id.choices = [(0, 'All Tasks')]
+        
+        # Apply filters if form is submitted
+        if filter_form.validate_on_submit():
+            # Build query with filters
+            query = TimeEntry.query.join(Project).filter(Project.user_id == current_user.id)
+            
+            # Date range filter
+            if filter_form.date_from.data:
+                query = query.filter(TimeEntry.start_time >= filter_form.date_from.data)
+            if filter_form.date_to.data:
+                query = query.filter(TimeEntry.start_time <= filter_form.date_to.data)
+                
+            # Project filter
+            if filter_form.project_id.data != 0:
+                query = query.filter(TimeEntry.project_id == filter_form.project_id.data)
+                
+                # Load tasks for selected project
+                tasks = Task.query.filter_by(project_id=filter_form.project_id.data).all()
+                task_choices = [(0, 'All Tasks')] + [(t.id, t.title) for t in tasks]
+                filter_form.task_id.choices = task_choices
+                
+                # Task filter
+                if filter_form.task_id.data != 0:
+                    query = query.filter(TimeEntry.task_id == filter_form.task_id.data)
+            
+            # Billable status filter
+            if filter_form.billable.data == 1:  # Billable only
+                query = query.filter(TimeEntry.billable == True)
+            elif filter_form.billable.data == 2:  # Non-billable only
+                query = query.filter(TimeEntry.billable == False)
+                
+            # Duration filters
+            if filter_form.duration_min.data is not None:
+                query = query.filter(TimeEntry.duration >= filter_form.duration_min.data)
+            if filter_form.duration_max.data is not None:
+                query = query.filter(TimeEntry.duration <= filter_form.duration_max.data)
+            
+            # Get filtered time entries
+            time_entries = query.order_by(TimeEntry.start_time.desc()).all()
+        else:
+            # Get all time entries for initial page load, limited to past 30 days
+            thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+            time_entries = TimeEntry.query.join(Project).filter(
+                Project.user_id == current_user.id,
+                TimeEntry.start_time >= thirty_days_ago
+            ).order_by(TimeEntry.start_time.desc()).all()
+            
+        # Calculate statistics
+        total_duration = sum(entry.duration for entry in time_entries)
+        billable_duration = sum(entry.duration for entry in time_entries if entry.billable)
+        billable_percentage = (billable_duration / total_duration * 100) if total_duration > 0 else 0
+        
+        # Project time distribution
+        project_data = {}
+        for entry in time_entries:
+            project_name = entry.project.name
+            if project_name not in project_data:
+                project_data[project_name] = 0
+            project_data[project_name] += entry.duration
+            
+        # Daily distribution (for chart)
+        daily_data = {}
+        for entry in time_entries:
+            date_key = entry.start_time.strftime('%Y-%m-%d')
+            if date_key not in daily_data:
+                daily_data[date_key] = 0
+            daily_data[date_key] += entry.duration / 60.0  # Convert to hours
+        
+        # Sort by date
+        daily_labels = sorted(daily_data.keys())
+        daily_values = [daily_data[date] for date in daily_labels]
+        
+        # Day of week distribution
+        weekday_data = [0] * 7
+        for entry in time_entries:
+            weekday = entry.start_time.weekday()
+            weekday_data[weekday] += entry.duration / 60.0  # Convert to hours
+            
+        weekday_labels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        
+        # Task level analysis if we have a specific project selected
+        task_data = {}
+        if filter_form.project_id.data != 0:
+            for entry in time_entries:
+                if entry.task:
+                    task_name = entry.task.title
+                    if task_name not in task_data:
+                        task_data[task_name] = 0
+                    task_data[task_name] += entry.duration
+        
+        # Format duration for display
+        def format_duration(minutes):
+            hours = minutes // 60
+            mins = minutes % 60
+            return f"{hours}h {mins}m"
+        
+        total_formatted = format_duration(total_duration)
+        billable_formatted = format_duration(billable_duration)
+        
+        return render_template(
+            'projects/time_statistics.html',
+            filter_form=filter_form,
+            time_entries=time_entries,
+            total_duration=total_duration,
+            total_formatted=total_formatted,
+            billable_duration=billable_duration,
+            billable_formatted=billable_formatted,
+            billable_percentage=billable_percentage,
+            project_data=project_data,
+            daily_labels=daily_labels,
+            daily_values=daily_values,
+            weekday_labels=weekday_labels,
+            weekday_data=weekday_data,
+            task_data=task_data
+        )
+    except Exception as e:
+        logger.error(f"Error loading time entry statistics: {str(e)}")
+        flash('An error occurred while loading time entry statistics. Please try again.', 'danger')
+        return redirect(url_for('projects.dashboard'))
+
+@projects_bp.route('/time-entries/batch', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def batch_time_entries():
+    """Batch operations for time entries"""
+    try:
+        form = BatchTimeEntryForm()
+        
+        # Populate project choices
+        user_projects = Project.query.filter_by(user_id=current_user.id).all()
+        form.project_id.choices = [(p.id, p.name) for p in user_projects]
+        form.target_project_id.choices = [(p.id, p.name) for p in user_projects]
+        
+        # Default task choices
+        form.task_id.choices = [(0, 'No Task')]
+        form.target_task_id.choices = [(0, 'No Task')]
+        
+        # Get all time entries for the user
+        time_entries = TimeEntry.query.join(Project).filter(
+            Project.user_id == current_user.id
+        ).order_by(TimeEntry.start_time.desc()).all()
+        
+        if form.validate_on_submit():
+            # Get selected entry IDs from form
+            selected_ids = request.form.getlist('selected_entries', type=int)
+            
+            if not selected_ids:
+                flash('No time entries selected. Please select at least one entry.', 'warning')
+                return redirect(url_for('projects.batch_time_entries'))
+            
+            # Perform the requested batch action
+            action = form.action.data
+            
+            # Verify that the selected entries belong to the user
+            selected_entries = TimeEntry.query.join(Project).filter(
+                TimeEntry.id.in_(selected_ids),
+                Project.user_id == current_user.id
+            ).all()
+            
+            if len(selected_entries) != len(selected_ids):
+                flash('Some selected entries could not be found or do not belong to you.', 'danger')
+                return redirect(url_for('projects.batch_time_entries'))
+            
+            if action == 'delete':
+                # Delete the selected entries
+                for entry in selected_entries:
+                    db.session.delete(entry)
+                db.session.commit()
+                flash(f'Successfully deleted {len(selected_entries)} time entries.', 'success')
+                
+            elif action == 'change_project':
+                # Move entries to a different project
+                target_project_id = form.target_project_id.data
+                
+                # Verify target project belongs to user
+                target_project = Project.query.filter_by(
+                    id=target_project_id, 
+                    user_id=current_user.id
+                ).first()
+                
+                if not target_project:
+                    flash('Invalid target project selection.', 'danger')
+                    return redirect(url_for('projects.batch_time_entries'))
+                
+                # Update project ID for all selected entries
+                for entry in selected_entries:
+                    entry.project_id = target_project_id
+                    # Clear task ID since it may not be valid for the new project
+                    entry.task_id = None
+                
+                db.session.commit()
+                flash(f'Successfully moved {len(selected_entries)} time entries to project "{target_project.name}".', 'success')
+                
+            elif action == 'change_task':
+                # Assign entries to a task
+                target_task_id = form.target_task_id.data
+                
+                if target_task_id == 0:
+                    # Remove task association
+                    for entry in selected_entries:
+                        entry.task_id = None
+                    db.session.commit()
+                    flash(f'Successfully removed task association from {len(selected_entries)} time entries.', 'success')
+                else:
+                    # Verify task belongs to user
+                    target_task = Task.query.join(Project).filter(
+                        Task.id == target_task_id,
+                        Project.user_id == current_user.id
+                    ).first()
+                    
+                    if not target_task:
+                        flash('Invalid target task selection.', 'danger')
+                        return redirect(url_for('projects.batch_time_entries'))
+                    
+                    # Update task ID for all selected entries
+                    for entry in selected_entries:
+                        # Update project ID to match task's project
+                        entry.project_id = target_task.project_id
+                        entry.task_id = target_task_id
+                    
+                    db.session.commit()
+                    flash(f'Successfully assigned {len(selected_entries)} time entries to task "{target_task.title}".', 'success')
+            
+            elif action == 'mark_billable' or action == 'mark_non_billable':
+                # Set billable flag
+                billable_value = (action == 'mark_billable')
+                
+                for entry in selected_entries:
+                    entry.billable = billable_value
+                
+                db.session.commit()
+                status = 'billable' if billable_value else 'non-billable'
+                flash(f'Successfully marked {len(selected_entries)} time entries as {status}.', 'success')
+            
+            return redirect(url_for('projects.batch_time_entries'))
+                
+        return render_template(
+            'projects/batch_time_entries.html',
+            form=form,
+            time_entries=time_entries
+        )
+                
+    except Exception as e:
+        logger.error(f"Error in batch time entries: {str(e)}")
+        flash('An error occurred while processing time entries. Please try again.', 'danger')
+        return redirect(url_for('projects.dashboard'))
 
 @projects_bp.route('/projects/<int:project_id>/tasks')
 @login_required

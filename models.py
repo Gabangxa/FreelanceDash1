@@ -122,11 +122,13 @@ class TimeEntry(db.Model):
     description = db.Column(db.Text)
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False, index=True)
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), index=True)
+    billable = db.Column(db.Boolean, default=True, index=True)  # Flag for billable time
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     # Composite index for reporting queries
     __table_args__ = (
         Index('idx_time_entry_project_date', 'project_id', 'start_time'),
+        Index('idx_time_entry_billable', 'billable'),
     )
 
 class Invoice(db.Model):
