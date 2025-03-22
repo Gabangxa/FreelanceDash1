@@ -424,8 +424,14 @@ def edit_time_entry(id):
         elif request.method == 'GET':
             form.project_id.data = time_entry.project_id
             form.task_id.data = time_entry.task_id if time_entry.task_id else 0
-            form.start_time.data = time_entry.start_time
-            form.end_time.data = time_entry.end_time
+            
+            # Format datetime objects to match expected format in the form
+            if time_entry.start_time:
+                form.start_time.data = time_entry.start_time
+            
+            if time_entry.end_time:
+                form.end_time.data = time_entry.end_time
+                
             form.description.data = time_entry.description
             form.billable.data = time_entry.billable
         

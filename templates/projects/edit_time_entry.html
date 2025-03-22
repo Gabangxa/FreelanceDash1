@@ -49,7 +49,7 @@
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 {{ form.start_time.label(class="form-label") }}
-                                {{ form.start_time(class="form-control", type="datetime-local") }}
+                                {{ form.start_time(class="form-control", type="text") }}
                                 {% if form.start_time.errors %}
                                     <div class="invalid-feedback d-block">
                                         {% for error in form.start_time.errors %}
@@ -61,7 +61,7 @@
                             </div>
                             <div class="col-md-6">
                                 {{ form.end_time.label(class="form-label") }}
-                                {{ form.end_time(class="form-control", type="datetime-local") }}
+                                {{ form.end_time(class="form-control", type="text") }}
                                 {% if form.end_time.errors %}
                                     <div class="invalid-feedback d-block">
                                         {% for error in form.end_time.errors %}
@@ -203,8 +203,35 @@ document.addEventListener('DOMContentLoaded', function() {
     const currentProject = document.getElementById('project_id').value;
     if (currentProject) {
         // Only call if we have a project ID (should always be the case in edit mode)
-        // window.loadTasks(currentProject);
+        window.loadTasks(currentProject);
     }
+    
+    // Format date fields in the required format if they have values
+    function formatDateFields() {
+        const startTimeField = document.querySelector('[name="start_time"]');
+        const endTimeField = document.querySelector('[name="end_time"]');
+        
+        if (startTimeField && startTimeField.value) {
+            // Ensure the value is properly formatted as YYYY-MM-DD HH:MM
+            const startTimeValue = startTimeField.value;
+            if (startTimeValue.includes('T')) {
+                // Convert from datetime-local format (YYYY-MM-DDThh:mm) to our format
+                startTimeField.value = startTimeValue.replace('T', ' ');
+            }
+        }
+        
+        if (endTimeField && endTimeField.value) {
+            // Ensure the value is properly formatted as YYYY-MM-DD HH:MM
+            const endTimeValue = endTimeField.value;
+            if (endTimeValue.includes('T')) {
+                // Convert from datetime-local format (YYYY-MM-DDThh:mm) to our format
+                endTimeField.value = endTimeValue.replace('T', ' ');
+            }
+        }
+    }
+    
+    // Run the formatting when the page loads
+    formatDateFields();
 });
 </script>
 {% endblock %}
