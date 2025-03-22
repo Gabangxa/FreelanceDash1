@@ -468,7 +468,7 @@ def delete_time_entry(id):
         flash('An error occurred while deleting the time entry. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
-@projects_bp.route('/time-entries/statistics')
+@projects_bp.route('/time-entries/statistics', methods=['GET', 'POST'])
 @login_required
 @handle_db_errors
 def time_entry_statistics():
