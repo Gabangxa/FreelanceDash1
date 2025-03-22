@@ -316,13 +316,17 @@ def create_time_entry():
             task_id = request.form.get('task_id', type=int)
             description = request.form.get('description', '')
             
+            # Get billable status if provided, default to True
+            billable = request.form.get('billable', 'true').lower() == 'true'
+            
             entry = TimeEntry(
                 project_id=project.id,
                 task_id=task_id,
                 start_time=start_time,
                 end_time=end_time,
                 duration=duration,
-                description=description
+                description=description,
+                billable=billable
             )
 
             db.session.add(entry)
@@ -398,6 +402,7 @@ def edit_time_entry(id):
                 time_entry.end_time = form.end_time.data
                 time_entry.duration = duration
                 time_entry.description = form.description.data
+                time_entry.billable = form.billable.data
                 
                 db.session.commit()
                 proj_logger.info(f"Time entry updated successfully: id={time_entry.id}")
@@ -416,6 +421,7 @@ def edit_time_entry(id):
             form.start_time.data = time_entry.start_time
             form.end_time.data = time_entry.end_time
             form.description.data = time_entry.description
+            form.billable.data = time_entry.billable
         
         return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
         

@@ -85,6 +85,18 @@
                             {% endif %}
                         </div>
                         
+                        <div class="mb-3 form-check">
+                            {{ form.billable(class="form-check-input") }}
+                            {{ form.billable.label(class="form-check-label") }}
+                            {% if form.billable.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.billable.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
                         <div class="d-flex justify-content-between">
                             <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
                                 <i class="fas fa-trash me-2"></i>Delete Time Entry
