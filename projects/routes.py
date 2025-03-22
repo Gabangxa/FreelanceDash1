@@ -365,13 +365,19 @@ def edit_time_entry(id):
         form.project_id.choices = [(p.id, p.name) for p in user_projects]
         
         # Populate task choices based on the selected project
+        # For GET requests, use the time entry's project
+        # For POST requests, use the project selected in the form
         if request.method == 'GET':
-            project_tasks = Task.query.filter_by(project_id=time_entry.project_id).all()
-            # Convert task choices to the expected format
-            task_choices = [(0, 'No Task')]
-            for task in project_tasks:
-                task_choices.append((task.id, task.title))
-            form.task_id.choices = task_choices
+            project_id_for_tasks = time_entry.project_id
+        else:
+            project_id_for_tasks = request.form.get('project_id', time_entry.project_id, type=int)
+            
+        project_tasks = Task.query.filter_by(project_id=project_id_for_tasks).all()
+        # Convert task choices to the expected format
+        task_choices = [(0, 'No Task')]
+        for task in project_tasks:
+            task_choices.append((task.id, task.title))
+        form.task_id.choices = task_choices
         
         if form.validate_on_submit():
             try:
