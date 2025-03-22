@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+
+{% block title %}Edit Time Entry - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>Edit Time Entry</h1>
+        <a href="{{ url_for('projects.view_project', id=time_entry.project_id) }}" class="btn btn-outline-secondary">
+            <i class="fas fa-arrow-left me-2"></i>Back to Project
+        </a>
+    </div>
+    
+    <div class="row">
+        <div class="col-md-8 mx-auto">
+            <div class="card">
+                <div class="card-header">
+                    <h5 class="card-title mb-0">Time Entry Details</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST">
+                        {{ form.hidden_tag() }}
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.project_id.label(class="form-label") }}
+                                {{ form.project_id(class="form-select", onchange="loadTasks(this.value)") }}
+                                {% if form.project_id.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.project_id.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.task_id.label(class="form-label") }}
+                                {{ form.task_id(class="form-select", id="task_id") }}
+                                {% if form.task_id.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.task_id.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.start_time.label(class="form-label") }}
+                                {{ form.start_time(class="form-control", type="datetime-local") }}
+                                {% if form.start_time.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.start_time.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="text-muted">Format: YYYY-MM-DD HH:MM</small>
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.end_time.label(class="form-label") }}
+                                {{ form.end_time(class="form-control", type="datetime-local") }}
+                                {% if form.end_time.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.end_time.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                                <small class="text-muted">Format: YYYY-MM-DD HH:MM</small>
+                            </div>
+                        </div>
+                        
+                        <div class="mb-3">
+                            {{ form.description.label(class="form-label") }}
+                            {{ form.description(class="form-control", rows=3) }}
+                            {% if form.description.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.description.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+                                <i class="fas fa-trash me-2"></i>Delete Time Entry
+                            </button>
+                            <div>
+                                <a href="{{ url_for('projects.view_project', id=time_entry.project_id) }}" class="btn btn-secondary me-2">Cancel</a>
+                                {{ form.submit(class="btn btn-primary") }}
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete this time entry? This action cannot be undone.</p>
+                <p class="mb-0"><strong>Date:</strong> {{ time_entry.start_time.strftime('%Y-%m-%d %H:%M') }}</p>
+                <p class="mb-0"><strong>Duration:</strong> {{ time_entry.duration }} minutes</p>
+                <p><strong>Description:</strong> {{ time_entry.description or 'No description' }}</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('projects.delete_time_entry', id=time_entry.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">Delete Time Entry</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Function to load tasks for a selected project
+    window.loadTasks = function(projectId) {
+        const taskSelect = document.getElementById('task_id');
+        
+        // Clear existing options except "No Task"
+        while (taskSelect.options.length > 1) {
+            taskSelect.remove(1);
+        }
+        
+        // Don't proceed if no project is selected
+        if (!projectId) return;
+        
+        // Fetch tasks for the selected project
+        fetch(`/projects/${projectId}/tasks`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error('Network response was not ok');
+                }
+                return response.json();
+            })
+            .then(tasks => {
+                // Add new options
+                tasks.forEach(task => {
+                    const option = document.createElement('option');
+                    option.value = task.id;
+                    option.textContent = task.title;
+                    taskSelect.appendChild(option);
+                });
+                
+                // If the task select had a previous value, try to restore it
+                const previousTaskId = {{ time_entry.task_id or 0 }};
+                
+                // Check if the previously selected task is in the new list
+                let found = false;
+                for (let i = 0; i < taskSelect.options.length; i++) {
+                    if (parseInt(taskSelect.options[i].value) === previousTaskId) {
+                        taskSelect.selectedIndex = i;
+                        found = true;
+                        break;
+                    }
+                }
+                
+                // If not found, default to "No Task"
+                if (!found && previousTaskId !== 0) {
+                    taskSelect.selectedIndex = 0;
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching tasks:', error);
+                // Add a default "Error loading tasks" option
+                const option = document.createElement('option');
+                option.value = "0";
+                option.textContent = "Error loading tasks";
+                taskSelect.appendChild(option);
+            });
+    };
+    
+    // Initialize task dropdown with current project's tasks
+    const currentProject = document.getElementById('project_id').value;
+    if (currentProject) {
+        // Only call if we have a project ID (should always be the case in edit mode)
+        // window.loadTasks(currentProject);
+    }
+});
+</script>
+{% endblock %}

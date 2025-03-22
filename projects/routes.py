@@ -1,5 +1,5 @@
 import logging
-from flask import Blueprint, render_template, redirect, url_for, flash, request
+from flask import Blueprint, render_template, redirect, url_for, flash, request, jsonify
 from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from app import db, logger
@@ -187,18 +187,37 @@ def edit_task(id):
 
         if form.validate_on_submit():
             try:
+                # Store original project ID to check if it changed
+                original_project_id = task.project_id
+                
                 # Verify new project belongs to user if changed
-                if task.project_id != form.project_id.data:
+                if original_project_id != form.project_id.data:
                     project = Project.query.filter_by(id=form.project_id.data, user_id=current_user.id).first()
                     if not project:
                         flash('Invalid project selection', 'danger')
                         return redirect(url_for('projects.edit_task', id=id))
 
+                # Update task details
                 task.title = form.title.data
                 task.description = form.description.data
                 task.due_date = form.due_date.data
                 task.status = form.status.data
                 task.project_id = form.project_id.data
+                
+                # If project has changed, update all time entries associated with this task
+                if original_project_id != form.project_id.data:
+                    time_entries = TimeEntry.query.filter_by(task_id=task.id).all()
+                    entries_count = 0
+                    
+                    for entry in time_entries:
+                        entry.project_id = form.project_id.data
+                        db.session.add(entry)
+                        entries_count += 1
+                    
+                    if entries_count > 0:
+                        logger.info(f"Updated {entries_count} time entries from project {original_project_id} to project {form.project_id.data}")
+                        flash(f'Updated {entries_count} time entries to the new project.', 'info')
+                
                 db.session.commit()
                 flash('Task updated successfully', 'success')
                 return redirect(url_for('projects.view_project', id=task.project_id))
@@ -318,3 +337,142 @@ def create_time_entry():
         logger.error(f"Unexpected error in create_time_entry: {str(e)}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
+
+@projects_bp.route('/time-entries/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def edit_time_entry(id):
+    # Get component logger
+    proj_logger = logging.getLogger('projects')
+    
+    try:
+        # Fetch the time entry and verify ownership
+        time_entry = TimeEntry.query.join(Project).filter(
+            TimeEntry.id == id,
+            Project.user_id == current_user.id
+        ).first_or_404()
+        
+        form = TimeEntryForm()
+        
+        # Populate project choices
+        user_projects = Project.query.filter_by(user_id=current_user.id).all()
+        form.project_id.choices = [(p.id, p.name) for p in user_projects]
+        
+        # Populate task choices based on the selected project
+        if request.method == 'GET':
+            project_tasks = Task.query.filter_by(project_id=time_entry.project_id).all()
+            # Convert task choices to the expected format
+            task_choices = [(0, 'No Task')]
+            for task in project_tasks:
+                task_choices.append((task.id, task.title))
+            form.task_id.choices = task_choices
+        
+        if form.validate_on_submit():
+            try:
+                # Verify the project belongs to the user
+                project = Project.query.filter_by(
+                    id=form.project_id.data,
+                    user_id=current_user.id
+                ).first_or_404()
+                
+                # Calculate duration if both start and end times are provided
+                duration = None
+                if form.start_time.data and form.end_time.data:
+                    # Ensure end time is after start time
+                    if form.end_time.data <= form.start_time.data:
+                        flash('End time must be after start time', 'danger')
+                        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
+                    
+                    time_diff = form.end_time.data - form.start_time.data
+                    duration = int(time_diff.total_seconds() / 60)
+                else:
+                    # Keep the existing duration if only one of the times is updated
+                    duration = time_entry.duration
+                
+                # Update time entry
+                time_entry.project_id = form.project_id.data
+                time_entry.task_id = form.task_id.data if form.task_id.data > 0 else None
+                time_entry.start_time = form.start_time.data
+                time_entry.end_time = form.end_time.data
+                time_entry.duration = duration
+                time_entry.description = form.description.data
+                
+                db.session.commit()
+                proj_logger.info(f"Time entry updated successfully: id={time_entry.id}")
+                flash('Time entry updated successfully', 'success')
+                return redirect(url_for('projects.view_project', id=time_entry.project_id))
+                
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                proj_logger.error(f"Error updating time entry {id}: {str(e)}")
+                flash('Error updating time entry. Please try again.', 'danger')
+        
+        # Populate form with existing data
+        elif request.method == 'GET':
+            form.project_id.data = time_entry.project_id
+            form.task_id.data = time_entry.task_id if time_entry.task_id else 0
+            form.start_time.data = time_entry.start_time
+            form.end_time.data = time_entry.end_time
+            form.description.data = time_entry.description
+        
+        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
+        
+    except Exception as e:
+        logger.error(f"Error editing time entry {id}: {str(e)}")
+        flash('An error occurred while accessing the time entry. Please try again.', 'danger')
+        return redirect(url_for('projects.list_projects'))
+
+@projects_bp.route('/time-entries/<int:id>/delete', methods=['POST'])
+@login_required
+@handle_db_errors
+def delete_time_entry(id):
+    # Get component logger
+    proj_logger = logging.getLogger('projects')
+    
+    try:
+        # Fetch the time entry and verify ownership
+        time_entry = TimeEntry.query.join(Project).filter(
+            TimeEntry.id == id,
+            Project.user_id == current_user.id
+        ).first_or_404()
+        
+        # Store project ID for redirect after deletion
+        project_id = time_entry.project_id
+        
+        # Delete the time entry
+        db.session.delete(time_entry)
+        db.session.commit()
+        
+        proj_logger.info(f"Time entry {id} deleted successfully by user {current_user.id}")
+        flash('Time entry deleted successfully', 'success')
+        
+        return redirect(url_for('projects.view_project', id=project_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        logger.error(f"Error deleting time entry {id}: {str(e)}")
+        flash('An error occurred while deleting the time entry. Please try again.', 'danger')
+        return redirect(url_for('projects.list_projects'))
+
+@projects_bp.route('/projects/<int:project_id>/tasks')
+@login_required
+def get_project_tasks(project_id):
+    """Get tasks for a specific project (for AJAX requests)"""
+    try:
+        # Verify the project belongs to the current user
+        project = Project.query.filter_by(
+            id=project_id,
+            user_id=current_user.id
+        ).first_or_404()
+        
+        # Get all tasks for the project
+        tasks = Task.query.filter_by(project_id=project_id).all()
+        
+        # Format tasks as JSON
+        tasks_json = [{'id': task.id, 'title': task.title} for task in tasks]
+        
+        return jsonify(tasks_json)
+        
+    except Exception as e:
+        logger.error(f"Error fetching tasks for project {project_id}: {str(e)}")
+        return jsonify([]), 400
