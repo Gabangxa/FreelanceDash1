@@ -718,84 +718,125 @@ def batch_time_entries():
         if request.method == 'POST':
             # Validate the form
             if form.validate_on_submit():
-                entries_created = 0
-                entries_with_errors = 0
+                # Lists to track entry processing status
+                valid_entries = []
+                error_entries = []
                 
-                # Begin a transaction to save all entries
-                try:
-                    for entry_data in form.entries.data:
-                        # Validate that the project belongs to the user
-                        project_id = entry_data['project_id']
-                        project = Project.query.filter_by(
-                            id=project_id,
-                            user_id=current_user.id
+                # First pass: validate all entries without saving
+                for index, entry_data in enumerate(form.entries.data):
+                    entry_number = index + 1
+                    entry_error = False
+                    
+                    # Validate that the project belongs to the user
+                    project_id = entry_data['project_id']
+                    project = Project.query.filter_by(
+                        id=project_id,
+                        user_id=current_user.id
+                    ).first()
+                    
+                    if not project:
+                        error_entries.append(f"Entry {entry_number}: Invalid project selection")
+                        entry_error = True
+                        continue
+                    
+                    # Validate date and hours
+                    try:
+                        entry_date_str = entry_data['entry_date']
+                        if isinstance(entry_date_str, str):
+                            # Parse the date string from the form
+                            entry_date = datetime.strptime(entry_date_str, '%Y-%m-%d')
+                        else:
+                            # It's already a datetime object
+                            entry_date = entry_date_str
+                            
+                        hours = float(entry_data['hours'])
+                        
+                        # Validate hours (should be between 0.1 and 24)
+                        if hours <= 0 or hours > 24:
+                            error_entries.append(f"Entry {entry_number}: Hours must be between 0.1 and 24")
+                            entry_error = True
+                            continue
+                            
+                        # Convert hours to minutes for the duration
+                        duration_minutes = int(hours * 60)
+                        
+                        # Set start time to the selected date at 9 AM
+                        start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))
+                        
+                        # Calculate end time by adding hours
+                        end_time = start_time + timedelta(minutes=duration_minutes)
+                    except (ValueError, TypeError) as e:
+                        logger.error(f"Error processing date/time: {str(e)}")
+                        error_entries.append(f"Entry {entry_number}: Invalid date or hours format")
+                        entry_error = True
+                        continue
+                    
+                    # Check if the task is specified and belongs to the selected project
+                    task_id = None
+                    if entry_data['task_id'] and int(entry_data['task_id']) > 0:
+                        task = Task.query.filter_by(
+                            id=int(entry_data['task_id']),
+                            project_id=project.id
                         ).first()
-                        
-                        if not project:
-                            flash(f'Invalid project selection for entry {entries_created + 1}', 'danger')
-                            continue
-                        
-                        # Get the entry values
-                        try:
-                            entry_date_str = entry_data['entry_date']
-                            if isinstance(entry_date_str, str):
-                                # Parse the date string from the form
-                                entry_date = datetime.strptime(entry_date_str, '%Y-%m-%d')
-                            else:
-                                # It's already a datetime object
-                                entry_date = entry_date_str
-                                
-                            hours = float(entry_data['hours'])
-                            
-                            # Convert hours to minutes for the duration
-                            duration_minutes = int(hours * 60)
-                            
-                            # Set start time to the selected date at 9 AM
-                            start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))
-                            
-                            # Calculate end time by adding hours
-                            end_time = start_time + timedelta(minutes=duration_minutes)
-                        except (ValueError, TypeError) as e:
-                            logger.error(f"Error processing date/time: {str(e)}")
-                            flash(f'Invalid date or hours for entry {entries_created + 1}', 'danger')
-                            continue
-                        
-                        # Check if the task is specified and belongs to the selected project
-                        task_id = None
-                        if entry_data['task_id'] and int(entry_data['task_id']) > 0:
-                            task = Task.query.filter_by(
-                                id=int(entry_data['task_id']),
-                                project_id=project.id
-                            ).first()
-                            if task:
-                                task_id = task.id
-                        
-                        # Create the time entry
-                        time_entry = TimeEntry(
-                            project_id=project.id,
-                            task_id=task_id,
-                            start_time=start_time,
-                            end_time=end_time,
-                            duration=duration_minutes,
-                            description=entry_data['description'],
-                            billable=entry_data.get('billable', True)
-                        )
-                        
-                        db.session.add(time_entry)
-                        entries_created += 1
+                        if task:
+                            task_id = task.id
                     
-                    db.session.commit()
-                    
-                    if entries_created > 0:
-                        flash(f'Successfully created {entries_created} time entries', 'success')
-                        return redirect(url_for('projects.dashboard'))
-                    else:
-                        flash('No valid time entries were submitted', 'warning')
+                    # If all validations pass, add to valid entries
+                    if not entry_error:
+                        valid_entries.append({
+                            'project_id': project.id,
+                            'task_id': task_id,
+                            'start_time': start_time,
+                            'end_time': end_time,
+                            'duration': duration_minutes,
+                            'description': entry_data['description'],
+                            'billable': entry_data.get('billable', True),
+                            'entry_number': entry_number
+                        })
                 
-                except SQLAlchemyError as e:
-                    db.session.rollback()
-                    logger.error(f"Database error saving batch time entries: {str(e)}")
-                    flash('Error saving time entries. Please try again.', 'danger')
+                # Only proceed with database transaction if we have valid entries
+                if valid_entries:
+                    try:
+                        # Create all time entries in a single transaction
+                        entries_created = 0
+                        for entry_data in valid_entries:
+                            time_entry = TimeEntry(
+                                project_id=entry_data['project_id'],
+                                task_id=entry_data['task_id'],
+                                start_time=entry_data['start_time'],
+                                end_time=entry_data['end_time'],
+                                duration=entry_data['duration'],
+                                description=entry_data['description'],
+                                billable=entry_data['billable']
+                            )
+                            db.session.add(time_entry)
+                            entries_created += 1
+                        
+                        # Commit all entries at once
+                        db.session.commit()
+                        
+                        # Show success message
+                        flash(f'Successfully created {entries_created} time entries', 'success')
+                        
+                        # Show errors if any
+                        if error_entries:
+                            for error in error_entries:
+                                flash(error, 'warning')
+                                
+                        return redirect(url_for('projects.dashboard'))
+                    
+                    except SQLAlchemyError as e:
+                        # Roll back the transaction if any error occurs
+                        db.session.rollback()
+                        logger.error(f"Database error saving batch time entries: {str(e)}")
+                        flash('Error saving time entries. Please try again.', 'danger')
+                else:
+                    # No valid entries to save
+                    flash('No valid time entries were submitted', 'warning')
+                    
+                    # Show specific errors
+                    for error in error_entries:
+                        flash(error, 'danger')
             else:
                 # Form validation errors
                 for field, errors in form.errors.items():

@@ -85,7 +85,55 @@ class BatchHoursEntryForm(FlaskForm):
         if len(field.data) < 1:
             raise ValidationError("Please add at least one time entry")
         
-        # Additional validation could be added here if needed
+        # Additional validation for entries
+        date_hour_totals = {}  # Track total hours per date
+        entry_errors = []
+        
+        for i, entry_data in enumerate(field.data):
+            entry_num = i + 1
+            
+            # Check for missing required data
+            if not entry_data.get('entry_date'):
+                entry_errors.append(f"Entry {entry_num}: Date is required")
+            
+            if not entry_data.get('hours'):
+                entry_errors.append(f"Entry {entry_num}: Hours are required")
+                continue
+                
+            # Try to get and validate hours
+            try:
+                hours = float(entry_data['hours'])
+                if hours <= 0 or hours > 24:
+                    entry_errors.append(f"Entry {entry_num}: Hours must be between 0.1 and 24")
+                    continue
+                    
+                # Track hours per day to ensure no more than 24 hours per day
+                if isinstance(entry_data['entry_date'], str):
+                    try:
+                        date_str = entry_data['entry_date']
+                        entry_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+                    except ValueError:
+                        entry_errors.append(f"Entry {entry_num}: Invalid date format")
+                        continue
+                else:
+                    entry_date = entry_data['entry_date'].date()
+                
+                # Add hours to date total
+                if entry_date in date_hour_totals:
+                    date_hour_totals[entry_date] += hours
+                else:
+                    date_hour_totals[entry_date] = hours
+                    
+                # Check if total exceeds 24 hours for this date
+                if date_hour_totals[entry_date] > 24:
+                    entry_errors.append(f"Total hours for {entry_date.strftime('%Y-%m-%d')} exceed 24 hours")
+                
+            except (ValueError, TypeError, KeyError):
+                entry_errors.append(f"Entry {entry_num}: Invalid hours value")
+                
+        # Raise validation error if any entry errors were found
+        if entry_errors:
+            raise ValidationError("; ".join(entry_errors))
 
 class TimeEntryFilterForm(FlaskForm):
     date_from = DateTimeField('From Date', format='%Y-%m-%d', validators=[Optional()])
