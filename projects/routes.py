@@ -873,12 +873,17 @@ def batch_time_entries():
             
             # Default project selection if there are projects
             if projects:
-                form.entries[0].form.project_id.data = projects[0].id
+                default_project = projects[0]
+                form.entries[0].form.project_id.data = default_project.id
                 
                 # Load tasks for the default project
-                tasks = Task.query.filter_by(project_id=projects[0].id).all()
+                tasks = Task.query.filter_by(project_id=default_project.id).all()
                 task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
                 form.entries[0].form.task_id.choices = task_choices
+                
+                # If there are tasks, pre-select the first one
+                if tasks:
+                    form.entries[0].form.task_id.data = tasks[0].id
         
         # Set default values for all entries
         for entry_form in form.entries:

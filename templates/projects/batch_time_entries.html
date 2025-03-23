@@ -441,16 +441,31 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(tasks => {
                 // Add new options
                 tasks.forEach(task => {
-                    const option = document.createElement('option');
-                    option.value = task.id;
-                    option.textContent = task.title;
-                    taskSelect.appendChild(option);
+                    // Check if this task option already exists to prevent duplicates
+                    const exists = Array.from(taskSelect.options).some(option => 
+                        option.value === task.id.toString());
+                    
+                    if (!exists) {
+                        const option = document.createElement('option');
+                        option.value = task.id;
+                        option.textContent = task.title;
+                        taskSelect.appendChild(option);
+                    }
                 });
             })
             .catch(error => {
                 console.error('Error fetching tasks:', error);
             });
     };
+    
+    // Call this immediately to load tasks for the first row
+    // We don't need another DOMContentLoaded listener since we're already in one
+    setTimeout(function() {
+        const firstRowProject = document.querySelector('.time-entry-row:first-child .project-select');
+        if (firstRowProject && firstRowProject.value) {
+            loadTasks(firstRowProject);
+        }
+    }, 100); // Small delay to ensure the DOM is fully processed
 });
 </script>
 {% endblock %}
