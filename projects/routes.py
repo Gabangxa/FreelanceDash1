@@ -810,32 +810,32 @@ def batch_time_entries():
         # Configure the project and task selections for all entries
         for entry_form in form.entries:
             # Set project choices
-            entry_form.project_id.choices = project_choices
+            entry_form.form.project_id.choices = project_choices
             
             # Default project selection if none is set
-            if not entry_form.project_id.data and projects:
-                entry_form.project_id.data = projects[0].id
+            if not entry_form.form.project_id.data and projects:
+                entry_form.form.project_id.data = projects[0].id
             
             # Set task choices (initially just "No Task")
-            entry_form.task_id.choices = [(0, 'No Task')]
+            entry_form.form.task_id.choices = [(0, 'No Task')]
             
             # If a project is selected, load its tasks
-            if entry_form.project_id.data:
+            if entry_form.form.project_id.data:
                 try:
-                    project_id = int(entry_form.project_id.data)
+                    project_id = int(entry_form.form.project_id.data)
                     tasks = Task.query.filter_by(project_id=project_id).all()
                     task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
-                    entry_form.task_id.choices = task_choices
+                    entry_form.form.task_id.choices = task_choices
                 except (ValueError, TypeError):
                     # Handle case where project_id is not a valid integer
                     pass
                     
             # Set default values for other fields if not already set
-            if not entry_form.hours.data:
-                entry_form.hours.data = 1.0
+            if not entry_form.form.hours.data:
+                entry_form.form.hours.data = 1.0
                 
-            if entry_form.billable.data is None:
-                entry_form.billable.data = True
+            if entry_form.form.billable.data is None:
+                entry_form.form.billable.data = True
         
         # Render the template with the form
         return render_template(
