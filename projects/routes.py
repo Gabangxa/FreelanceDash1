@@ -714,6 +714,25 @@ def batch_time_entries():
         projects = Project.query.filter_by(user_id=current_user.id).all()
         project_choices = [(p.id, p.name) for p in projects]
         
+        # For each entry form, set the project and task choices
+        for entry_form in form.entries:
+            # Set project choices - this must be done before validation
+            entry_form.form.project_id.choices = project_choices
+            
+            # Set task choices (initially just "No Task")
+            entry_form.form.task_id.choices = [(0, 'No Task')]
+            
+            # If a project is selected, load its tasks
+            if entry_form.form.project_id.data:
+                try:
+                    project_id = int(entry_form.form.project_id.data)
+                    tasks = Task.query.filter_by(project_id=project_id).all()
+                    task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
+                    entry_form.form.task_id.choices = task_choices
+                except (ValueError, TypeError):
+                    # Handle case where project_id is not a valid integer
+                    pass
+        
         # If this is a POST request and the form is submitted
         if request.method == 'POST':
             # Validate the form
@@ -843,35 +862,27 @@ def batch_time_entries():
                     for error in errors:
                         flash(f'Error in {field}: {error}', 'danger')
         
-        # Initialize the form with one empty entry
+        # Initialize the form with one empty entry if no entries exist
         if len(form.entries) == 0:
             # Add an empty entry - we'll populate the choices after
             form.entries.append_entry({})
+            
+            # Set project choices for the new entry
+            form.entries[0].form.project_id.choices = project_choices
+            form.entries[0].form.task_id.choices = [(0, 'No Task')]
+            
+            # Default project selection if there are projects
+            if projects:
+                form.entries[0].form.project_id.data = projects[0].id
+                
+                # Load tasks for the default project
+                tasks = Task.query.filter_by(project_id=projects[0].id).all()
+                task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
+                form.entries[0].form.task_id.choices = task_choices
         
-        # Configure the project and task selections for all entries
+        # Set default values for all entries
         for entry_form in form.entries:
-            # Set project choices
-            entry_form.form.project_id.choices = project_choices
-            
-            # Default project selection if none is set
-            if not entry_form.form.project_id.data and projects:
-                entry_form.form.project_id.data = projects[0].id
-            
-            # Set task choices (initially just "No Task")
-            entry_form.form.task_id.choices = [(0, 'No Task')]
-            
-            # If a project is selected, load its tasks
-            if entry_form.form.project_id.data:
-                try:
-                    project_id = int(entry_form.form.project_id.data)
-                    tasks = Task.query.filter_by(project_id=project_id).all()
-                    task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
-                    entry_form.form.task_id.choices = task_choices
-                except (ValueError, TypeError):
-                    # Handle case where project_id is not a valid integer
-                    pass
-                    
-            # Set default values for other fields if not already set
+            # Set default values for fields if not already set
             if not entry_form.form.hours.data:
                 entry_form.form.hours.data = 1.0
                 

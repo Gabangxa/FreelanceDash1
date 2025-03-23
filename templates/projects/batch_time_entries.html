@@ -145,6 +145,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Re-initialize event listeners for the new entry
         initializeEntryEventListeners(newEntry);
+        
+        // Make sure task loading works for the new entry's project
+        const projectSelect = newEntry.querySelector('.project-select');
+        if (projectSelect && projectSelect.value) {
+            loadTasks(projectSelect); // Load tasks for the selected project
+        }
     });
     
     // Function to reset form field values
