@@ -102,11 +102,11 @@
             <div class="mb-2">
                 <a href="{{ url_for('faq.index') }}" class="text-decoration-none text-muted">FAQ</a>
                 <span class="mx-2">|</span>
-                <a href="#" class="text-decoration-none text-muted">Privacy Policy</a>
+                <a href="{{ url_for('privacy') }}" class="text-decoration-none text-muted">Privacy Policy</a>
                 <span class="mx-2">|</span>
-                <a href="#" class="text-decoration-none text-muted">Terms of Service</a>
+                <a href="{{ url_for('terms') }}" class="text-decoration-none text-muted">Terms of Service</a>
             </div>
-            <span class="text-muted">© 2024 Freelancer Suite. All rights reserved.</span>
+            <span class="text-muted">© {{ current_year }} Freelancer Suite. All rights reserved.</span>
         </div>
     </footer>
 

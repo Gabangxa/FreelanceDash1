@@ -105,6 +105,14 @@ def log_request_info():
         logger.debug('Request Headers: %s', request.headers)
         logger.debug('Request Body: %s', request.get_data())
 
+# Template context processors
+@app.context_processor
+def inject_common_variables():
+    """Inject common variables into all templates."""
+    return {
+        'current_year': datetime.now().year
+    }
+
 @app.after_request
 def add_security_headers_and_log_timing(response):
     # Add security headers
@@ -131,6 +139,19 @@ register_user_friendly_error_handler(app)
 @app.route('/')
 def index():
     return render_template('index.html')
+
+# Terms of Service and Privacy Policy routes
+@app.route('/terms')
+def terms():
+    # Pass the current date for the "Last Updated" section
+    current_date = datetime.now().strftime('%B %d, %Y')
+    return render_template('terms.html', current_date=current_date)
+
+@app.route('/privacy')
+def privacy():
+    # Pass the current date for the "Last Updated" section
+    current_date = datetime.now().strftime('%B %d, %Y')
+    return render_template('privacy.html', current_date=current_date)
 
 # Register blueprints
 from auth.routes import auth_bp
