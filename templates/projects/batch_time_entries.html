@@ -140,10 +140,10 @@
                     {% endfor %}
                 </div>
                 
-                <!-- Add another entry button -->
-                <div class="mb-4">
-                    <button type="button" id="addEntryBtn" class="btn btn-outline-primary">
-                        <i class="fas fa-plus me-2"></i>Add Another Entry
+                <!-- Action buttons -->
+                <div class="d-flex mb-4 gap-2">
+                    <button type="button" class="btn btn-outline-secondary copy-all-btn">
+                        <i class="fas fa-copy me-2"></i>Copy All Entries to Next Day
                     </button>
                 </div>
                 
@@ -187,12 +187,21 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Add a new time entry row
     addEntryBtn.addEventListener('click', function() {
-        // Clone the first entry
-        const firstEntry = timeEntriesContainer.querySelector('.time-entry-row');
-        const newEntry = firstEntry.cloneNode(true);
+        addNewEntry();
+    });
+    
+    // Function to add a new entry
+    function addNewEntry(copyFrom = null) {
+        // Clone the first entry or the specified entry
+        const sourceEntry = copyFrom || timeEntriesContainer.querySelector('.time-entry-row');
+        const newEntry = sourceEntry.cloneNode(true);
         
-        // Reset form field values in the clone
-        resetFormValues(newEntry);
+        // Reset or copy form field values in the clone
+        if (copyFrom) {
+            copyFormValues(copyFrom, newEntry);
+        } else {
+            resetFormValues(newEntry);
+        }
         
         // Add remove button if not already present
         ensureRemoveButton(newEntry);
@@ -211,7 +220,124 @@ document.addEventListener('DOMContentLoaded', function() {
         if (projectSelect && projectSelect.value) {
             loadTasks(projectSelect); // Load tasks for the selected project
         }
-    });
+        
+        // Add live validation
+        addLiveValidation(newEntry);
+        
+        // Update total hours
+        updateTotalHours();
+        
+        // Scroll to the new entry
+        newEntry.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        return newEntry;
+    }
+    
+    // Copy all entries button
+    const copyAllButton = document.querySelector('.copy-all-btn');
+    if (copyAllButton) {
+        copyAllButton.addEventListener('click', function() {
+            // Get all current entries
+            const entries = document.querySelectorAll('.time-entry-row');
+            if (entries.length === 0) return;
+            
+            // Show confirmation
+            if (!confirm('This will copy all current entries to the next day. Continue?')) {
+                return;
+            }
+            
+            // Keep track of added entries to update totals at the end
+            let entriesAdded = 0;
+            
+            // Copy each entry
+            entries.forEach(entry => {
+                const newEntry = addNewEntry(entry);
+                
+                // Set date to next day
+                const dateInput = newEntry.querySelector('input[type="date"]');
+                if (dateInput && dateInput.value) {
+                    const currentDate = new Date(dateInput.value);
+                    currentDate.setDate(currentDate.getDate() + 1);
+                    // Format as YYYY-MM-DD
+                    const yyyy = currentDate.getFullYear();
+                    const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
+                    const dd = String(currentDate.getDate()).padStart(2, '0');
+                    dateInput.value = `${yyyy}-${mm}-${dd}`;
+                }
+                
+                entriesAdded++;
+            });
+            
+            // Show success message
+            const successMsg = document.createElement('div');
+            successMsg.className = 'alert alert-success alert-dismissible fade show';
+            successMsg.innerHTML = `
+                <strong>Success!</strong> Copied ${entriesAdded} entries to the next day.
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            `;
+            formStatusMessages.prepend(successMsg);
+            
+            // Update validation
+            validateDateTotals();
+        });
+    }
+    
+    // Function to copy form values from source to target
+    function copyFormValues(sourceElement, targetElement) {
+        // Copy number and description values
+        const sourceHours = sourceElement.querySelector('input[type="number"]');
+        const targetHours = targetElement.querySelector('input[type="number"]');
+        if (sourceHours && targetHours) {
+            targetHours.value = sourceHours.value;
+        }
+        
+        const sourceDesc = sourceElement.querySelector('textarea');
+        const targetDesc = targetElement.querySelector('textarea');
+        if (sourceDesc && targetDesc) {
+            targetDesc.value = sourceDesc.value;
+        }
+        
+        // Copy date value
+        const sourceDateInput = sourceElement.querySelector('input[type="date"]');
+        const targetDateInput = targetElement.querySelector('input[type="date"]');
+        if (sourceDateInput && targetDateInput) {
+            targetDateInput.value = sourceDateInput.value;
+        }
+        
+        // Copy billable state
+        const sourceBillable = sourceElement.querySelector('input[type="checkbox"]');
+        const targetBillable = targetElement.querySelector('input[type="checkbox"]');
+        if (sourceBillable && targetBillable) {
+            targetBillable.checked = sourceBillable.checked;
+        }
+        
+        // Copy project selection
+        const sourceProject = sourceElement.querySelector('.project-select');
+        const targetProject = targetElement.querySelector('.project-select');
+        if (sourceProject && targetProject && sourceProject.value) {
+            targetProject.value = sourceProject.value;
+            
+            // We'll need to load tasks for this project
+            // We delay this to allow the DOM to fully update
+            setTimeout(() => loadTasks(targetProject), 50);
+            
+            // Try to set task value after tasks are loaded
+            setTimeout(() => {
+                const sourceTask = sourceElement.querySelector('.task-select');
+                const targetTask = targetElement.querySelector('.task-select');
+                if (sourceTask && targetTask && sourceTask.value) {
+                    // Check if this task option exists in the target
+                    const taskExists = Array.from(targetTask.options).some(
+                        option => option.value === sourceTask.value
+                    );
+                    
+                    if (taskExists) {
+                        targetTask.value = sourceTask.value;
+                    }
+                }
+            }, 300);
+        }
+    }
     
     // Function to reset form field values
     function resetFormValues(entryElement) {
@@ -600,6 +726,12 @@ document.addEventListener('DOMContentLoaded', function() {
         
         // Update the total display with 2 decimal places
         totalHoursDisplay.textContent = total.toFixed(2);
+        
+        // Update the header total display if it exists
+        const headerTotal = document.getElementById('totalHoursHeader');
+        if (headerTotal) {
+            headerTotal.textContent = total.toFixed(2);
+        }
     }
     
     // Function to load tasks for a selected project
