@@ -736,17 +736,29 @@ def batch_time_entries():
                             continue
                         
                         # Get the entry values
-                        entry_date = entry_data['entry_date']
-                        hours = float(entry_data['hours'])
-                        
-                        # Convert hours to minutes for the duration
-                        duration_minutes = int(hours * 60)
-                        
-                        # Set start time to the selected date at 9 AM
-                        start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))
-                        
-                        # Calculate end time by adding hours
-                        end_time = start_time + timedelta(minutes=duration_minutes)
+                        try:
+                            entry_date_str = entry_data['entry_date']
+                            if isinstance(entry_date_str, str):
+                                # Parse the date string from the form
+                                entry_date = datetime.strptime(entry_date_str, '%Y-%m-%d')
+                            else:
+                                # It's already a datetime object
+                                entry_date = entry_date_str
+                                
+                            hours = float(entry_data['hours'])
+                            
+                            # Convert hours to minutes for the duration
+                            duration_minutes = int(hours * 60)
+                            
+                            # Set start time to the selected date at 9 AM
+                            start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))
+                            
+                            # Calculate end time by adding hours
+                            end_time = start_time + timedelta(minutes=duration_minutes)
+                        except (ValueError, TypeError) as e:
+                            logger.error(f"Error processing date/time: {str(e)}")
+                            flash(f'Invalid date or hours for entry {entries_created + 1}', 'danger')
+                            continue
                         
                         # Check if the task is specified and belongs to the selected project
                         task_id = None
@@ -792,31 +804,38 @@ def batch_time_entries():
         
         # Initialize the form with one empty entry
         if len(form.entries) == 0:
-            # Create a single entry with default values
-            entry_data = {
-                'entry_date': datetime.now(),
-                'project_id': projects[0].id if projects else None,
-                'task_id': 0,
-                'hours': 1.0,
-                'description': '',
-                'billable': True
-            }
-            form.entries.append_entry(entry_data)
+            # Add an empty entry - we'll populate the choices after
+            form.entries.append_entry({})
         
         # Configure the project and task selections for all entries
         for entry_form in form.entries:
             # Set project choices
             entry_form.project_id.choices = project_choices
             
+            # Default project selection if none is set
+            if not entry_form.project_id.data and projects:
+                entry_form.project_id.data = projects[0].id
+            
             # Set task choices (initially just "No Task")
             entry_form.task_id.choices = [(0, 'No Task')]
             
             # If a project is selected, load its tasks
             if entry_form.project_id.data:
-                project_id = entry_form.project_id.data
-                tasks = Task.query.filter_by(project_id=project_id).all()
-                task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
-                entry_form.task_id.choices = task_choices
+                try:
+                    project_id = int(entry_form.project_id.data)
+                    tasks = Task.query.filter_by(project_id=project_id).all()
+                    task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
+                    entry_form.task_id.choices = task_choices
+                except (ValueError, TypeError):
+                    # Handle case where project_id is not a valid integer
+                    pass
+                    
+            # Set default values for other fields if not already set
+            if not entry_form.hours.data:
+                entry_form.hours.data = 1.0
+                
+            if entry_form.billable.data is None:
+                entry_form.billable.data = True
         
         # Render the template with the form
         return render_template(

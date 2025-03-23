@@ -33,7 +33,7 @@
                                 <!-- Date -->
                                 <div class="col-md-6 col-lg-2">
                                     <label class="form-label">{{ entry_form.entry_date.label }}</label>
-                                    {{ entry_form.entry_date(class="form-control", type="date") }}
+                                    <input type="date" name="{{ entry_form.entry_date.name }}" id="{{ entry_form.entry_date.id }}" class="form-control" required>
                                 </div>
                                 
                                 <!-- Project -->
