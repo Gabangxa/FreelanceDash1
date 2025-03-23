@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
-from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm
+from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
 import calendar
@@ -723,10 +723,11 @@ def batch_time_entries():
                 
                 # Begin a transaction to save all entries
                 try:
-                    for entry_form in form.entries:
+                    for entry_data in form.entries.data:
                         # Validate that the project belongs to the user
+                        project_id = entry_data['project_id']
                         project = Project.query.filter_by(
-                            id=entry_form.project_id.data,
+                            id=project_id,
                             user_id=current_user.id
                         ).first()
                         
@@ -734,9 +735,9 @@ def batch_time_entries():
                             flash(f'Invalid project selection for entry {entries_created + 1}', 'danger')
                             continue
                         
-                        # Create a new time entry
-                        entry_date = entry_form.entry_date.data
-                        hours = entry_form.hours.data
+                        # Get the entry values
+                        entry_date = entry_data['entry_date']
+                        hours = float(entry_data['hours'])
                         
                         # Convert hours to minutes for the duration
                         duration_minutes = int(hours * 60)
@@ -749,9 +750,9 @@ def batch_time_entries():
                         
                         # Check if the task is specified and belongs to the selected project
                         task_id = None
-                        if entry_form.task_id.data and entry_form.task_id.data > 0:
+                        if entry_data['task_id'] and int(entry_data['task_id']) > 0:
                             task = Task.query.filter_by(
-                                id=entry_form.task_id.data,
+                                id=int(entry_data['task_id']),
                                 project_id=project.id
                             ).first()
                             if task:
@@ -764,8 +765,8 @@ def batch_time_entries():
                             start_time=start_time,
                             end_time=end_time,
                             duration=duration_minutes,
-                            description=entry_form.description.data,
-                            billable=entry_form.billable.data
+                            description=entry_data['description'],
+                            billable=entry_data.get('billable', True)
                         )
                         
                         db.session.add(time_entry)
@@ -790,22 +791,32 @@ def batch_time_entries():
                         flash(f'Error in {field}: {error}', 'danger')
         
         # Initialize the form with one empty entry
-        if not form.entries:
-            # Initialize with a single entry form
-            entry_form = SingleEntryForm()
+        if len(form.entries) == 0:
+            # Create a single entry with default values
+            entry_data = {
+                'entry_date': datetime.now(),
+                'project_id': projects[0].id if projects else None,
+                'task_id': 0,
+                'hours': 1.0,
+                'description': '',
+                'billable': True
+            }
+            form.entries.append_entry(entry_data)
+        
+        # Configure the project and task selections for all entries
+        for entry_form in form.entries:
+            # Set project choices
+            entry_form.project_id.choices = project_choices
             
-            # For each project in the form
-            for entry_form in [entry_form]:
-                entry_form.project_id.choices = project_choices
-                entry_form.task_id.choices = [(0, 'No Task')]
-                
-            # Add the entry form to the batch form
-            form.entries.append_entry(entry_form.data)
+            # Set task choices (initially just "No Task")
+            entry_form.task_id.choices = [(0, 'No Task')]
             
-            # Update project/task choices for the newly added form
-            for entry_form in form.entries:
-                entry_form.project_id.choices = project_choices
-                entry_form.task_id.choices = [(0, 'No Task')]
+            # If a project is selected, load its tasks
+            if entry_form.project_id.data:
+                project_id = entry_form.project_id.data
+                tasks = Task.query.filter_by(project_id=project_id).all()
+                task_choices = [(0, 'No Task')] + [(t.id, t.title) for t in tasks]
+                entry_form.task_id.choices = task_choices
         
         # Render the template with the form
         return render_template(
