@@ -33,25 +33,53 @@
                                 <!-- Date -->
                                 <div class="col-md-6 col-lg-2">
                                     <label class="form-label">{{ entry_form.form.entry_date.label }}</label>
-                                    <input type="date" name="{{ entry_form.form.entry_date.name }}" id="{{ entry_form.form.entry_date.id }}" class="form-control" required>
+                                    <input type="date" name="{{ entry_form.form.entry_date.name }}" id="{{ entry_form.form.entry_date.id }}" class="form-control {% if entry_form.form.entry_date.errors %}is-invalid{% endif %}" required>
+                                    {% if entry_form.form.entry_date.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in entry_form.form.entry_date.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 
                                 <!-- Project -->
                                 <div class="col-md-6 col-lg-3">
                                     <label class="form-label">{{ entry_form.form.project_id.label }}</label>
-                                    {{ entry_form.form.project_id(class="form-select project-select", onchange="loadTasks(this)") }}
+                                    {{ entry_form.form.project_id(class="form-select project-select " + ("is-invalid" if entry_form.form.project_id.errors else ""), onchange="loadTasks(this)") }}
+                                    {% if entry_form.form.project_id.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in entry_form.form.project_id.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 
                                 <!-- Task -->
                                 <div class="col-md-6 col-lg-3">
                                     <label class="form-label">{{ entry_form.form.task_id.label }}</label>
-                                    {{ entry_form.form.task_id(class="form-select task-select") }}
+                                    {{ entry_form.form.task_id(class="form-select task-select " + ("is-invalid" if entry_form.form.task_id.errors else "")) }}
+                                    {% if entry_form.form.task_id.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in entry_form.form.task_id.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 
                                 <!-- Hours -->
                                 <div class="col-md-6 col-lg-2">
                                     <label class="form-label">{{ entry_form.form.hours.label }}</label>
-                                    {{ entry_form.form.hours(class="form-control", step="0.25", min="0.25", max="24") }}
+                                    {{ entry_form.form.hours(class="form-control " + ("is-invalid" if entry_form.form.hours.errors else ""), step="0.25", min="0.25", max="24") }}
+                                    {% if entry_form.form.hours.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in entry_form.form.hours.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                                 
                                 <!-- Billable -->
@@ -72,7 +100,14 @@
                                 <!-- Description (full width) -->
                                 <div class="col-12">
                                     <label class="form-label">{{ entry_form.form.description.label }}</label>
-                                    {{ entry_form.form.description(class="form-control", rows="2") }}
+                                    {{ entry_form.form.description(class="form-control " + ("is-invalid" if entry_form.form.description.errors else ""), rows="2") }}
+                                    {% if entry_form.form.description.errors %}
+                                    <div class="invalid-feedback">
+                                        {% for error in entry_form.form.description.errors %}
+                                        {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>

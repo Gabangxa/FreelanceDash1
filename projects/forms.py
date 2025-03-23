@@ -62,11 +62,11 @@ class BatchTimeEntryForm(FlaskForm):
 
 class SingleEntryForm(Form):
     """Form for a single time entry row in the batch submission form"""
-    entry_date = DateTimeField('Date', format='%Y-%m-%d', validators=[DataRequired()], default=datetime.now)
-    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    entry_date = DateTimeField('Date', format='%Y-%m-%d', validators=[DataRequired(message="Date is required")], default=datetime.now)
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired(message="Project is required")])
     task_id = SelectField('Task', coerce=int, validators=[Optional()])
     hours = FloatField('Hours', validators=[
-        DataRequired(), 
+        DataRequired(message="Hours are required"), 
         NumberRange(min=0.1, max=24, message="Hours must be between 0.1 and 24")
     ])
     description = TextAreaField('Description')
@@ -75,6 +75,30 @@ class SingleEntryForm(Form):
     def __init__(self, *args, **kwargs):
         super(SingleEntryForm, self).__init__(*args, **kwargs)
         # Default task selection will be added in the route
+        
+    def validate_entry_date(self, field):
+        """Custom validator for the date field"""
+        if field.data is None:
+            raise ValidationError("Date is required")
+        
+        # Check if date is in the future
+        if field.data.date() > datetime.now().date():
+            # This is just a warning, not an error, so we won't raise an exception
+            field.warnings = ["Date is in the future"] 
+            
+    def validate_hours(self, field):
+        """Custom validator for hours field"""
+        if field.data is None:
+            raise ValidationError("Hours are required")
+            
+        try:
+            hours = float(field.data)
+            if hours <= 0:
+                raise ValidationError("Hours must be greater than 0")
+            if hours > 24:
+                raise ValidationError("Hours cannot exceed 24 per entry")
+        except (ValueError, TypeError):
+            raise ValidationError("Invalid hours value")
 
 class BatchHoursEntryForm(FlaskForm):
     """Form for batch time entry submission with hours instead of start/end times"""
