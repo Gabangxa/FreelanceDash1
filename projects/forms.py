@@ -9,7 +9,13 @@ class ProjectForm(FlaskForm):
     start_date = DateTimeField('Start Date', validators=[DataRequired()], format='%Y-%m-%d')
     end_date = DateTimeField('End Date', format='%Y-%m-%d')
     client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
-    submit = SubmitField('Create Project')
+    submit = SubmitField('Save Project')
+    
+    def __init__(self, *args, **kwargs):
+        super(ProjectForm, self).__init__(*args, **kwargs)
+        # Change button text if this is an edit form
+        if kwargs.get('obj'):
+            self.submit.label.text = 'Update Project'
 
 class TaskForm(FlaskForm):
     title = StringField('Task Title', validators=[DataRequired()])
