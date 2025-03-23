@@ -24,9 +24,8 @@
                 <strong>Quick Tips:</strong>
                 <ul class="mb-0 mt-1">
                     <li>Enter time entries for multiple days at once</li>
-                    <li>Use the copy button to duplicate similar entries</li>
+                    <li>Use the add entry button to create more entries</li>
                     <li>Any warnings will appear highlighted in yellow</li>
-                    <li>Total hours: <span class="badge bg-primary ms-1" id="totalHoursHeader">0.00</span></li>
                 </ul>
             </div>
         </div>
@@ -142,8 +141,8 @@
                 
                 <!-- Action buttons -->
                 <div class="d-flex mb-4 gap-2">
-                    <button type="button" class="btn btn-outline-secondary copy-all-btn">
-                        <i class="fas fa-copy me-2"></i>Copy All Entries to Next Day
+                    <button type="button" id="addMoreEntriesBtn" class="btn btn-outline-primary">
+                        <i class="fas fa-plus me-2"></i>Add More Entries
                     </button>
                 </div>
                 
@@ -190,6 +189,17 @@ document.addEventListener('DOMContentLoaded', function() {
         addNewEntry();
     });
     
+    // Add More Entries button
+    const addMoreEntriesBtn = document.getElementById('addMoreEntriesBtn');
+    if (addMoreEntriesBtn) {
+        addMoreEntriesBtn.addEventListener('click', function() {
+            // Add 3 new entries at once
+            for (let i = 0; i < 3; i++) {
+                addNewEntry();
+            }
+        });
+    }
+    
     // Function to add a new entry
     function addNewEntry(copyFrom = null) {
         // Clone the first entry or the specified entry
@@ -233,52 +243,11 @@ document.addEventListener('DOMContentLoaded', function() {
         return newEntry;
     }
     
-    // Copy all entries button
-    const copyAllButton = document.querySelector('.copy-all-btn');
-    if (copyAllButton) {
-        copyAllButton.addEventListener('click', function() {
-            // Get all current entries
-            const entries = document.querySelectorAll('.time-entry-row');
-            if (entries.length === 0) return;
-            
-            // Show confirmation
-            if (!confirm('This will copy all current entries to the next day. Continue?')) {
-                return;
-            }
-            
-            // Keep track of added entries to update totals at the end
-            let entriesAdded = 0;
-            
-            // Copy each entry
-            entries.forEach(entry => {
-                const newEntry = addNewEntry(entry);
-                
-                // Set date to next day
-                const dateInput = newEntry.querySelector('input[type="date"]');
-                if (dateInput && dateInput.value) {
-                    const currentDate = new Date(dateInput.value);
-                    currentDate.setDate(currentDate.getDate() + 1);
-                    // Format as YYYY-MM-DD
-                    const yyyy = currentDate.getFullYear();
-                    const mm = String(currentDate.getMonth() + 1).padStart(2, '0');
-                    const dd = String(currentDate.getDate()).padStart(2, '0');
-                    dateInput.value = `${yyyy}-${mm}-${dd}`;
-                }
-                
-                entriesAdded++;
-            });
-            
-            // Show success message
-            const successMsg = document.createElement('div');
-            successMsg.className = 'alert alert-success alert-dismissible fade show';
-            successMsg.innerHTML = `
-                <strong>Success!</strong> Copied ${entriesAdded} entries to the next day.
-                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            `;
-            formStatusMessages.prepend(successMsg);
-            
-            // Update validation
-            validateDateTotals();
+    // Initialize renumber entries function
+    function renumberEntries() {
+        const entries = document.querySelectorAll('.time-entry-row');
+        entries.forEach((entry, index) => {
+            updateFieldNamesAndIds(entry, index);
         });
     }
     
@@ -719,19 +688,28 @@ document.addEventListener('DOMContentLoaded', function() {
     // Function to calculate and update total hours
     function updateTotalHours() {
         let total = 0;
-        document.querySelectorAll('input[type="number"]').forEach(input => {
-            const value = parseFloat(input.value) || 0;
-            total += value;
+        
+        // Specifically target the hours inputs in time entry rows
+        document.querySelectorAll('.time-entry-row input[type="number"]').forEach(input => {
+            if (input && !input.disabled) {
+                const value = parseFloat(input.value) || 0;
+                total += value;
+            }
         });
         
         // Update the total display with 2 decimal places
-        totalHoursDisplay.textContent = total.toFixed(2);
-        
-        // Update the header total display if it exists
-        const headerTotal = document.getElementById('totalHoursHeader');
-        if (headerTotal) {
-            headerTotal.textContent = total.toFixed(2);
+        if (totalHoursDisplay) {
+            totalHoursDisplay.textContent = total.toFixed(2);
         }
+        
+        // Highlight the total if it's exceptionally high
+        if (totalHoursDisplay && total > 24) {
+            totalHoursDisplay.classList.add('text-warning');
+        } else if (totalHoursDisplay) {
+            totalHoursDisplay.classList.remove('text-warning');
+        }
+        
+        return total;
     }
     
     // Function to load tasks for a selected project
