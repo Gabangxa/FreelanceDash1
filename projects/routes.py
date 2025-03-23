@@ -134,6 +134,69 @@ def view_project(id):
         flash('Error loading project details. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
+@projects_bp.route('/projects/<int:id>/edit', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def edit_project(id):
+    try:
+        # Get the project with security check
+        project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+        
+        # Initialize form with project data
+        form = ProjectForm(obj=project)
+        
+        # Populate client choices
+        form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
+        
+        if form.validate_on_submit():
+            try:
+                # Update project attributes
+                project.name = form.name.data
+                project.description = form.description.data
+                project.start_date = form.start_date.data
+                project.end_date = form.end_date.data
+                project.client_id = form.client_id.data
+                
+                db.session.commit()
+                flash('Project updated successfully', 'success')
+                return redirect(url_for('projects.view_project', id=project.id))
+            except SQLAlchemyError as e:
+                db.session.rollback()
+                logger.error(f"Error updating project {id}: {str(e)}")
+                flash('Error updating project. Please try again.', 'danger')
+        
+        return render_template('projects/edit.html', form=form, project=project)
+    except Exception as e:
+        logger.error(f"Unexpected error in edit_project {id}: {str(e)}")
+        flash('An unexpected error occurred. Please try again.', 'danger')
+        return redirect(url_for('projects.list_projects'))
+        
+@projects_bp.route('/projects/<int:id>/delete', methods=['POST'])
+@login_required
+@handle_db_errors
+def delete_project(id):
+    try:
+        # Get the project with security check
+        project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+        
+        project_name = project.name
+        
+        # Delete the project - cascading will handle related records
+        db.session.delete(project)
+        db.session.commit()
+        
+        flash(f'Project "{project_name}" has been deleted successfully', 'success')
+        return redirect(url_for('projects.list_projects'))
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Error deleting project {id}: {str(e)}")
+        flash('Error deleting project. Please try again.', 'danger')
+        return redirect(url_for('projects.view_project', id=id))
+    except Exception as e:
+        logger.error(f"Unexpected error in delete_project {id}: {str(e)}")
+        flash('An unexpected error occurred. Please try again.', 'danger')
+        return redirect(url_for('projects.list_projects'))
+
 @projects_bp.route('/tasks/new', methods=['GET', 'POST'])
 @login_required
 @handle_db_errors
