@@ -845,7 +845,9 @@ def batch_time_entries():
         )
                 
     except Exception as e:
+        import traceback
         logger.error(f"Error in batch time entries: {str(e)}")
+        logger.error(f"Traceback: {traceback.format_exc()}")
         flash('An error occurred while processing time entries. Please try again.', 'danger')
         return redirect(url_for('projects.dashboard'))
 
