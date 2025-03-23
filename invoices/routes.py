@@ -5,6 +5,11 @@ from app import db, logger
 from models import Invoice, InvoiceItem, Client, Project
 from invoices.forms import InvoiceForm, InvoiceItemForm
 from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
+from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import uuid
 from datetime import datetime
