@@ -1,6 +1,6 @@
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField
-from wtforms.validators import DataRequired, Optional, NumberRange
+from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField, FieldList, FormField, FloatField, Form
+from wtforms.validators import DataRequired, Optional, NumberRange, ValidationError
 from datetime import datetime
 
 class ProjectForm(FlaskForm):
@@ -59,6 +59,33 @@ class BatchTimeEntryForm(FlaskForm):
     target_task_id = SelectField('Target Task', coerce=int)
     
     submit = SubmitField('Apply to Selected')
+
+class SingleEntryForm(Form):
+    """Form for a single time entry row in the batch submission form"""
+    entry_date = DateTimeField('Date', format='%Y-%m-%d', validators=[DataRequired()], default=datetime.now)
+    project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
+    task_id = SelectField('Task', coerce=int, validators=[Optional()])
+    hours = FloatField('Hours', validators=[
+        DataRequired(), 
+        NumberRange(min=0.1, max=24, message="Hours must be between 0.1 and 24")
+    ])
+    description = TextAreaField('Description')
+    billable = BooleanField('Billable', default=True)
+    
+    def __init__(self, *args, **kwargs):
+        super(SingleEntryForm, self).__init__(*args, **kwargs)
+        # Default task selection will be added in the route
+
+class BatchHoursEntryForm(FlaskForm):
+    """Form for batch time entry submission with hours instead of start/end times"""
+    entries = FieldList(FormField(SingleEntryForm), min_entries=1)
+    submit = SubmitField('Save All Entries')
+    
+    def validate_entries(self, field):
+        if len(field.data) < 1:
+            raise ValidationError("Please add at least one time entry")
+        
+        # Additional validation could be added here if needed
 
 class TimeEntryFilterForm(FlaskForm):
     date_from = DateTimeField('From Date', format='%Y-%m-%d', validators=[Optional()])

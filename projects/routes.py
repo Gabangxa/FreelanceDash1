@@ -705,122 +705,113 @@ def time_entry_statistics():
 @login_required
 @handle_db_errors
 def batch_time_entries():
-    """Batch operations for time entries"""
+    """Batch time entry submission with hours input"""
     try:
-        form = BatchTimeEntryForm()
+        # Create a new batch time entry form
+        form = BatchHoursEntryForm()
         
-        # Populate project choices
-        user_projects = Project.query.filter_by(user_id=current_user.id).all()
-        form.project_id.choices = [(p.id, p.name) for p in user_projects]
-        form.target_project_id.choices = [(p.id, p.name) for p in user_projects]
+        # Get all projects for the current user
+        projects = Project.query.filter_by(user_id=current_user.id).all()
+        project_choices = [(p.id, p.name) for p in projects]
         
-        # Default task choices
-        form.task_id.choices = [(0, 'No Task')]
-        form.target_task_id.choices = [(0, 'No Task')]
-        
-        # Get all time entries for the user
-        time_entries = TimeEntry.query.join(Project).filter(
-            Project.user_id == current_user.id
-        ).order_by(TimeEntry.start_time.desc()).all()
-        
-        if form.validate_on_submit():
-            # Get selected entry IDs from form
-            selected_ids = request.form.getlist('selected_entries', type=int)
-            
-            if not selected_ids:
-                flash('No time entries selected. Please select at least one entry.', 'warning')
-                return redirect(url_for('projects.batch_time_entries'))
-            
-            # Perform the requested batch action
-            action = form.action.data
-            
-            # Verify that the selected entries belong to the user
-            selected_entries = TimeEntry.query.join(Project).filter(
-                TimeEntry.id.in_(selected_ids),
-                Project.user_id == current_user.id
-            ).all()
-            
-            if len(selected_entries) != len(selected_ids):
-                flash('Some selected entries could not be found or do not belong to you.', 'danger')
-                return redirect(url_for('projects.batch_time_entries'))
-            
-            if action == 'delete':
-                # Delete the selected entries
-                for entry in selected_entries:
-                    db.session.delete(entry)
-                db.session.commit()
-                flash(f'Successfully deleted {len(selected_entries)} time entries.', 'success')
+        # If this is a POST request and the form is submitted
+        if request.method == 'POST':
+            # Validate the form
+            if form.validate_on_submit():
+                entries_created = 0
+                entries_with_errors = 0
                 
-            elif action == 'change_project':
-                # Move entries to a different project
-                target_project_id = form.target_project_id.data
-                
-                # Verify target project belongs to user
-                target_project = Project.query.filter_by(
-                    id=target_project_id, 
-                    user_id=current_user.id
-                ).first()
-                
-                if not target_project:
-                    flash('Invalid target project selection.', 'danger')
-                    return redirect(url_for('projects.batch_time_entries'))
-                
-                # Update project ID for all selected entries
-                for entry in selected_entries:
-                    entry.project_id = target_project_id
-                    # Clear task ID since it may not be valid for the new project
-                    entry.task_id = None
-                
-                db.session.commit()
-                flash(f'Successfully moved {len(selected_entries)} time entries to project "{target_project.name}".', 'success')
-                
-            elif action == 'change_task':
-                # Assign entries to a task
-                target_task_id = form.target_task_id.data
-                
-                if target_task_id == 0:
-                    # Remove task association
-                    for entry in selected_entries:
-                        entry.task_id = None
-                    db.session.commit()
-                    flash(f'Successfully removed task association from {len(selected_entries)} time entries.', 'success')
-                else:
-                    # Verify task belongs to user
-                    target_task = Task.query.join(Project).filter(
-                        Task.id == target_task_id,
-                        Project.user_id == current_user.id
-                    ).first()
-                    
-                    if not target_task:
-                        flash('Invalid target task selection.', 'danger')
-                        return redirect(url_for('projects.batch_time_entries'))
-                    
-                    # Update task ID for all selected entries
-                    for entry in selected_entries:
-                        # Update project ID to match task's project
-                        entry.project_id = target_task.project_id
-                        entry.task_id = target_task_id
+                # Begin a transaction to save all entries
+                try:
+                    for entry_form in form.entries:
+                        # Validate that the project belongs to the user
+                        project = Project.query.filter_by(
+                            id=entry_form.project_id.data,
+                            user_id=current_user.id
+                        ).first()
+                        
+                        if not project:
+                            flash(f'Invalid project selection for entry {entries_created + 1}', 'danger')
+                            continue
+                        
+                        # Create a new time entry
+                        entry_date = entry_form.entry_date.data
+                        hours = entry_form.hours.data
+                        
+                        # Convert hours to minutes for the duration
+                        duration_minutes = int(hours * 60)
+                        
+                        # Set start time to the selected date at 9 AM
+                        start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))
+                        
+                        # Calculate end time by adding hours
+                        end_time = start_time + timedelta(minutes=duration_minutes)
+                        
+                        # Check if the task is specified and belongs to the selected project
+                        task_id = None
+                        if entry_form.task_id.data and entry_form.task_id.data > 0:
+                            task = Task.query.filter_by(
+                                id=entry_form.task_id.data,
+                                project_id=project.id
+                            ).first()
+                            if task:
+                                task_id = task.id
+                        
+                        # Create the time entry
+                        time_entry = TimeEntry(
+                            project_id=project.id,
+                            task_id=task_id,
+                            start_time=start_time,
+                            end_time=end_time,
+                            duration=duration_minutes,
+                            description=entry_form.description.data,
+                            billable=entry_form.billable.data
+                        )
+                        
+                        db.session.add(time_entry)
+                        entries_created += 1
                     
                     db.session.commit()
-                    flash(f'Successfully assigned {len(selected_entries)} time entries to task "{target_task.title}".', 'success')
+                    
+                    if entries_created > 0:
+                        flash(f'Successfully created {entries_created} time entries', 'success')
+                        return redirect(url_for('projects.dashboard'))
+                    else:
+                        flash('No valid time entries were submitted', 'warning')
+                
+                except SQLAlchemyError as e:
+                    db.session.rollback()
+                    logger.error(f"Database error saving batch time entries: {str(e)}")
+                    flash('Error saving time entries. Please try again.', 'danger')
+            else:
+                # Form validation errors
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        flash(f'Error in {field}: {error}', 'danger')
+        
+        # Initialize the form with one empty entry
+        if not form.entries:
+            # Initialize with a single entry form
+            entry_form = SingleEntryForm()
             
-            elif action == 'mark_billable' or action == 'mark_non_billable':
-                # Set billable flag
-                billable_value = (action == 'mark_billable')
+            # For each project in the form
+            for entry_form in [entry_form]:
+                entry_form.project_id.choices = project_choices
+                entry_form.task_id.choices = [(0, 'No Task')]
                 
-                for entry in selected_entries:
-                    entry.billable = billable_value
-                
-                db.session.commit()
-                status = 'billable' if billable_value else 'non-billable'
-                flash(f'Successfully marked {len(selected_entries)} time entries as {status}.', 'success')
+            # Add the entry form to the batch form
+            form.entries.append_entry(entry_form.data)
             
-            return redirect(url_for('projects.batch_time_entries'))
-                
+            # Update project/task choices for the newly added form
+            for entry_form in form.entries:
+                entry_form.project_id.choices = project_choices
+                entry_form.task_id.choices = [(0, 'No Task')]
+        
+        # Render the template with the form
         return render_template(
             'projects/batch_time_entries.html',
             form=form,
-            time_entries=time_entries
+            projects=projects
         )
                 
     except Exception as e:
