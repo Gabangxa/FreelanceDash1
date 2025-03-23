@@ -7,8 +7,6 @@ from invoices.forms import InvoiceForm, InvoiceItemForm
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.pdfbase import pdfmetrics
-from reportlab.pdfbase.ttfonts import TTFont
 from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import uuid
@@ -209,9 +207,8 @@ def generate_pdf(id):
         primary_color = settings.invoice_color_primary or '#3498db'
         secondary_color = settings.invoice_color_secondary or '#f8f9fa'
         
-        # Register a custom font
-        pdfmetrics.registerFont(TTFont('Roboto', 'static/fonts/Roboto-Regular.ttf'))
-        pdfmetrics.registerFont(TTFont('Roboto-Bold', 'static/fonts/Roboto-Bold.ttf'))
+        # We'll use the built-in ReportLab fonts instead of custom fonts
+        # Built-in fonts include: Helvetica, Helvetica-Bold, Times-Roman, Times-Bold, Courier, Courier-Bold
         
         # Select the template based on user preferences
         template_name = settings.invoice_template or 'default'
@@ -232,12 +229,12 @@ def generate_pdf(id):
             
             # Invoice number in white on dark header
             p.setFillColorRGB(1, 1, 1)  # White
-            p.setFont('Roboto-Bold', 16)
+            p.setFont('Helvetica-Bold', 16)
             p.drawString(width - 200, height - 50, f"INVOICE #{invoice.invoice_number}")
             
             # Date and status
             p.setFillColorRGB(0.2, 0.2, 0.2)  # Dark gray
-            p.setFont('Roboto', 10)
+            p.setFont('Helvetica', 10)
             p.drawString(50, height - 120, f"Date: {invoice.created_at.strftime('%Y-%m-%d')}")
             p.drawString(50, height - 135, f"Due Date: {invoice.due_date.strftime('%Y-%m-%d')}")
             
