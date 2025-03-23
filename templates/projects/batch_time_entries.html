@@ -16,21 +16,46 @@
         </div>
     </div>
 
+    <!-- Info and tips alert -->
+    <div class="alert alert-info mb-4">
+        <div class="d-flex align-items-center">
+            <i class="fas fa-info-circle me-2 fs-5"></i>
+            <div>
+                <strong>Quick Tips:</strong>
+                <ul class="mb-0 mt-1">
+                    <li>Enter time entries for multiple days at once</li>
+                    <li>Use the copy button to duplicate similar entries</li>
+                    <li>Any warnings will appear highlighted in yellow</li>
+                    <li>Total hours: <span class="badge bg-primary ms-1" id="totalHoursHeader">0.00</span></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
     <div class="card shadow-sm mb-4">
         <div class="card-header bg-light">
-            <h5 class="mb-0">Add Multiple Time Entries</h5>
+            <div class="d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Add Multiple Time Entries</h5>
+                <button type="button" id="addEntryBtn" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i> Add Entry
+                </button>
+            </div>
         </div>
         <div class="card-body">
             <form method="POST" id="batchTimeForm">
                 {{ form.hidden_tag() }}
                 
+                <!-- Progress indicator for form submission -->
+                <div id="formProgress" class="progress mb-4 d-none">
+                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                </div>
+                
                 <!-- Time entries container -->
                 <div id="timeEntriesContainer">
                     {% for entry_form in form.entries %}
-                    <div class="time-entry-row card mb-3">
-                        <div class="card-body">
-                            <div class="row g-3">
-                                <!-- Date -->
+                    <div class="time-entry-row">
+                        <div class="row g-3">
+                            <!-- Date -->
                                 <div class="col-md-6 col-lg-2">
                                     <label class="form-label">{{ entry_form.form.entry_date.label }}</label>
                                     <input type="date" name="{{ entry_form.form.entry_date.name }}" id="{{ entry_form.form.entry_date.id }}" class="form-control {% if entry_form.form.entry_date.errors %}is-invalid{% endif %}" required>
@@ -299,85 +324,246 @@ document.addEventListener('DOMContentLoaded', function() {
             initializeEntryEventListeners(entry);
         });
         
-        // Initialize form submission with client-side validation
-        form.addEventListener('submit', function(e) {
-            // Clear previous error messages
-            document.querySelectorAll('.validation-error').forEach(el => el.remove());
+        // Function to validate a single entry with live feedback
+        function validateSingleEntry(entry, showMessages = true) {
+            let entryValid = true;
             
-            let hasErrors = false;
-            let dateHourTotals = {}; // Track hours per date
+            // Clear previous error messages for this entry
+            entry.querySelectorAll('.validation-error').forEach(el => el.remove());
+            entry.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+            entry.querySelectorAll('.border-warning').forEach(el => el.classList.remove('border-warning'));
             
-            // Validate each entry
-            const entries = document.querySelectorAll('.time-entry-row');
-            
-            entries.forEach((entry, index) => {
-                // Check date field
-                const dateInput = entry.querySelector('input[type="date"]');
-                if (!dateInput.value) {
-                    showValidationError(dateInput, 'Date is required');
-                    hasErrors = true;
-                }
+            // Check date field
+            const dateInput = entry.querySelector('input[type="date"]');
+            if (!dateInput.value) {
+                if (showMessages) showValidationError(dateInput, 'Date is required');
+                entryValid = false;
+            } else {
+                // Check if date is in the future
+                const selectedDate = new Date(dateInput.value);
+                const today = new Date();
+                today.setHours(0, 0, 0, 0); // Set to start of day for comparison
                 
-                // Check hours
-                const hoursInput = entry.querySelector('input[type="number"]');
-                const hours = parseFloat(hoursInput.value);
-                
-                if (!hoursInput.value) {
-                    showValidationError(hoursInput, 'Hours are required');
-                    hasErrors = true;
-                } else if (isNaN(hours) || hours <= 0 || hours > 24) {
-                    showValidationError(hoursInput, 'Hours must be between 0.1 and 24');
-                    hasErrors = true;
-                } else {
-                    // Track total hours per date for validation
-                    const dateStr = dateInput.value;
-                    if (dateStr) {
-                        if (!dateHourTotals[dateStr]) {
-                            dateHourTotals[dateStr] = 0;
-                        }
-                        dateHourTotals[dateStr] += hours;
+                if (selectedDate > today) {
+                    if (showMessages) {
+                        // Just a warning, not an error
+                        dateInput.classList.add('border-warning');
+                        const warningDiv = document.createElement('div');
+                        warningDiv.className = 'text-warning small validation-error';
+                        warningDiv.textContent = 'Future date selected';
+                        dateInput.parentNode.appendChild(warningDiv);
                     }
-                }
-                
-                // Check project selection
-                const projectSelect = entry.querySelector('.project-select');
-                if (!projectSelect.value || projectSelect.value <= 0) {
-                    showValidationError(projectSelect, 'Project is required');
-                    hasErrors = true;
-                }
-            });
-            
-            // Check total hours per date (should not exceed 24)
-            for (const [dateStr, totalHours] of Object.entries(dateHourTotals)) {
-                if (totalHours > 24) {
-                    // Show warning at the top of the form
-                    const warning = document.createElement('div');
-                    warning.className = 'alert alert-warning validation-error';
-                    warning.innerHTML = `<strong>Warning:</strong> Total hours for ${dateStr} (${totalHours.toFixed(2)}) exceed 24 hours`;
-                    form.prepend(warning);
-                    hasErrors = true;
+                    // Still valid, just a warning
                 }
             }
             
-            // Check if at least one entry exists
+            // Check hours
+            const hoursInput = entry.querySelector('input[type="number"]');
+            const hours = parseFloat(hoursInput.value);
+            
+            if (!hoursInput.value) {
+                if (showMessages) showValidationError(hoursInput, 'Hours are required');
+                entryValid = false;
+            } else if (isNaN(hours) || hours <= 0) {
+                if (showMessages) showValidationError(hoursInput, 'Hours must be greater than 0');
+                entryValid = false;
+            } else if (hours > 24) {
+                if (showMessages) showValidationError(hoursInput, 'Hours cannot exceed 24 per entry');
+                entryValid = false;
+            } else if (hours > 8) {
+                if (showMessages) {
+                    // Just a warning for high hours, not an error
+                    hoursInput.classList.add('border-warning');
+                    const warningDiv = document.createElement('div');
+                    warningDiv.className = 'text-warning small validation-error';
+                    warningDiv.textContent = 'High hour count';
+                    hoursInput.parentNode.appendChild(warningDiv);
+                }
+                // Still valid, just a warning
+            }
+            
+            // Check project selection
+            const projectSelect = entry.querySelector('.project-select');
+            if (!projectSelect.value || projectSelect.value <= 0) {
+                if (showMessages) showValidationError(projectSelect, 'Project is required');
+                entryValid = false;
+            }
+            
+            return {
+                valid: entryValid,
+                dateValue: dateInput.value,
+                hoursValue: hours && !isNaN(hours) ? hours : 0
+            };
+        }
+        
+        // Add live validation to each input
+        function addLiveValidation(entry) {
+            const inputs = entry.querySelectorAll('input, select');
+            inputs.forEach(input => {
+                input.addEventListener('change', function() {
+                    validateSingleEntry(entry);
+                    validateDateTotals(); // Update date totals after any field change
+                });
+                
+                // For immediate validation of text/number inputs
+                if (input.type === 'text' || input.type === 'number' || input.type === 'date') {
+                    input.addEventListener('blur', function() {
+                        validateSingleEntry(entry);
+                        validateDateTotals();
+                    });
+                }
+            });
+        }
+        
+        // Apply live validation to all entries
+        document.querySelectorAll('.time-entry-row').forEach(entry => {
+            addLiveValidation(entry);
+        });
+        
+        // Function to validate total hours per date
+        function validateDateTotals() {
+            // Remove previous total warnings
+            document.querySelectorAll('.date-total-warning').forEach(el => el.remove());
+            
+            let dateHourTotals = {}; // Track hours per date
+            let hasWarnings = false;
+            
+            // Calculate totals per date
+            document.querySelectorAll('.time-entry-row').forEach(entry => {
+                const validation = validateSingleEntry(entry, false);
+                if (validation.dateValue && validation.hoursValue > 0) {
+                    if (!dateHourTotals[validation.dateValue]) {
+                        dateHourTotals[validation.dateValue] = 0;
+                    }
+                    dateHourTotals[validation.dateValue] += validation.hoursValue;
+                }
+            });
+            
+            // Check for dates with excessive hours
+            for (const [dateStr, totalHours] of Object.entries(dateHourTotals)) {
+                if (totalHours > 24) {
+                    hasWarnings = true;
+                    
+                    // Find date inputs with this date and mark them
+                    document.querySelectorAll('.time-entry-row').forEach(entry => {
+                        const dateInput = entry.querySelector('input[type="date"]');
+                        if (dateInput.value === dateStr) {
+                            dateInput.classList.add('border-warning');
+                        }
+                    });
+                    
+                    // Show warning at the top of the form
+                    const warning = document.createElement('div');
+                    warning.className = 'alert alert-warning date-total-warning';
+                    warning.innerHTML = `<strong>Warning:</strong> Total hours for ${dateStr} (${totalHours.toFixed(2)}) exceed 24 hours. This may be valid in some cases (e.g. multiple people), but please verify.`;
+                    
+                    // Add it after the total hours display
+                    const totalHoursAlert = document.querySelector('.alert.alert-info.mb-4');
+                    totalHoursAlert.after(warning);
+                }
+            }
+            
+            return !hasWarnings;
+        }
+        
+        // Initialize form submission with client-side validation
+        form.addEventListener('submit', function(e) {
+            // Clear previous form-level error messages
+            document.querySelectorAll('.form-level-error').forEach(el => el.remove());
+            
+            let hasErrors = false;
+            
+            // Validate each entry
+            const entries = document.querySelectorAll('.time-entry-row');
+            let validEntryCount = 0;
+            
+            entries.forEach((entry, index) => {
+                const result = validateSingleEntry(entry, true);
+                if (result.valid) {
+                    validEntryCount++;
+                } else {
+                    hasErrors = true;
+                    
+                    // Highlight the entire entry row
+                    entry.classList.add('border');
+                    entry.classList.add('border-danger');
+                }
+            });
+            
+            // Check if at least one entry exists and is valid
             if (entries.length === 0) {
                 const warning = document.createElement('div');
-                warning.className = 'alert alert-warning validation-error';
+                warning.className = 'alert alert-warning form-level-error';
                 warning.innerHTML = '<strong>Error:</strong> Please add at least one time entry';
                 form.prepend(warning);
                 hasErrors = true;
+            } else if (validEntryCount === 0) {
+                const warning = document.createElement('div');
+                warning.className = 'alert alert-warning form-level-error';
+                warning.innerHTML = '<strong>Error:</strong> None of your time entries are valid. Please correct the errors.';
+                form.prepend(warning);
+                hasErrors = true;
+            }
+            
+            // Validate total hours per date
+            const validTotals = validateDateTotals();
+            if (!validTotals) {
+                // Add a confirmation checkbox if totals exceed 24 hours
+                const totalWarnings = document.querySelectorAll('.date-total-warning');
+                if (totalWarnings.length > 0 && !document.getElementById('confirm-high-hours')) {
+                    const confirmDiv = document.createElement('div');
+                    confirmDiv.className = 'form-check mb-3 mt-3 form-level-error';
+                    confirmDiv.innerHTML = `
+                        <input class="form-check-input" type="checkbox" id="confirm-high-hours">
+                        <label class="form-check-label" for="confirm-high-hours">
+                            I confirm that the high daily hour totals are intentional
+                        </label>
+                    `;
+                    totalWarnings[0].appendChild(confirmDiv);
+                    
+                    // Require confirmation to proceed
+                    const confirmed = document.getElementById('confirm-high-hours')?.checked;
+                    if (!confirmed) {
+                        hasErrors = true;
+                    }
+                }
             }
             
             // Prevent form submission if validation fails
             if (hasErrors) {
                 e.preventDefault();
+                
+                // Show error summary at the top
+                const errorSummary = document.createElement('div');
+                errorSummary.className = 'alert alert-danger form-level-error';
+                errorSummary.innerHTML = '<strong>Please fix the following issues:</strong><ul></ul>';
+                
+                // Collect all error messages
+                const errorList = errorSummary.querySelector('ul');
+                document.querySelectorAll('.invalid-feedback').forEach(errorMsg => {
+                    const li = document.createElement('li');
+                    li.textContent = errorMsg.textContent;
+                    errorList.appendChild(li);
+                });
+                
+                // Add to top of form if we have specific errors
+                if (errorList.children.length > 0) {
+                    form.prepend(errorSummary);
+                }
+                
                 // Scroll to the top to show errors
                 window.scrollTo(0, 0);
             } else {
-                // Show loading state
+                // Show loading state and progress
                 const submitBtn = document.querySelector('button[type="submit"]');
                 submitBtn.disabled = true;
                 submitBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Saving...';
+                
+                // Add progress bar
+                const progressContainer = document.createElement('div');
+                progressContainer.className = 'progress mt-3';
+                progressContainer.innerHTML = '<div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>';
+                submitBtn.parentNode.appendChild(progressContainer);
             }
         });
         
