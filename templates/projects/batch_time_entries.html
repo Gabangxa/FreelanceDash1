@@ -32,33 +32,33 @@
                             <div class="row g-3">
                                 <!-- Date -->
                                 <div class="col-md-6 col-lg-2">
-                                    <label class="form-label">{{ entry_form.entry_date.label }}</label>
-                                    <input type="date" name="{{ entry_form.entry_date.name }}" id="{{ entry_form.entry_date.id }}" class="form-control" required>
+                                    <label class="form-label">{{ entry_form.form.entry_date.label }}</label>
+                                    <input type="date" name="{{ entry_form.form.entry_date.name }}" id="{{ entry_form.form.entry_date.id }}" class="form-control" required>
                                 </div>
                                 
                                 <!-- Project -->
                                 <div class="col-md-6 col-lg-3">
-                                    <label class="form-label">{{ entry_form.project_id.label }}</label>
-                                    {{ entry_form.project_id(class="form-select project-select", onchange="loadTasks(this)") }}
+                                    <label class="form-label">{{ entry_form.form.project_id.label }}</label>
+                                    {{ entry_form.form.project_id(class="form-select project-select", onchange="loadTasks(this)") }}
                                 </div>
                                 
                                 <!-- Task -->
                                 <div class="col-md-6 col-lg-3">
-                                    <label class="form-label">{{ entry_form.task_id.label }}</label>
-                                    {{ entry_form.task_id(class="form-select task-select") }}
+                                    <label class="form-label">{{ entry_form.form.task_id.label }}</label>
+                                    {{ entry_form.form.task_id(class="form-select task-select") }}
                                 </div>
                                 
                                 <!-- Hours -->
                                 <div class="col-md-6 col-lg-2">
-                                    <label class="form-label">{{ entry_form.hours.label }}</label>
-                                    {{ entry_form.hours(class="form-control", step="0.25", min="0.25", max="24") }}
+                                    <label class="form-label">{{ entry_form.form.hours.label }}</label>
+                                    {{ entry_form.form.hours(class="form-control", step="0.25", min="0.25", max="24") }}
                                 </div>
                                 
                                 <!-- Billable -->
                                 <div class="col-md-6 col-lg-2 d-flex align-items-end">
                                     <div class="form-check mb-2">
-                                        {{ entry_form.billable(class="form-check-input") }}
-                                        <label class="form-check-label">{{ entry_form.billable.label }}</label>
+                                        {{ entry_form.form.billable(class="form-check-input") }}
+                                        <label class="form-check-label">{{ entry_form.form.billable.label }}</label>
                                     </div>
                                     
                                     <!-- Remove button (not shown for first entry) -->
@@ -71,8 +71,8 @@
                                 
                                 <!-- Description (full width) -->
                                 <div class="col-12">
-                                    <label class="form-label">{{ entry_form.description.label }}</label>
-                                    {{ entry_form.description(class="form-control", rows="2") }}
+                                    <label class="form-label">{{ entry_form.form.description.label }}</label>
+                                    {{ entry_form.form.description(class="form-control", rows="2") }}
                                 </div>
                             </div>
                         </div>
