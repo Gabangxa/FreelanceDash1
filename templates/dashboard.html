@@ -194,49 +194,73 @@
 
 {% block scripts %}
 <script>
-    // Only initialize chart if the element exists (when there's data)
-    const chartEl = document.getElementById('timeTrackingChart');
-    if (chartEl) {
-        const ctx = chartEl.getContext('2d');
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-                datasets: [{
-                    label: 'Hours Worked',
-                    data: {{ daily_hours|tojson }},
-                    backgroundColor: 'rgba(13, 110, 253, 0.5)',
-                    borderColor: 'rgb(13, 110, 253)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                animation: {
-                    duration: 800,
-                    easing: 'easeOutQuart'
+    // Chart.js initialization function - used for initial load and AJAX updates
+    window.timeTrackingChart = null;
+    
+    function initializeTimeTrackingChart() {
+        const chartEl = document.getElementById('timeTrackingChart');
+        if (chartEl) {
+            // Destroy existing chart if it exists
+            if (window.timeTrackingChart) {
+                window.timeTrackingChart.destroy();
+            }
+            
+            // Get chart data from the data attribute or use the initial data
+            let chartData = {{ daily_hours|tojson }};
+            if (chartEl.dataset.hours) {
+                try {
+                    chartData = JSON.parse(chartEl.dataset.hours);
+                } catch (e) {
+                    console.error('Error parsing chart data:', e);
+                }
+            }
+            
+            console.log('Chart data:', chartData);
+            
+            const ctx = chartEl.getContext('2d');
+            window.timeTrackingChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                    datasets: [{
+                        label: 'Hours Worked',
+                        data: chartData,
+                        backgroundColor: 'rgba(13, 110, 253, 0.5)',
+                        borderColor: 'rgb(13, 110, 253)',
+                        borderWidth: 1
+                    }]
                 },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        title: {
-                            display: true,
-                            text: 'Hours'
+                options: {
+                    responsive: true,
+                    animation: {
+                        duration: 800,
+                        easing: 'easeOutQuart'
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Hours'
+                            }
                         }
-                    }
-                },
-                plugins: {
-                    tooltip: {
-                        callbacks: {
-                            label: function(context) {
-                                return `${context.parsed.y.toFixed(1)} hours`;
+                    },
+                    plugins: {
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    return `${context.parsed.y.toFixed(1)} hours`;
+                                }
                             }
                         }
                     }
                 }
-            }
-        });
+            });
+        }
     }
+    
+    // Initialize chart on page load
+    initializeTimeTrackingChart();
 
     // Initialize tooltips
     document.addEventListener('DOMContentLoaded', function() {
@@ -269,6 +293,9 @@
             // Get form data
             const formData = new FormData(weekForm);
             
+            // Add debug logging
+            console.log('Sending AJAX request for week data...');
+            
             // Send AJAX request
             fetch('{{ url_for('projects.dashboard') }}', {
                 method: 'POST',
@@ -277,8 +304,12 @@
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .then(response => response.json())
+            .then(response => {
+                console.log('Response status:', response.status);
+                return response.json();
+            })
             .then(data => {
+                console.log('Response data:', data);
                 if (data.success) {
                     // Update week display title
                     weekDisplayTitle.textContent = 'Time Tracking Overview: ' + data.week_display;
@@ -286,13 +317,24 @@
                     // Update chart content
                     chartContent.innerHTML = data.html;
                     
+                    // Reinitialize the chart
+                    setTimeout(() => {
+                        initializeTimeTrackingChart();
+                    }, 100);  // Small delay to ensure DOM is updated
+                    
                     // Hide loading indicator
+                    chartLoading.classList.add('d-none');
+                    chartContent.style.opacity = '1';
+                } else {
+                    console.error('Error response:', data.error || 'Unknown error');
+                    chartContent.innerHTML = '<div class="alert alert-danger">Error loading data. Please try again.</div>';
                     chartLoading.classList.add('d-none');
                     chartContent.style.opacity = '1';
                 }
             })
             .catch(error => {
                 console.error('Error fetching data:', error);
+                chartContent.innerHTML = '<div class="alert alert-danger">Error loading data. Please try again.</div>';
                 chartLoading.classList.add('d-none');
                 chartContent.style.opacity = '1';
             });
