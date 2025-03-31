@@ -24,11 +24,19 @@ def dashboard():
         # Get selected week or default to current week
         today = datetime.utcnow()
         
-        if week_form.validate_on_submit():
-            # Use selected week from form
-            start_of_week = week_form.week_start.data
+        # Check if this is an AJAX request for week selection
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        if request.method == 'POST':
+            if week_form.validate_on_submit():
+                # Use selected week from form
+                start_of_week = week_form.week_start.data
+            else:
+                # Default to current week if form validation fails
+                start_of_week = today - timedelta(days=today.weekday())
+                week_form.week_start.data = start_of_week
         else:
-            # Default to current week
+            # Default to current week for GET request
             start_of_week = today - timedelta(days=today.weekday())
             week_form.week_start.data = start_of_week  # Set default value in form
         
@@ -70,16 +78,29 @@ def dashboard():
             Project.user_id == current_user.id,
             Invoice.status.in_(['pending', 'draft'])  # Count both pending and draft as they need attention
         ).count()
-
-        return render_template('dashboard.html',
-                             projects=projects,
-                             tasks=tasks,
-                             weekly_hours=weekly_hours,
-                             daily_hours=daily_hours,
-                             pending_invoices=pending_invoices,
-                             today=today.date(),
-                             week_form=week_form,
-                             week_display=week_display)
+        
+        # Handle AJAX requests for week selection
+        if is_ajax:
+            return jsonify({
+                'success': True,
+                'week_display': week_display,
+                'weekly_hours': round(weekly_hours, 1),
+                'daily_hours': daily_hours,
+                'html': render_template('dashboard_chart_partial.html',
+                                    daily_hours=daily_hours,
+                                    week_display=week_display)
+            })
+        else:
+            # Regular full page render
+            return render_template('dashboard.html',
+                                projects=projects,
+                                tasks=tasks,
+                                weekly_hours=weekly_hours,
+                                daily_hours=daily_hours,
+                                pending_invoices=pending_invoices,
+                                today=today.date(),
+                                week_form=week_form,
+                                week_display=week_display)
     except SQLAlchemyError as e:
         logger.error(f"Database error in dashboard: {str(e)}")
         flash('Error loading dashboard data. Please try again.', 'danger')
@@ -89,15 +110,27 @@ def dashboard():
         week_form.week_start.data = start_of_week
         week_display = f"{start_of_week.strftime('%b %d')} - {(start_of_week + timedelta(days=6)).strftime('%b %d, %Y')}"
         
-        return render_template('dashboard.html', 
-                             projects=[], 
-                             tasks=[], 
-                             weekly_hours=0, 
-                             daily_hours=[0]*7, 
-                             pending_invoices=0,
-                             today=today.date(),
-                             week_form=week_form,
-                             week_display=week_display)
+        # Check if this is an AJAX request
+        is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        
+        if is_ajax:
+            return jsonify({
+                'success': False,
+                'error': 'Error loading dashboard data. Please try again.',
+                'html': render_template('dashboard_chart_partial.html',
+                                    daily_hours=[0]*7,
+                                    week_display=week_display)
+            })
+        else:
+            return render_template('dashboard.html', 
+                                projects=[], 
+                                tasks=[], 
+                                weekly_hours=0, 
+                                daily_hours=[0]*7, 
+                                pending_invoices=0,
+                                today=today.date(),
+                                week_form=week_form,
+                                week_display=week_display)
 
 @projects_bp.route('/projects')
 @login_required

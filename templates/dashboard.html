@@ -148,31 +148,44 @@
     <div class="col-12">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Time Tracking Overview: {{ week_display }}</h5>
-                <form method="POST" action="{{ url_for('projects.dashboard') }}" class="d-flex align-items-center">
+                <h5 class="mb-0" id="week-display-title">Time Tracking Overview: {{ week_display }}</h5>
+                <form id="week-selection-form" class="d-flex align-items-center">
                     {{ week_form.hidden_tag() }}
                     <div class="input-group input-group-sm" style="max-width: 280px;">
-                        {{ week_form.week_start(class="form-control form-control-sm", type="date") }}
+                        {{ week_form.week_start(class="form-control form-control-sm", type="date", id="week-start-picker") }}
                         <button type="submit" class="btn btn-sm btn-primary">
                             <i class="fas fa-calendar-week me-1"></i>View Week
                         </button>
                     </div>
                 </form>
             </div>
-            <div class="card-body">
-                {% if daily_hours|sum > 0 %}
-                    <canvas id="timeTrackingChart" height="100"></canvas>
-                {% else %}
-                    <div class="text-center py-5 text-muted">
-                        <i class="fas fa-chart-line fa-3x mb-3"></i>
-                        <p>No time tracking data available for this week.</p>
-                        <p>
-                            <a href="{{ url_for('projects.batch_time_entries') }}" class="btn btn-sm btn-primary">
-                                <i class="fas fa-plus me-1"></i>Add Time Entries
-                            </a>
-                        </p>
+            <div class="card-body" id="chart-container">
+                <!-- Loading indicator -->
+                <div id="chart-loading" class="d-none">
+                    <div class="text-center py-5">
+                        <div class="spinner-border text-primary" role="status">
+                            <span class="visually-hidden">Loading...</span>
+                        </div>
+                        <p class="mt-2 text-muted">Loading time tracking data...</p>
                     </div>
-                {% endif %}
+                </div>
+                
+                <!-- Chart content -->
+                <div id="chart-content">
+                    {% if daily_hours|sum > 0 %}
+                        <canvas id="timeTrackingChart" height="100"></canvas>
+                    {% else %}
+                        <div class="text-center py-5 text-muted">
+                            <i class="fas fa-chart-line fa-3x mb-3"></i>
+                            <p>No time tracking data available for this week.</p>
+                            <p>
+                                <a href="{{ url_for('projects.batch_time_entries') }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-plus me-1"></i>Add Time Entries
+                                </a>
+                            </p>
+                        </div>
+                    {% endif %}
+                </div>
             </div>
         </div>
     </div>
@@ -199,6 +212,10 @@
             },
             options: {
                 responsive: true,
+                animation: {
+                    duration: 800,
+                    easing: 'easeOutQuart'
+                },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -226,6 +243,59 @@
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+        
+        // Set up the week selection form AJAX
+        const weekForm = document.getElementById('week-selection-form');
+        const weekPicker = document.getElementById('week-start-picker');
+        const chartContainer = document.getElementById('chart-container');
+        const chartContent = document.getElementById('chart-content');
+        const chartLoading = document.getElementById('chart-loading');
+        const weekDisplayTitle = document.getElementById('week-display-title');
+        
+        // Handle automatic week selection change
+        weekPicker.addEventListener('change', function() {
+            weekForm.dispatchEvent(new Event('submit'));
+        });
+        
+        // Handle form submission via AJAX
+        weekForm.addEventListener('submit', function(event) {
+            event.preventDefault();
+            
+            // Show loading indicator
+            chartContent.style.opacity = '0.3';
+            chartLoading.classList.remove('d-none');
+            
+            // Get form data
+            const formData = new FormData(weekForm);
+            
+            // Send AJAX request
+            fetch('{{ url_for('projects.dashboard') }}', {
+                method: 'POST',
+                body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Update week display title
+                    weekDisplayTitle.textContent = 'Time Tracking Overview: ' + data.week_display;
+                    
+                    // Update chart content
+                    chartContent.innerHTML = data.html;
+                    
+                    // Hide loading indicator
+                    chartLoading.classList.add('d-none');
+                    chartContent.style.opacity = '1';
+                }
+            })
+            .catch(error => {
+                console.error('Error fetching data:', error);
+                chartLoading.classList.add('d-none');
+                chartContent.style.opacity = '1';
+            });
         });
     });
 </script>
