@@ -5,23 +5,38 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
-from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm
+from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm, WeekSelectionForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
 import calendar
 
 projects_bp = Blueprint('projects', __name__)
 
-@projects_bp.route('/')
-@projects_bp.route('/dashboard')
+@projects_bp.route('/', methods=['GET', 'POST'])
+@projects_bp.route('/dashboard', methods=['GET', 'POST'])
 @login_required
 @handle_db_errors
 def dashboard():
     try:
-        # Get start and end of current week
+        # Initialize week selection form
+        week_form = WeekSelectionForm()
+        
+        # Get selected week or default to current week
         today = datetime.utcnow()
-        start_of_week = today - timedelta(days=today.weekday())
+        
+        if week_form.validate_on_submit():
+            # Use selected week from form
+            start_of_week = week_form.week_start.data
+        else:
+            # Default to current week
+            start_of_week = today - timedelta(days=today.weekday())
+            week_form.week_start.data = start_of_week  # Set default value in form
+        
+        # Calculate end of selected week
         end_of_week = start_of_week + timedelta(days=6)
+        
+        # Format dates for display
+        week_display = f"{start_of_week.strftime('%b %d')} - {end_of_week.strftime('%b %d, %Y')}"
 
         # Query all projects for current user
         projects = Project.query.filter_by(user_id=current_user.id).all()
@@ -32,7 +47,7 @@ def dashboard():
             Task.status != 'completed'
         ).order_by(Task.due_date.asc()).all()
 
-        # Calculate weekly hours
+        # Calculate weekly hours for selected week
         weekly_time_entries = TimeEntry.query.join(Project).filter(
             Project.user_id == current_user.id,
             TimeEntry.start_time >= start_of_week,
@@ -62,17 +77,27 @@ def dashboard():
                              weekly_hours=weekly_hours,
                              daily_hours=daily_hours,
                              pending_invoices=pending_invoices,
-                             today=today.date())
+                             today=today.date(),
+                             week_form=week_form,
+                             week_display=week_display)
     except SQLAlchemyError as e:
         logger.error(f"Database error in dashboard: {str(e)}")
         flash('Error loading dashboard data. Please try again.', 'danger')
+        today = datetime.utcnow()
+        start_of_week = today - timedelta(days=today.weekday())
+        week_form = WeekSelectionForm()
+        week_form.week_start.data = start_of_week
+        week_display = f"{start_of_week.strftime('%b %d')} - {(start_of_week + timedelta(days=6)).strftime('%b %d, %Y')}"
+        
         return render_template('dashboard.html', 
                              projects=[], 
                              tasks=[], 
                              weekly_hours=0, 
                              daily_hours=[0]*7, 
                              pending_invoices=0,
-                             today=datetime.utcnow().date())
+                             today=today.date(),
+                             week_form=week_form,
+                             week_display=week_display)
 
 @projects_bp.route('/projects')
 @login_required

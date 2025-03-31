@@ -147,11 +147,32 @@
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header">
-                <h5 class="mb-0">Time Tracking Overview</h5>
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Time Tracking Overview: {{ week_display }}</h5>
+                <form method="POST" action="{{ url_for('projects.dashboard') }}" class="d-flex align-items-center">
+                    {{ week_form.hidden_tag() }}
+                    <div class="input-group input-group-sm" style="max-width: 280px;">
+                        {{ week_form.week_start(class="form-control form-control-sm", type="date") }}
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="fas fa-calendar-week me-1"></i>View Week
+                        </button>
+                    </div>
+                </form>
             </div>
             <div class="card-body">
-                <canvas id="timeTrackingChart" height="100"></canvas>
+                {% if daily_hours|sum > 0 %}
+                    <canvas id="timeTrackingChart" height="100"></canvas>
+                {% else %}
+                    <div class="text-center py-5 text-muted">
+                        <i class="fas fa-chart-line fa-3x mb-3"></i>
+                        <p>No time tracking data available for this week.</p>
+                        <p>
+                            <a href="{{ url_for('projects.batch_time_entries') }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus me-1"></i>Add Time Entries
+                            </a>
+                        </p>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -160,42 +181,45 @@
 
 {% block scripts %}
 <script>
-    // Time tracking chart
-    const ctx = document.getElementById('timeTrackingChart').getContext('2d');
-    new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
-            datasets: [{
-                label: 'Hours Worked',
-                data: {{ daily_hours|tojson }},
-                backgroundColor: 'rgba(13, 110, 253, 0.5)',
-                borderColor: 'rgb(13, 110, 253)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    title: {
-                        display: true,
-                        text: 'Hours'
-                    }
-                }
+    // Only initialize chart if the element exists (when there's data)
+    const chartEl = document.getElementById('timeTrackingChart');
+    if (chartEl) {
+        const ctx = chartEl.getContext('2d');
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                datasets: [{
+                    label: 'Hours Worked',
+                    data: {{ daily_hours|tojson }},
+                    backgroundColor: 'rgba(13, 110, 253, 0.5)',
+                    borderColor: 'rgb(13, 110, 253)',
+                    borderWidth: 1
+                }]
             },
-            plugins: {
-                tooltip: {
-                    callbacks: {
-                        label: function(context) {
-                            return `${context.parsed.y.toFixed(1)} hours`;
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Hours'
+                        }
+                    }
+                },
+                plugins: {
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return `${context.parsed.y.toFixed(1)} hours`;
+                            }
                         }
                     }
                 }
             }
-        }
-    });
+        });
+    }
 
     // Initialize tooltips
     document.addEventListener('DOMContentLoaded', function() {

@@ -1,7 +1,7 @@
 from flask_wtf import FlaskForm
 from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField, FieldList, FormField, FloatField, Form
 from wtforms.validators import DataRequired, Optional, NumberRange, ValidationError
-from datetime import datetime
+from datetime import datetime, timedelta
 
 class ProjectForm(FlaskForm):
     name = StringField('Project Name', validators=[DataRequired()])
@@ -173,3 +173,7 @@ class TimeEntryFilterForm(FlaskForm):
     duration_max = IntegerField('Max Duration (minutes)', validators=[Optional(), NumberRange(min=0)])
     
     submit = SubmitField('Apply Filters')
+    
+class WeekSelectionForm(FlaskForm):
+    week_start = DateTimeField('Week Starting', format='%Y-%m-%d', validators=[DataRequired()], default=lambda: datetime.now() - timedelta(days=datetime.now().weekday()))
+    submit = SubmitField('View Selected Week')
