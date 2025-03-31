@@ -1,5 +1,6 @@
 /* Global Styles */
 :root {
+    /* Light Mode Colors */
     --primary-color: #3498db;
     --primary-dark: #2980b9;
     --secondary-color: #2c3e50;
@@ -13,14 +14,65 @@
     --border-radius: 0.5rem;
     --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     --transition: all 0.3s ease;
+    
+    /* Light Mode Specific */
+    --body-bg: #f5f7fa;
+    --body-color: #34495e;
+    --card-bg: #ffffff;
+    --card-border: #e1e5eb;
+    --input-bg: #ffffff;
+    --input-border: #e1e5eb;
+    --table-border: #e9ecef;
+    --table-stripe: rgba(0, 0, 0, 0.02);
+    --table-hover: rgba(52, 152, 219, 0.05);
+    --dropdown-bg: #ffffff;
+    --navbar-bg: var(--primary-color);
+    --footer-bg: #f8f9fa;
+    --modal-bg: #ffffff;
+    --modal-backdrop: rgba(44, 62, 80, 0.5);
+    --time-entry-bg: #ffffff;
+    --time-entry-hover: #f8f9fa;
+}
+
+/* Dark Mode Colors */
+[data-bs-theme="dark"] {
+    --primary-color: #3498db;
+    --primary-dark: #2980b9;
+    --secondary-color: #ecf0f1;
+    --accent-color: #e74c3c;
+    --success-color: #2ecc71;
+    --warning-color: #f39c12;
+    --info-color: #1abc9c;
+    --light-color: #2c3e50;
+    --gray-color: #95a5a6;
+    --dark-color: #ecf0f1;
+    
+    /* Dark Mode Specific */
+    --body-bg: #1a1d21;
+    --body-color: #ecf0f1;
+    --card-bg: #2c3e50;
+    --card-border: #34495e;
+    --input-bg: #34495e;
+    --input-border: #2c3e50;
+    --table-border: #34495e;
+    --table-stripe: rgba(255, 255, 255, 0.05);
+    --table-hover: rgba(52, 152, 219, 0.1);
+    --dropdown-bg: #34495e;
+    --navbar-bg: #2c3e50;
+    --footer-bg: #2c3e50;
+    --modal-bg: #34495e;
+    --modal-backdrop: rgba(0, 0, 0, 0.7);
+    --time-entry-bg: #34495e;
+    --time-entry-hover: #2c3e50;
 }
 
 body {
-    background-color: #f5f7fa;
-    color: #34495e;
+    background-color: var(--body-bg);
+    color: var(--body-color);
     font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
     letter-spacing: 0.01rem;
     line-height: 1.6;
+    transition: background-color 0.3s ease, color 0.3s ease;
 }
 
 /* Navigation */
@@ -46,6 +98,8 @@ body {
     transition: var(--transition);
     overflow: hidden;
     margin-bottom: 1.5rem;
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
 }
 
 .card:hover {
@@ -54,20 +108,23 @@ body {
 }
 
 .card-header {
-    background-color: #fff;
-    border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    background-color: var(--card-bg);
+    border-bottom: 1px solid var(--card-border);
     padding: 1.25rem 1.5rem;
     font-weight: 600;
+    color: var(--body-color);
 }
 
 .card-body {
     padding: 1.5rem;
+    color: var(--body-color);
 }
 
 .card-footer {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: var(--card-bg);
     padding: 1rem 1.5rem;
-    border-top: 1px solid rgba(0, 0, 0, 0.05);
+    border-top: 1px solid var(--card-border);
+    color: var(--body-color);
 }
 
 /* Dashboard Stats Cards */
@@ -111,13 +168,14 @@ body {
 }
 
 .form-control, .form-select {
-    border: 1px solid #e1e5eb;
+    border: 1px solid var(--input-border);
     border-radius: var(--border-radius);
     padding: 0.75rem 1rem;
     font-size: 0.95rem;
     transition: var(--transition);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
-    background-color: #fff;
+    background-color: var(--input-bg);
+    color: var(--body-color);
 }
 
 .form-control:focus, .form-select:focus {
@@ -221,16 +279,17 @@ body {
     padding: 1.5rem;
     margin-bottom: 1.25rem;
     border-radius: var(--border-radius);
-    background-color: #fff;
+    background-color: var(--time-entry-bg);
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-    border: 1px solid #e1e5eb;
+    border: 1px solid var(--card-border);
     transition: var(--transition);
+    color: var(--body-color);
 }
 
 .time-entry-row:hover {
     transform: translateY(-3px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-    border-color: #d6dce7;
+    background-color: var(--time-entry-hover);
 }
 
 .time-entry-row.border-danger {
@@ -256,10 +315,12 @@ body {
     border-radius: var(--border-radius);
     overflow: hidden;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    color: var(--body-color);
+    background-color: var(--card-bg);
 }
 
 .table thead {
-    background-color: #f8f9fa;
+    background-color: var(--card-bg);
 }
 
 .table th {
@@ -269,13 +330,13 @@ body {
     font-size: 0.8rem;
     letter-spacing: 0.03rem;
     padding: 1rem;
-    border-bottom: 2px solid #e9ecef;
+    border-bottom: 2px solid var(--table-border);
 }
 
 .table td {
     vertical-align: middle;
     padding: 1rem;
-    border-top: 1px solid #e9ecef;
+    border-top: 1px solid var(--table-border);
     font-size: 0.95rem;
 }
 
@@ -284,11 +345,11 @@ body {
 }
 
 .table tbody tr:hover {
-    background-color: rgba(52, 152, 219, 0.05);
+    background-color: var(--table-hover);
 }
 
 .table-striped tbody tr:nth-of-type(odd) {
-    background-color: rgba(0, 0, 0, 0.02);
+    background-color: var(--table-stripe);
 }
 
 /* Status Badges */
@@ -360,12 +421,13 @@ body {
 /* Invoice Creation Page */
 .invoice-item {
     padding: 1.5rem;
-    background-color: #fff;
+    background-color: var(--card-bg);
     border-radius: var(--border-radius);
     margin-bottom: 1.5rem;
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.04);
-    border: 1px solid #e1e5eb;
+    border: 1px solid var(--card-border);
     transition: var(--transition);
+    color: var(--body-color);
 }
 
 .invoice-item:hover {
@@ -380,22 +442,23 @@ body {
 /* Invoice details styles */
 .invoice-details {
     padding: 2rem;
-    background-color: #fff;
+    background-color: var(--card-bg);
     border-radius: var(--border-radius);
     box-shadow: var(--box-shadow);
+    color: var(--body-color);
 }
 
 .invoice-details .title {
     font-weight: 700;
     margin-bottom: 1.5rem;
     color: var(--secondary-color);
-    border-bottom: 2px solid #e1e5eb;
+    border-bottom: 2px solid var(--card-border);
     padding-bottom: 0.75rem;
 }
 
 .invoice-details .detail-label {
     font-weight: 600;
-    color: #7f8c8d;
+    color: var(--gray-color);
     text-transform: uppercase;
     font-size: 0.8rem;
     letter-spacing: 0.05rem;
@@ -404,6 +467,7 @@ body {
 .invoice-details .detail-value {
     font-weight: 500;
     font-size: 1.1rem;
+    color: var(--body-color);
 }
 
 /* Loading Spinner */
@@ -418,7 +482,7 @@ body {
     left: 0;
     right: 0;
     bottom: 0;
-    background-color: rgba(255, 255, 255, 0.7);
+    background-color: var(--modal-backdrop);
     display: flex;
     justify-content: center;
     align-items: center;
@@ -427,7 +491,8 @@ body {
 
 .loading-spinner {
     padding: 2rem;
-    background-color: #fff;
+    background-color: var(--card-bg);
+    color: var(--body-color);
     border-radius: var(--border-radius);
     box-shadow: var(--box-shadow);
     text-align: center;
@@ -435,10 +500,11 @@ body {
 
 /* Footer */
 .footer {
-    background: linear-gradient(to right, #f8f9fa, #edf1f7);
+    background-color: var(--footer-bg);
     padding: 1.5rem 0;
     margin-top: 3rem;
-    border-top: 1px solid #e1e5eb;
+    border-top: 1px solid var(--card-border);
+    color: var(--body-color);
 }
 
 .footer a {
@@ -453,13 +519,13 @@ body {
 }
 
 .footer .text-muted {
-    color: #7f8c8d !important;
+    color: var(--gray-color) !important;
 }
 
 /* Modal Styling */
 .modal-backdrop {
     z-index: 1040;
-    background-color: rgba(44, 62, 80, 0.5);
+    background-color: var(--modal-backdrop);
 }
 
 .modal {
@@ -492,17 +558,18 @@ body {
 .modal-content {
     position: relative;
     pointer-events: auto;
-    background-color: #fff;
+    background-color: var(--modal-bg);
+    color: var(--body-color);
     background-clip: padding-box;
     border: none;
     border-radius: var(--border-radius);
     outline: 0;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.1);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 .modal-header {
     padding: 1.25rem 1.5rem;
-    border-bottom: 1px solid #e1e5eb;
+    border-bottom: 1px solid var(--card-border);
 }
 
 .modal-title {
@@ -516,17 +583,18 @@ body {
 
 .modal-footer {
     padding: 1.25rem 1.5rem;
-    border-top: 1px solid #e1e5eb;
+    border-top: 1px solid var(--card-border);
 }
 
 /* Dashboard specific styles */
 .dashboard-welcome {
     margin-bottom: 2rem;
     padding: 2rem;
-    background: linear-gradient(135deg, #f5f7fa, #edf1f7);
+    background-color: var(--card-bg);
     border-radius: var(--border-radius);
     box-shadow: var(--box-shadow);
     border-left: 5px solid var(--primary-color);
+    color: var(--body-color);
 }
 
 .dashboard-welcome h1 {
@@ -560,7 +628,7 @@ body {
 .page-header {
     margin-bottom: 2rem;
     padding-bottom: 1rem;
-    border-bottom: 2px solid #e1e5eb;
+    border-bottom: 2px solid var(--card-border);
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -617,16 +685,19 @@ body {
     box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
     border-radius: var(--border-radius);
     min-width: 12rem;
+    background-color: var(--dropdown-bg);
+    color: var(--body-color);
 }
 
 .dropdown-item {
     padding: 0.75rem 1.25rem;
     font-weight: 500;
     transition: var(--transition);
+    color: var(--body-color);
 }
 
 .dropdown-item:hover {
-    background-color: rgba(52, 152, 219, 0.1);
+    background-color: var(--table-hover);
 }
 
 .dropdown-item i {
@@ -637,6 +708,32 @@ body {
 }
 
 /* Responsiveness improvements */
+/* Theme Toggle Switch */
+.form-check-input[type="checkbox"]#theme-toggle {
+    width: 2.5rem;
+    height: 1.25rem;
+    margin-top: 0;
+    cursor: pointer;
+}
+
+.form-check-input:checked[type="checkbox"]#theme-toggle {
+    background-color: #2c3e50;
+    border-color: #1a252f;
+}
+
+.form-check-label[for="theme-toggle"] {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+#light-icon {
+    color: #f1c40f;
+}
+
+#dark-icon {
+    color: #f8f9fa;
+}
+
 @media (max-width: 768px) {
     .card {
         margin-bottom: 1.5rem;
@@ -681,5 +778,9 @@ body {
     
     .dashboard-welcome {
         padding: 1.5rem;
+    }
+    
+    .form-check-label[for="theme-toggle"] span {
+        display: none !important;
     }
 }

@@ -11,6 +11,9 @@ document.addEventListener('DOMContentLoaded', function() {
     popoverTriggerList.map(function (popoverTriggerEl) {
         return new bootstrap.Popover(popoverTriggerEl);
     });
+    
+    // Initialize dark mode from saved preference
+    initThemeMode();
 });
 
 // Invoice Items Management
@@ -199,4 +202,58 @@ function stopTimer() {
 // Flash Messages
 function dismissFlash(element) {
     element.closest('.alert').remove();
+}
+
+// Theme Mode Toggle (Dark/Light mode)
+function initThemeMode() {
+    // Check for saved theme preference or use system preference
+    const savedTheme = localStorage.getItem('theme');
+    const themeToggle = document.getElementById('theme-toggle');
+    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const darkIcon = document.getElementById('dark-icon');
+    const lightIcon = document.getElementById('light-icon');
+    const themeText = document.getElementById('theme-text');
+    
+    // Apply the theme based on saved preference or system preference
+    if (savedTheme === 'dark' || (!savedTheme && prefersDarkMode)) {
+        document.documentElement.setAttribute('data-bs-theme', 'dark');
+        if (themeToggle) {
+            themeToggle.checked = true;
+        }
+        updateThemeIcons('dark');
+    } else {
+        document.documentElement.setAttribute('data-bs-theme', 'light');
+        if (themeToggle) {
+            themeToggle.checked = false;
+        }
+        updateThemeIcons('light');
+    }
+    
+    // Attach event listener to theme toggle switch
+    if (themeToggle) {
+        themeToggle.addEventListener('change', toggleTheme);
+    }
+}
+
+function toggleTheme(event) {
+    const theme = event.target.checked ? 'dark' : 'light';
+    document.documentElement.setAttribute('data-bs-theme', theme);
+    localStorage.setItem('theme', theme);
+    updateThemeIcons(theme);
+}
+
+function updateThemeIcons(theme) {
+    const darkIcon = document.getElementById('dark-icon');
+    const lightIcon = document.getElementById('light-icon');
+    const themeText = document.getElementById('theme-text');
+    
+    if (theme === 'dark') {
+        if (darkIcon) darkIcon.style.display = 'inline-block';
+        if (lightIcon) lightIcon.style.display = 'none';
+        if (themeText) themeText.textContent = 'Dark Mode';
+    } else {
+        if (darkIcon) darkIcon.style.display = 'none';
+        if (lightIcon) lightIcon.style.display = 'inline-block';
+        if (themeText) themeText.textContent = 'Light Mode';
+    }
 }
