@@ -210,9 +210,6 @@ function initThemeMode() {
     const savedTheme = localStorage.getItem('theme');
     const themeToggle = document.getElementById('theme-toggle');
     const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    const darkIcon = document.getElementById('dark-icon');
-    const lightIcon = document.getElementById('light-icon');
-    const themeText = document.getElementById('theme-text');
     
     // Apply the theme based on saved preference or system preference
     if (savedTheme === 'dark' || (!savedTheme && prefersDarkMode)) {
@@ -245,15 +242,12 @@ function toggleTheme(event) {
 function updateThemeIcons(theme) {
     const darkIcon = document.getElementById('dark-icon');
     const lightIcon = document.getElementById('light-icon');
-    const themeText = document.getElementById('theme-text');
     
     if (theme === 'dark') {
         if (darkIcon) darkIcon.style.display = 'inline-block';
         if (lightIcon) lightIcon.style.display = 'none';
-        if (themeText) themeText.textContent = 'Dark Mode';
     } else {
         if (darkIcon) darkIcon.style.display = 'none';
         if (lightIcon) lightIcon.style.display = 'inline-block';
-        if (themeText) themeText.textContent = 'Light Mode';
     }
 }

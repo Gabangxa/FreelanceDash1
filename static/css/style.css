@@ -779,8 +779,4 @@ body {
     .dashboard-welcome {
         padding: 1.5rem;
     }
-    
-    .form-check-label[for="theme-toggle"] span {
-        display: none !important;
-    }
 }
