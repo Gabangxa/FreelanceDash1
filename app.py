@@ -160,6 +160,7 @@ from invoices.routes import invoices_bp
 from clients.routes import clients_bp
 from faq.routes import faq_bp
 from settings.routes import settings_bp
+import polar
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(projects_bp)
@@ -168,9 +169,20 @@ app.register_blueprint(clients_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(settings_bp)
 
+# Initialize Polar.sh integration
+polar.init_app(app)
+
 # Create database tables
 with app.app_context():
+    # Import models to ensure they're registered with SQLAlchemy
     import models
+    
+    # Check which tables are already created
+    from sqlalchemy import inspect
+    inspector = inspect(db.engine)
+    existing_tables = inspector.get_table_names()
+    
+    # Create all tables that don't exist
     db.create_all()
 
 # For testing/debugging purposes only

@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}Subscription Management{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <!-- Header -->
+    <div class="row mb-5">
+        <div class="col-12 text-center">
+            <h1 class="display-5 fw-bold">Subscription Plans</h1>
+            <p class="lead text-muted">Choose the plan that works best for your freelance business</p>
+        </div>
+    </div>
+    
+    <!-- Current Subscription Status -->
+    {% if subscription and subscription.is_active() %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card border-primary">
+                <div class="card-body">
+                    <div class="d-flex align-items-center justify-content-between">
+                        <div>
+                            <h5 class="card-title mb-1">Current Plan: <span class="text-primary">{{ subscription.tier_name }}</span></h5>
+                            <p class="card-text text-muted mb-0">
+                                {% if subscription.billing_interval == 'month' %}
+                                Billed monthly at {{ subscription.currency }} {{ "%.2f"|format(subscription.amount) }}
+                                {% else %}
+                                Billed annually at {{ subscription.currency }} {{ "%.2f"|format(subscription.amount) }}
+                                {% endif %}
+                            </p>
+                            <p class="card-text">
+                                <small class="text-muted">Active since {{ subscription.start_date.strftime('%B %d, %Y') }}</small>
+                            </p>
+                        </div>
+                        <div>
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
+                                Cancel Subscription
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Pricing Plans -->
+    <div class="row row-cols-1 row-cols-md-3 g-4 mb-5">
+        {% for tier in subscription_tiers %}
+        <div class="col">
+            <div class="card h-100 {% if subscription and subscription.is_active() and subscription.tier_id == tier.id %}border-primary{% else %}border{% endif %}">
+                <div class="card-body">
+                    <h5 class="card-title text-center">{{ tier.name }}</h5>
+                    <div class="text-center mb-4 pt-3">
+                        <h2 class="display-6 fw-bold">
+                            ${{ tier.price_monthly }}
+                            <small class="text-muted fs-6">/month</small>
+                        </h2>
+                        {% if tier.id != 'free' %}
+                        <p class="text-muted small mb-0">Or ${{ tier.price_annually }} billed annually</p>
+                        <p class="text-muted small">Save {{ ((tier.price_monthly * 12 - tier.price_annually) / (tier.price_monthly * 12) * 100) | int }}%</p>
+                        {% endif %}
+                    </div>
+                    <p class="text-muted text-center mb-4">{{ tier.description }}</p>
+                    <ul class="list-group list-group-flush mb-4">
+                        {% for feature in tier.features %}
+                        <li class="list-group-item bg-transparent border-0 ps-0">
+                            <i class="fas fa-check text-success me-2"></i> {{ feature }}
+                        </li>
+                        {% endfor %}
+                    </ul>
+                    <div class="d-grid">
+                        {% if subscription and subscription.is_active() and subscription.tier_id == tier.id %}
+                            <button class="btn btn-outline-primary" disabled>Current Plan</button>
+                        {% elif tier.id == 'free' %}
+                            <button class="btn btn-outline-secondary" disabled>Free Tier</button>
+                        {% else %}
+                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id) }}" class="btn btn-primary">
+                                {% if subscription and subscription.is_active() %}
+                                    Upgrade
+                                {% else %}
+                                    Subscribe
+                                {% endif %}
+                            </a>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    
+    <!-- Features Comparison -->
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-light">
+                    <h5 class="mb-0">Features Comparison</h5>
+                </div>
+                <div class="card-body p-0">
+                    <div class="table-responsive">
+                        <table class="table table-striped mb-0">
+                            <thead>
+                                <tr>
+                                    <th scope="col">Feature</th>
+                                    <th scope="col" class="text-center">Free</th>
+                                    <th scope="col" class="text-center">Professional</th>
+                                    <th scope="col" class="text-center">Business</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>Clients</td>
+                                    <td class="text-center">Up to 3</td>
+                                    <td class="text-center">Unlimited</td>
+                                    <td class="text-center">Unlimited</td>
+                                </tr>
+                                <tr>
+                                    <td>Projects</td>
+                                    <td class="text-center">Up to 5</td>
+                                    <td class="text-center">Unlimited</td>
+                                    <td class="text-center">Unlimited</td>
+                                </tr>
+                                <tr>
+                                    <td>Time Tracking</td>
+                                    <td class="text-center">Basic</td>
+                                    <td class="text-center">Advanced</td>
+                                    <td class="text-center">Advanced</td>
+                                </tr>
+                                <tr>
+                                    <td>Invoice Templates</td>
+                                    <td class="text-center">1</td>
+                                    <td class="text-center">3</td>
+                                    <td class="text-center">5+</td>
+                                </tr>
+                                <tr>
+                                    <td>Custom Branding</td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td>Advanced Reporting</td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td>Team Members</td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center">Up to 3</td>
+                                </tr>
+                                <tr>
+                                    <td>API Access</td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                </tr>
+                                <tr>
+                                    <td>Priority Support</td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
+                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- FAQ Section -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3 class="h4 mb-4">Frequently Asked Questions</h3>
+            
+            <div class="accordion" id="subscriptionFAQ">
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingOne">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
+                            Can I switch between plans?
+                        </button>
+                    </h2>
+                    <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            Yes, you can upgrade or downgrade your plan at any time. When upgrading, you'll be billed the prorated amount for the remainder of your billing cycle. When downgrading, the changes will take effect at the end of your current billing cycle.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingTwo">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
+                            What payment methods do you accept?
+                        </button>
+                    </h2>
+                    <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            We accept all major credit cards (Visa, Mastercard, American Express) through our secure payment processor. We do not store your credit card information on our servers.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingThree">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
+                            How do I cancel my subscription?
+                        </button>
+                    </h2>
+                    <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            You can cancel your subscription at any time from this page. After cancellation, your premium features will remain active until the end of your current billing cycle. After that, your account will automatically be converted to the free tier.
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="accordion-item">
+                    <h2 class="accordion-header" id="headingFour">
+                        <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
+                            Is there a free trial?
+                        </button>
+                    </h2>
+                    <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#subscriptionFAQ">
+                        <div class="accordion-body">
+                            We don't currently offer a free trial, but our free tier provides access to the core features so you can try the platform before upgrading. If you're not satisfied with your paid subscription within the first 14 days, contact our support team for a full refund.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Cancel Subscription Modal -->
+{% if subscription and subscription.is_active() %}
+<div class="modal fade" id="cancelModal" tabindex="-1" aria-labelledby="cancelModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="cancelModalLabel">Cancel Subscription</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to cancel your {{ subscription.tier_name }} subscription?</p>
+                <ul>
+                    <li>Your subscription will remain active until the end of the current billing period.</li>
+                    <li>After that, your account will be converted to the free tier.</li>
+                    <li>You may lose access to premium features and data associated with those features.</li>
+                </ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Subscription</button>
+                <form action="{{ url_for('subscriptions.cancel_subscription') }}" method="post">
+                    <button type="submit" class="btn btn-danger">Cancel Subscription</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
