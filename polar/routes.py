@@ -2,14 +2,16 @@
 Routes for Polar.sh subscription management.
 """
 import logging
+from datetime import datetime
 from flask import (
     Blueprint, render_template, flash, redirect, request,
-    url_for, current_app, session
+    url_for, current_app, session, jsonify
 )
 from flask_login import login_required, current_user
 from app import db
 from errors import handle_db_errors, UserFriendlyError
-from .polar_api import get_polar_api, PolarAPIError, is_polar_api_configured, get_polar_oauth_redirect_uri
+from models import User
+from .polar_api import get_polar_api, PolarAPIError, is_polar_api_configured, get_webhook_url
 from .models import Subscription, SubscriptionLog
 
 
@@ -247,20 +249,285 @@ def checkout_cancel():
     return redirect(url_for('subscriptions.index'))
 
 
-@bp.route('/redirect-uri')
+@bp.route('/webhook-url')
 @login_required
-def oauth_redirect_uri():
+def webhook_url():
     """
-    Display the OAuth redirect URI that should be configured in Polar.sh.
+    Display the webhook URL that should be configured in Polar.sh.
     Only accessible to logged-in users to avoid exposing sensitive setup information.
     """
-    redirect_uri = get_polar_oauth_redirect_uri()
+    webhook_url = get_webhook_url()
     
     return render_template(
-        'polar/redirect_uri.html',
-        redirect_uri=redirect_uri,
+        'polar/webhook_url.html',
+        webhook_url=webhook_url,
         current_url=request.url_root
     )
+
+@bp.route('/webhook', methods=['POST'])
+@handle_db_errors
+def webhook():
+    """
+    Webhook endpoint for Polar.sh subscription events.
+    This endpoint receives webhook events from Polar.sh and processes them.
+    """
+    if not is_polar_api_configured():
+        logger.error("Received webhook but Polar API is not configured")
+        return jsonify({"error": "API not configured"}), 500
+    
+    # Get the webhook event data
+    event_data = request.json
+    
+    if not event_data:
+        logger.error("Empty webhook payload received")
+        return jsonify({"error": "Empty payload"}), 400
+    
+    # Log the webhook event type
+    event_type = event_data.get('type')
+    logger.info(f"Received Polar webhook event: {event_type}")
+    
+    # Process different event types
+    if event_type == 'subscription.created':
+        process_subscription_created(event_data)
+    elif event_type == 'subscription.updated':
+        process_subscription_updated(event_data)
+    elif event_type == 'subscription.cancelled':
+        process_subscription_cancelled(event_data)
+    elif event_type == 'subscription.payment_failed':
+        process_subscription_payment_failed(event_data)
+    else:
+        logger.warning(f"Unhandled webhook event type: {event_type}")
+        
+    # Always return 200 OK to acknowledge receipt
+    return jsonify({"status": "success"}), 200
+
+def process_subscription_created(event_data):
+    """Process a subscription.created webhook event."""
+    try:
+        subscription_id = event_data.get('subscription_id')
+        user_id = event_data.get('user_data', {}).get('id')
+        
+        if not subscription_id or not user_id:
+            logger.error("Missing required data in subscription.created event")
+            return
+        
+        # Convert user_id to integer
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid user_id in webhook: {user_id}")
+            return
+        
+        # Check if user exists
+        user = User.query.get(user_id)
+        if not user:
+            logger.error(f"User not found for webhook: {user_id}")
+            return
+        
+        # Get subscription details from Polar API
+        polar_api = get_polar_api()
+        subscription_data = polar_api.get_subscription(subscription_id)
+        
+        # Create or update subscription in database
+        subscription = Subscription.query.filter_by(user_id=user_id).first()
+        if subscription:
+            # Update existing subscription
+            subscription.polar_subscription_id = subscription_id
+            subscription.tier_id = subscription_data.get('tier_id')
+            subscription.tier_name = subscription_data.get('tier_name')
+            subscription.status = 'active'
+            subscription.amount = subscription_data.get('amount')
+            subscription.currency = subscription_data.get('currency')
+            subscription.billing_interval = subscription_data.get('interval')
+            subscription.start_date = subscription_data.get('start_date')
+            subscription.end_date = subscription_data.get('end_date')
+        else:
+            # Create new subscription
+            subscription = Subscription(
+                user_id=user_id,
+                polar_subscription_id=subscription_id,
+                tier_id=subscription_data.get('tier_id'),
+                tier_name=subscription_data.get('tier_name'),
+                status='active',
+                amount=subscription_data.get('amount'),
+                currency=subscription_data.get('currency'),
+                billing_interval=subscription_data.get('interval'),
+                start_date=subscription_data.get('start_date'),
+                end_date=subscription_data.get('end_date')
+            )
+            db.session.add(subscription)
+        
+        # Add log entry
+        subscription_log = SubscriptionLog(
+            user_id=user_id,
+            subscription_id=subscription.id if subscription.id else None,
+            event_type='webhook_created',
+            details=event_data
+        )
+        db.session.add(subscription_log)
+        db.session.commit()
+        
+        logger.info(f"Processed subscription.created webhook for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error processing subscription.created webhook: {str(e)}")
+        db.session.rollback()
+        raise
+
+def process_subscription_updated(event_data):
+    """Process a subscription.updated webhook event."""
+    try:
+        subscription_id = event_data.get('subscription_id')
+        user_id = event_data.get('user_data', {}).get('id')
+        
+        if not subscription_id or not user_id:
+            logger.error("Missing required data in subscription.updated event")
+            return
+        
+        # Convert user_id to integer
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid user_id in webhook: {user_id}")
+            return
+        
+        # Check if user exists
+        user = User.query.get(user_id)
+        if not user:
+            logger.error(f"User not found for webhook: {user_id}")
+            return
+        
+        # Get subscription from database
+        subscription = Subscription.query.filter_by(
+            user_id=user_id, 
+            polar_subscription_id=subscription_id
+        ).first()
+        
+        if not subscription:
+            logger.error(f"Subscription not found for webhook: {subscription_id}")
+            return
+        
+        # Get updated subscription details from Polar API
+        polar_api = get_polar_api()
+        subscription_data = polar_api.get_subscription(subscription_id)
+        
+        # Update subscription in database
+        subscription.tier_id = subscription_data.get('tier_id', subscription.tier_id)
+        subscription.tier_name = subscription_data.get('tier_name', subscription.tier_name)
+        subscription.status = subscription_data.get('status', subscription.status)
+        subscription.amount = subscription_data.get('amount', subscription.amount)
+        subscription.currency = subscription_data.get('currency', subscription.currency)
+        subscription.billing_interval = subscription_data.get('interval', subscription.billing_interval)
+        subscription.start_date = subscription_data.get('start_date', subscription.start_date)
+        subscription.end_date = subscription_data.get('end_date', subscription.end_date)
+        
+        # Add log entry
+        subscription_log = SubscriptionLog(
+            user_id=user_id,
+            subscription_id=subscription.id,
+            event_type='webhook_updated',
+            details=event_data
+        )
+        db.session.add(subscription_log)
+        db.session.commit()
+        
+        logger.info(f"Processed subscription.updated webhook for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error processing subscription.updated webhook: {str(e)}")
+        db.session.rollback()
+        raise
+
+def process_subscription_cancelled(event_data):
+    """Process a subscription.cancelled webhook event."""
+    try:
+        subscription_id = event_data.get('subscription_id')
+        user_id = event_data.get('user_data', {}).get('id')
+        
+        if not subscription_id or not user_id:
+            logger.error("Missing required data in subscription.cancelled event")
+            return
+        
+        # Convert user_id to integer
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid user_id in webhook: {user_id}")
+            return
+        
+        # Get subscription from database
+        subscription = Subscription.query.filter_by(
+            user_id=user_id, 
+            polar_subscription_id=subscription_id
+        ).first()
+        
+        if not subscription:
+            logger.error(f"Subscription not found for webhook: {subscription_id}")
+            return
+        
+        # Update subscription status
+        subscription.status = 'cancelled'
+        subscription.cancel_at = datetime.utcnow()
+        
+        # Add log entry
+        subscription_log = SubscriptionLog(
+            user_id=user_id,
+            subscription_id=subscription.id,
+            event_type='webhook_cancelled',
+            details=event_data
+        )
+        db.session.add(subscription_log)
+        db.session.commit()
+        
+        logger.info(f"Processed subscription.cancelled webhook for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error processing subscription.cancelled webhook: {str(e)}")
+        db.session.rollback()
+        raise
+
+def process_subscription_payment_failed(event_data):
+    """Process a subscription.payment_failed webhook event."""
+    try:
+        subscription_id = event_data.get('subscription_id')
+        user_id = event_data.get('user_data', {}).get('id')
+        
+        if not subscription_id or not user_id:
+            logger.error("Missing required data in subscription.payment_failed event")
+            return
+        
+        # Convert user_id to integer
+        try:
+            user_id = int(user_id)
+        except (ValueError, TypeError):
+            logger.error(f"Invalid user_id in webhook: {user_id}")
+            return
+        
+        # Get subscription from database
+        subscription = Subscription.query.filter_by(
+            user_id=user_id, 
+            polar_subscription_id=subscription_id
+        ).first()
+        
+        if not subscription:
+            logger.error(f"Subscription not found for webhook: {subscription_id}")
+            return
+        
+        # Update subscription status
+        subscription.status = 'payment_failed'
+        
+        # Add log entry
+        subscription_log = SubscriptionLog(
+            user_id=user_id,
+            subscription_id=subscription.id,
+            event_type='webhook_payment_failed',
+            details=event_data
+        )
+        db.session.add(subscription_log)
+        db.session.commit()
+        
+        logger.info(f"Processed subscription.payment_failed webhook for user {user_id}")
+    except Exception as e:
+        logger.error(f"Error processing subscription.payment_failed webhook: {str(e)}")
+        db.session.rollback()
+        raise
 
 
 @bp.route('/cancel', methods=['POST'])

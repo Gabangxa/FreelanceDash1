@@ -284,41 +284,36 @@ def get_polar_api():
 
 def is_polar_api_configured():
     """
-    Check if the Polar API is properly configured with required credentials.
+    Check if the Polar API is properly configured with the required API key.
     
     Returns:
         bool: True if the API is configured, False otherwise
     """
     try:
-        # Check if the required Polar credentials exist in environment
+        # Check if the POLAR_API_KEY exists in environment
         api_key = os.environ.get("POLAR_API_KEY")
-        client_id = os.environ.get("POLAR_CLIENT_ID")
-        client_secret = os.environ.get("POLAR_CLIENT_SECRET")
-        
-        # For basic API access, only the API key is required
-        # For full OAuth flow, all three credentials are needed
         return bool(api_key)
     except Exception:
         return False
 
-def get_polar_oauth_redirect_uri():
+def get_webhook_url():
     """
-    Get the OAuth redirect URI for Polar.sh integration.
+    Get the webhook URL for Polar.sh subscription events.
     
-    This is the URL that Polar will redirect back to after authentication.
-    When configuring your Polar.sh OAuth app, you should use this URL.
+    This is the URL that Polar will send webhook events to.
+    When configuring your Polar.sh webhook, you should use this URL.
     
     Returns:
-        str: The full redirect URI
+        str: The full webhook URL
     """
     try:
         # Get the application's external URL from configuration or build it
         from flask import url_for, current_app
         
-        # Generate the redirect URI using url_for
-        redirect_uri = url_for('subscriptions.checkout_success', _external=True)
-        return redirect_uri
+        # Generate the webhook URL using url_for
+        webhook_url = url_for('subscriptions.webhook', _external=True)
+        return webhook_url
     except Exception as e:
-        logger.error(f"Error generating Polar redirect URI: {str(e)}")
+        logger.error(f"Error generating Polar webhook URL: {str(e)}")
         # Fallback to a placeholder - this should be replaced with actual URL
-        return "https://yourapp.replit.app/subscriptions/checkout/success"
+        return "https://yourapp.replit.app/subscriptions/webhook"

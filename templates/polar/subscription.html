@@ -104,97 +104,15 @@
         {% endfor %}
     </div>
     
-    <!-- Features Comparison -->
+    <!-- Subscription FAQs -->
     <div class="row mb-5">
         <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-light">
-                    <h5 class="mb-0">Features Comparison</h5>
-                </div>
-                <div class="card-body p-0">
-                    <div class="table-responsive">
-                        <table class="table table-striped mb-0">
-                            <thead>
-                                <tr>
-                                    <th scope="col">Feature</th>
-                                    <th scope="col" class="text-center">Free</th>
-                                    <th scope="col" class="text-center">Professional</th>
-                                    <th scope="col" class="text-center">Business</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                <tr>
-                                    <td>Clients</td>
-                                    <td class="text-center">Up to 3</td>
-                                    <td class="text-center">Unlimited</td>
-                                    <td class="text-center">Unlimited</td>
-                                </tr>
-                                <tr>
-                                    <td>Projects</td>
-                                    <td class="text-center">Up to 5</td>
-                                    <td class="text-center">Unlimited</td>
-                                    <td class="text-center">Unlimited</td>
-                                </tr>
-                                <tr>
-                                    <td>Time Tracking</td>
-                                    <td class="text-center">Basic</td>
-                                    <td class="text-center">Advanced</td>
-                                    <td class="text-center">Advanced</td>
-                                </tr>
-                                <tr>
-                                    <td>Invoice Templates</td>
-                                    <td class="text-center">1</td>
-                                    <td class="text-center">3</td>
-                                    <td class="text-center">5+</td>
-                                </tr>
-                                <tr>
-                                    <td>Custom Branding</td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                </tr>
-                                <tr>
-                                    <td>Advanced Reporting</td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                </tr>
-                                <tr>
-                                    <td>Team Members</td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center">Up to 3</td>
-                                </tr>
-                                <tr>
-                                    <td>API Access</td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                </tr>
-                                <tr>
-                                    <td>Priority Support</td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-times text-danger"></i></td>
-                                    <td class="text-center"><i class="fas fa-check text-success"></i></td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    
-    <!-- FAQ Section -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <h3 class="h4 mb-4">Frequently Asked Questions</h3>
-            
+            <h2 class="text-center mb-4">Frequently Asked Questions</h2>
             <div class="accordion" id="subscriptionFAQ">
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingOne">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                            Can I switch between plans?
+                            Can I change my subscription plan later?
                         </button>
                     </h2>
                     <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#subscriptionFAQ">
@@ -240,6 +158,27 @@
                         <div class="accordion-body">
                             We don't currently offer a free trial, but our free tier provides access to the core features so you can try the platform before upgrading. If you're not satisfied with your paid subscription within the first 14 days, contact our support team for a full refund.
                         </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Admin Section -->
+<div class="container mt-5 mb-5">
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Administration</h5>
+                </div>
+                <div class="card-body">
+                    <p class="card-text">Configure Polar.sh integration settings:</p>
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="{{ url_for('subscriptions.webhook_url') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-link"></i> Webhook Configuration
+                        </a>
                     </div>
                 </div>
             </div>

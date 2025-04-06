@@ -1,0 +1,71 @@
+{% extends 'base.html' %}
+
+{% block title %}Polar.sh Webhook Configuration{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-10 offset-md-1">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Polar.sh Webhook Configuration</h4>
+                </div>
+                <div class="card-body">
+                    <div class="alert alert-info">
+                        <p>To configure webhooks for subscription events from Polar.sh, use the following URL in your Polar.sh dashboard:</p>
+                    </div>
+
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" value="{{ webhook_url }}" id="webhookUrl" readonly>
+                        <div class="input-group-append">
+                            <button class="btn btn-outline-secondary" type="button" id="copyBtn" onclick="copyWebhookUrl()">
+                                <i class="fas fa-copy"></i> Copy
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="mt-4">
+                        <h5>Configuration Steps:</h5>
+                        <ol>
+                            <li>Log in to your Polar.sh dashboard</li>
+                            <li>Navigate to the API & Webhooks section</li>
+                            <li>Add a new webhook endpoint using the URL above</li>
+                            <li>Select the events to receive (recommended: all subscription events)</li>
+                            <li>Save the webhook configuration</li>
+                        </ol>
+                    </div>
+
+                    <div class="alert alert-warning mt-3">
+                        <strong>Note:</strong> When testing, make sure this application is accessible from the internet so Polar.sh can reach your webhook endpoint.
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <a href="{{ url_for('subscriptions.index') }}" class="btn btn-primary">
+                        <i class="fas fa-arrow-left"></i> Back to Subscriptions
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyWebhookUrl() {
+    var copyText = document.getElementById("webhookUrl");
+    copyText.select();
+    copyText.setSelectionRange(0, 99999); /* For mobile devices */
+    document.execCommand("copy");
+    
+    var copyBtn = document.getElementById("copyBtn");
+    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    copyBtn.classList.remove("btn-outline-secondary");
+    copyBtn.classList.add("btn-success");
+    
+    setTimeout(function() {
+        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+        copyBtn.classList.remove("btn-success");
+        copyBtn.classList.add("btn-outline-secondary");
+    }, 2000);
+}
+</script>
+{% endblock %}
