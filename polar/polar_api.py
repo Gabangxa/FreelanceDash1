@@ -159,18 +159,7 @@ class PolarAPI:
         Returns:
             Cancellation confirmation
         """
-        # Handle demo subscriptions
-        if subscription_id.startswith('demo_sub_') or subscription_id.startswith('fallback_sub_'):
-            logger.info(f"Cancelling demo subscription: {subscription_id}")
-            # Return mock cancellation data
-            return {
-                "id": subscription_id,
-                "status": "cancelled",
-                "cancel_at": datetime.now().isoformat(),
-                "cancelled_at": datetime.now().isoformat()
-            }
-            
-        # Call the real API for actual subscriptions
+        logger.info(f"Cancelling subscription: {subscription_id}")
         return self._make_request("post", f"subscriptions/{subscription_id}/cancel")
     
     def upgrade_subscription(self, subscription_id, new_tier_id):
@@ -205,18 +194,23 @@ class PolarAPI:
         # Log the API request for debugging
         logger.info(f"Creating checkout session for tier {tier_id}")
         
-        # For demo purposes, we'll create a mock checkout URL since we don't have the complete Polar setup
-        # In a real implementation, this would call the Polar API
-        checkout_url = f"https://example.com/checkout/polar/{tier_id}?demo=true"
-        session_id = f"demo_session_{tier_id}_{int(time.time())}"
-        
-        # Return mock data that matches the expected structure
-        return {
-            "id": session_id,
-            "checkout_url": checkout_url,
-            "status": "pending",
-            "created_at": datetime.now().isoformat()
+        # Prepare the request data for the Polar.sh API
+        data = {
+            "user": user_data,
+            "tier_id": tier_id,
+            "success_url": success_url,
+            "cancel_url": cancel_url,
+            "mode": "subscription"
         }
+        
+        # Make the actual API request to Polar's checkout endpoint
+        try:
+            response = self._make_request("post", "checkout/session", json=data)
+            logger.info(f"Successfully created checkout session: {response.get('id')}")
+            return response
+        except Exception as e:
+            logger.error(f"Failed to create checkout session: {str(e)}")
+            raise PolarAPIError(f"Unable to create checkout session: {str(e)}")
     
     def get_payment_methods(self, user_id):
         """
@@ -240,42 +234,14 @@ class PolarAPI:
         Returns:
             Checkout session details
         """
-        # If this is a demo session, return mock data
-        if session_id.startswith('demo_session_'):
-            # Parse tier_id from the session_id
-            parts = session_id.split('_')
-            tier_id = parts[2] if len(parts) > 2 else 'professional'
-            
-            # Create mock subscription data for demonstration
-            return {
-                "id": session_id,
-                "subscription_id": f"demo_sub_{tier_id}_{int(time.time())}",
-                "tier_id": tier_id,
-                "tier_name": tier_id.capitalize(),
-                "amount": 15.0 if tier_id == 'professional' else 30.0,
-                "currency": "USD",
-                "interval": "month",
-                "start_date": datetime.now().isoformat(),
-                "status": "active"
-            }
+        logger.info(f"Getting checkout session details for: {session_id}")
         
-        # Otherwise try to call the API
         try:
+            # Call the Polar.sh API to get session details
             return self._make_request("get", f"checkout/session/{session_id}")
         except Exception as e:
             logger.error(f"Error getting checkout session: {str(e)}")
-            # Return mock data as fallback
-            return {
-                "id": session_id,
-                "subscription_id": f"fallback_sub_{int(time.time())}",
-                "tier_id": "professional",
-                "tier_name": "Professional",
-                "amount": 15.0,
-                "currency": "USD",
-                "interval": "month",
-                "start_date": datetime.now().isoformat(),
-                "status": "active"
-            }
+            raise PolarAPIError(f"Unable to retrieve checkout session information: {str(e)}")
 
 
 class PolarAPIError(Exception):
@@ -318,14 +284,41 @@ def get_polar_api():
 
 def is_polar_api_configured():
     """
-    Check if the Polar API is properly configured with a valid API key.
+    Check if the Polar API is properly configured with required credentials.
     
     Returns:
         bool: True if the API is configured, False otherwise
     """
     try:
-        # Check if the POLAR_API_KEY exists in environment
+        # Check if the required Polar credentials exist in environment
         api_key = os.environ.get("POLAR_API_KEY")
+        client_id = os.environ.get("POLAR_CLIENT_ID")
+        client_secret = os.environ.get("POLAR_CLIENT_SECRET")
+        
+        # For basic API access, only the API key is required
+        # For full OAuth flow, all three credentials are needed
         return bool(api_key)
     except Exception:
         return False
+
+def get_polar_oauth_redirect_uri():
+    """
+    Get the OAuth redirect URI for Polar.sh integration.
+    
+    This is the URL that Polar will redirect back to after authentication.
+    When configuring your Polar.sh OAuth app, you should use this URL.
+    
+    Returns:
+        str: The full redirect URI
+    """
+    try:
+        # Get the application's external URL from configuration or build it
+        from flask import url_for, current_app
+        
+        # Generate the redirect URI using url_for
+        redirect_uri = url_for('subscriptions.checkout_success', _external=True)
+        return redirect_uri
+    except Exception as e:
+        logger.error(f"Error generating Polar redirect URI: {str(e)}")
+        # Fallback to a placeholder - this should be replaced with actual URL
+        return "https://yourapp.replit.app/subscriptions/checkout/success"

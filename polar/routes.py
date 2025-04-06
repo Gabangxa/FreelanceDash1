@@ -9,7 +9,7 @@ from flask import (
 from flask_login import login_required, current_user
 from app import db
 from errors import handle_db_errors, UserFriendlyError
-from .polar_api import get_polar_api, PolarAPIError, is_polar_api_configured
+from .polar_api import get_polar_api, PolarAPIError, is_polar_api_configured, get_polar_oauth_redirect_uri
 from .models import Subscription, SubscriptionLog
 
 
@@ -245,6 +245,22 @@ def checkout_cancel():
     
     flash('Subscription checkout was cancelled', 'info')
     return redirect(url_for('subscriptions.index'))
+
+
+@bp.route('/redirect-uri')
+@login_required
+def oauth_redirect_uri():
+    """
+    Display the OAuth redirect URI that should be configured in Polar.sh.
+    Only accessible to logged-in users to avoid exposing sensitive setup information.
+    """
+    redirect_uri = get_polar_oauth_redirect_uri()
+    
+    return render_template(
+        'polar/redirect_uri.html',
+        redirect_uri=redirect_uri,
+        current_url=request.url_root
+    )
 
 
 @bp.route('/cancel', methods=['POST'])

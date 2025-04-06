@@ -1,0 +1,94 @@
+{% extends 'base.html' %}
+
+{% block title %}Polar OAuth Redirect URI{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <h1 class="mb-4">Polar.sh OAuth Configuration</h1>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0">Redirect URI for Polar.sh</h5>
+        </div>
+        <div class="card-body">
+            <p>
+                When setting up your Polar.sh OAuth application, use the following URL as your redirect URI:
+            </p>
+            
+            <div class="alert alert-info mb-3">
+                <div class="input-group">
+                    <input type="text" class="form-control" id="redirect-uri" value="{{ redirect_uri }}" readonly>
+                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('redirect-uri')">
+                        <i class="fas fa-copy"></i> Copy
+                    </button>
+                </div>
+            </div>
+            
+            <div class="alert alert-warning">
+                <h5>Important!</h5>
+                <p>
+                    Make sure the redirect URI exactly matches what you configure in your Polar.sh developer settings.
+                    Even a small difference (trailing slash, http vs https) will cause the OAuth flow to fail.
+                </p>
+            </div>
+        </div>
+    </div>
+    
+    <div class="card mb-4">
+        <div class="card-header bg-info text-white">
+            <h5 class="mb-0">Configuration Steps</h5>
+        </div>
+        <div class="card-body">
+            <ol>
+                <li>Go to the Polar.sh Developer Portal</li>
+                <li>Create a new OAuth Application</li>
+                <li>Enter your application name (e.g., "Freelancer Suite")</li>
+                <li>Set the Redirect URI to the value shown above</li>
+                <li>After creating the application, you'll receive:
+                    <ul>
+                        <li>Client ID</li>
+                        <li>Client Secret</li>
+                    </ul>
+                </li>
+                <li>Add these values to your application's environment variables as:
+                    <ul>
+                        <li>POLAR_CLIENT_ID</li>
+                        <li>POLAR_CLIENT_SECRET</li>
+                    </ul>
+                </li>
+            </ol>
+            
+            <div class="alert alert-success">
+                Once configured correctly, your payment system will connect to Polar.sh securely for subscription management.
+            </div>
+        </div>
+    </div>
+    
+    <div class="d-flex justify-content-between">
+        <a href="{{ url_for('subscriptions.index') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Subscriptions
+        </a>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(elementId) {
+    const element = document.getElementById(elementId);
+    element.select();
+    document.execCommand('copy');
+    
+    // Show a temporary success message
+    const button = element.nextElementSibling;
+    const originalText = button.innerHTML;
+    button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+    button.classList.remove('btn-outline-secondary');
+    button.classList.add('btn-success');
+    
+    setTimeout(() => {
+        button.innerHTML = originalText;
+        button.classList.remove('btn-success');
+        button.classList.add('btn-outline-secondary');
+    }, 2000);
+}
+</script>
+{% endblock %}
