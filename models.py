@@ -50,6 +50,61 @@ class User(UserMixin, db.Model):
         self.reset_token = None
         self.reset_token_expiry = None
         
+    def get_subscription(self):
+        """Get the user's active subscription or None if no active subscription exists."""
+        # Import here to avoid circular imports
+        from polar.models import Subscription
+        
+        subscription = Subscription.query.filter_by(user_id=self.id).first()
+        if subscription and subscription.is_active():
+            return subscription
+        return None
+        
+    def has_subscription_feature(self, feature_name):
+        """
+        Check if the user has access to a specific feature based on subscription.
+        
+        Args:
+            feature_name: Name of the feature to check (e.g., 'custom_branding', 'team_members')
+            
+        Returns:
+            bool: True if user has access to the feature, False otherwise
+        """
+        subscription = self.get_subscription()
+        
+        # If no active subscription, use free tier defaults
+        if subscription is None:
+            # Default free tier features
+            free_features = {
+                'clients_limit': 3,
+                'projects_limit': 5,
+                'custom_branding': False,
+                'advanced_reporting': False,
+                'team_members': 0,
+                'api_access': False,
+                'priority_support': False
+            }
+            
+            # For simple boolean features, return the free tier value
+            if feature_name in free_features:
+                return free_features[feature_name]
+                
+            # For numeric limits, return the limit value
+            if feature_name.endswith('_limit'):
+                return free_features.get(feature_name, 0)
+                
+            return False
+            
+        # Get features from the subscription
+        features = subscription.get_features()
+        
+        # Check if the feature exists in the subscription
+        if feature_name in features:
+            return features[feature_name]
+            
+        # Feature not found
+        return False
+        
     def get_or_create_settings(self):
         """Get the user settings or create default settings if none exist."""
         if not hasattr(self, 'settings') or self.settings is None:

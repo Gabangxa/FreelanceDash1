@@ -9,7 +9,7 @@ from flask import (
 from flask_login import login_required, current_user
 from app import db
 from errors import handle_db_errors, UserFriendlyError
-from .polar_api import get_polar_api, PolarAPIError
+from .polar_api import get_polar_api, PolarAPIError, is_polar_api_configured
 from .models import Subscription, SubscriptionLog
 
 
@@ -21,6 +21,14 @@ bp = Blueprint('subscriptions', __name__, url_prefix='/subscriptions')
 @login_required
 def index():
     """Display subscription information for the current user."""
+    # Check for Polar API configuration and set api_configured flag
+    api_configured = is_polar_api_configured()
+    
+    if not api_configured:
+        logger.warning("Polar API not configured - API key is missing")
+        flash("Subscription service requires API configuration. Please contact the administrator.", "warning")
+    
+    # Get current subscription for the user
     subscription = Subscription.query.filter_by(user_id=current_user.id).first()
     
     # Define subscription tiers and pricing for display
@@ -72,7 +80,8 @@ def index():
     
     return render_template('polar/subscription.html', 
                           subscription=subscription,
-                          subscription_tiers=subscription_tiers)
+                          subscription_tiers=subscription_tiers,
+                          api_configured=api_configured)
 
 
 @bp.route('/checkout/<tier_id>')
@@ -85,6 +94,12 @@ def checkout(tier_id):
     valid_tiers = ['professional', 'business']
     if tier_id not in valid_tiers:
         flash('Invalid subscription tier', 'danger')
+        return redirect(url_for('subscriptions.index'))
+    
+    # Check if Polar API is configured
+    if not is_polar_api_configured():
+        logger.error("Attempted checkout with unconfigured Polar API")
+        flash('Subscription service requires API configuration. Please contact the administrator.', 'danger')
         return redirect(url_for('subscriptions.index'))
     
     try:
@@ -130,8 +145,19 @@ def checkout_success():
     # Get session_id from Polar.sh redirect
     session_id = request.args.get('session_id')
     
+    # Verify session ID exists
+    if not session_id:
+        flash('Invalid checkout session', 'danger')
+        return redirect(url_for('subscriptions.index'))
+    
+    # Check if Polar API is configured
+    if not is_polar_api_configured():
+        logger.error("Attempted to complete checkout with unconfigured Polar API")
+        flash('Subscription service requires API configuration. Please contact the administrator.', 'danger')
+        return redirect(url_for('subscriptions.index'))
+    
     # Verify session ID matches what we started with
-    if not session_id or session_id != session.get('checkout_session_id'):
+    if session_id != session.get('checkout_session_id'):
         flash('Invalid checkout session', 'danger')
         return redirect(url_for('subscriptions.index'))
     
@@ -140,6 +166,12 @@ def checkout_success():
         polar_api = get_polar_api()
         subscription_data = polar_api.get_checkout_session(session_id)
         
+        # Validate that we have a subscription_id in the data
+        if not subscription_data.get('subscription_id'):
+            logger.error("Missing subscription_id in checkout data")
+            flash('Missing subscription details. Please try again or contact support.', 'danger')
+            return redirect(url_for('subscriptions.index'))
+            
         # Create or update subscription in database
         subscription = Subscription.query.filter_by(user_id=current_user.id).first()
         
@@ -226,6 +258,12 @@ def cancel_subscription():
     
     if not subscription or subscription.status != 'active':
         flash('No active subscription to cancel', 'warning')
+        return redirect(url_for('subscriptions.index'))
+    
+    # Check if Polar API is configured
+    if not is_polar_api_configured():
+        logger.error("Attempted to cancel subscription with unconfigured Polar API")
+        flash('Subscription service requires API configuration. Please contact the administrator.', 'danger')
         return redirect(url_for('subscriptions.index'))
     
     try:

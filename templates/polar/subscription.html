@@ -12,6 +12,20 @@
         </div>
     </div>
     
+    <!-- API Configuration Alert -->
+    {% if not api_configured %}
+    <div class="row mb-5">
+        <div class="col-12">
+            <div class="alert alert-warning" role="alert">
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> API Configuration Required</h4>
+                <p>The subscription service requires API configuration to enable payments. Please contact the administrator to configure the Polar API keys.</p>
+                <hr>
+                <p class="mb-0">You can still explore the available subscription plans, but you won't be able to subscribe until the API is properly configured.</p>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
     <!-- Current Subscription Status -->
     {% if subscription and subscription.is_active() %}
     <div class="row mb-5">
@@ -33,7 +47,7 @@
                             </p>
                         </div>
                         <div>
-                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal">
+                            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal" {% if not api_configured %}disabled{% endif %}>
                                 Cancel Subscription
                             </button>
                         </div>
@@ -75,7 +89,7 @@
                         {% elif tier.id == 'free' %}
                             <button class="btn btn-outline-secondary" disabled>Free Tier</button>
                         {% else %}
-                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id) }}" class="btn btn-primary">
+                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id) }}" class="btn btn-primary" {% if not api_configured %}disabled{% endif %}>
                                 {% if subscription and subscription.is_active() %}
                                     Upgrade
                                 {% else %}
@@ -249,11 +263,16 @@
                     <li>After that, your account will be converted to the free tier.</li>
                     <li>You may lose access to premium features and data associated with those features.</li>
                 </ul>
+                {% if not api_configured %}
+                <div class="alert alert-warning mt-3" role="alert">
+                    <small>The API is not currently configured. Please contact the administrator to enable subscription management.</small>
+                </div>
+                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Subscription</button>
                 <form action="{{ url_for('subscriptions.cancel_subscription') }}" method="post">
-                    <button type="submit" class="btn btn-danger">Cancel Subscription</button>
+                    <button type="submit" class="btn btn-danger" {% if not api_configured %}disabled{% endif %}>Cancel Subscription</button>
                 </form>
             </div>
         </div>
