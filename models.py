@@ -52,13 +52,24 @@ class User(UserMixin, db.Model):
         
     def get_subscription(self):
         """Get the user's active subscription or None if no active subscription exists."""
-        # Import here to avoid circular imports
-        from polar.models import Subscription
-        
-        subscription = Subscription.query.filter_by(user_id=self.id).first()
-        if subscription and subscription.is_active():
-            return subscription
-        return None
+        # Try to import Subscription model - this will fail if Polar is disabled
+        try:
+            # Import here to avoid circular imports
+            from polar.models import Subscription
+            
+            subscription = Subscription.query.filter_by(user_id=self.id).first()
+            if subscription and subscription.is_active():
+                return subscription
+            return None
+        except (ImportError, ModuleNotFoundError):
+            # Polar integration is disabled, return None
+            return None
+        except Exception as e:
+            # Log any other errors but don't crash the application
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.warning(f"Error getting subscription: {str(e)}")
+            return None
         
     def has_subscription_feature(self, feature_name):
         """

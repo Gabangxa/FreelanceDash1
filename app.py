@@ -160,7 +160,7 @@ from invoices.routes import invoices_bp
 from clients.routes import clients_bp
 from faq.routes import faq_bp
 from settings.routes import settings_bp
-import polar
+# import polar  # Temporarily disabled Polar.sh integration
 
 app.register_blueprint(auth_bp)
 app.register_blueprint(projects_bp)
@@ -169,8 +169,9 @@ app.register_blueprint(clients_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(settings_bp)
 
-# Initialize Polar.sh integration
-polar.init_app(app)
+# Initialize Polar.sh integration - Temporarily disabled
+# polar.init_app(app)
+logger.info("Polar.sh integration is temporarily disabled")
 
 # Create database tables
 with app.app_context():
