@@ -1,5 +1,5 @@
 """
-Email functionality for the Freelancer Suite application.
+Email functionality for the WorkVista application.
 """
 import os
 import logging
