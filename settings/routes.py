@@ -125,6 +125,431 @@ def invoice_template():
     
     return render_template('invoice_template.html', form=form, settings=settings, logo_data_uri=logo_data_uri)
 
+@settings_bp.route('/export-data', methods=['GET'])
+@login_required
+def export_data():
+    """Show data export options page."""
+    return render_template('export_data.html')
+
+@settings_bp.route('/export-data/json', methods=['GET'])
+@login_required
+def export_data_json():
+    """Export user data in JSON format."""
+    try:
+        import json
+        from datetime import datetime
+        from collections import OrderedDict
+        
+        # Get user data
+        user_data = OrderedDict()
+        
+        # Basic user info (excluding sensitive data)
+        user_data['user'] = {
+            'username': current_user.username,
+            'email': current_user.email,
+            'created_at': current_user.created_at.isoformat() if current_user.created_at else None
+        }
+        
+        # User settings
+        settings = current_user.get_or_create_settings()
+        user_data['settings'] = {
+            'company_name': settings.company_name,
+            'company_address': settings.company_address,
+            'company_phone': settings.company_phone,
+            'company_email': settings.company_email,
+            'company_website': settings.company_website,
+            'invoice_template': settings.invoice_template,
+            'invoice_color_primary': settings.invoice_color_primary,
+            'invoice_color_secondary': settings.invoice_color_secondary,
+            'invoice_footer_text': settings.invoice_footer_text,
+            # Logo is binary so we don't include it
+        }
+        
+        # Clients
+        clients = Client.query.filter_by(user_id=current_user.id).all()
+        user_data['clients'] = []
+        client_map = {}  # To map client IDs to indices in the exported array
+        
+        for i, client in enumerate(clients):
+            client_data = {
+                'id': client.id,
+                'name': client.name,
+                'email': client.email,
+                'company': client.company,
+                'address': client.address,
+                'created_at': client.created_at.isoformat() if client.created_at else None
+            }
+            user_data['clients'].append(client_data)
+            client_map[client.id] = i
+        
+        # Projects
+        projects = Project.query.filter_by(user_id=current_user.id).all()
+        user_data['projects'] = []
+        project_map = {}  # To map project IDs to indices
+        
+        for i, project in enumerate(projects):
+            project_data = {
+                'id': project.id,
+                'name': project.name,
+                'description': project.description,
+                'start_date': project.start_date.isoformat() if project.start_date else None,
+                'end_date': project.end_date.isoformat() if project.end_date else None,
+                'status': project.status,
+                'client_id': project.client_id,
+                'client_name': clients[client_map[project.client_id]].name if project.client_id in client_map else None,
+                'created_at': project.created_at.isoformat() if project.created_at else None
+            }
+            user_data['projects'].append(project_data)
+            project_map[project.id] = i
+        
+        # Tasks
+        tasks = Task.query.join(Project).filter(Project.user_id == current_user.id).all()
+        user_data['tasks'] = []
+        task_map = {}  # To map task IDs to indices
+        
+        for i, task in enumerate(tasks):
+            task_data = {
+                'id': task.id,
+                'title': task.title,
+                'description': task.description,
+                'status': task.status,
+                'due_date': task.due_date.isoformat() if task.due_date else None,
+                'project_id': task.project_id,
+                'project_name': projects[project_map[task.project_id]].name if task.project_id in project_map else None,
+                'created_at': task.created_at.isoformat() if task.created_at else None
+            }
+            user_data['tasks'].append(task_data)
+            task_map[task.id] = i
+        
+        # Time entries
+        time_entries = TimeEntry.query.join(Project).filter(Project.user_id == current_user.id).all()
+        user_data['time_entries'] = []
+        
+        for entry in time_entries:
+            entry_data = {
+                'id': entry.id,
+                'start_time': entry.start_time.isoformat() if entry.start_time else None,
+                'end_time': entry.end_time.isoformat() if entry.end_time else None,
+                'duration': entry.duration,
+                'description': entry.description,
+                'project_id': entry.project_id,
+                'project_name': projects[project_map[entry.project_id]].name if entry.project_id in project_map else None,
+                'task_id': entry.task_id,
+                'task_name': tasks[task_map[entry.task_id]].title if entry.task_id and entry.task_id in task_map else None,
+                'billable': entry.billable,
+                'created_at': entry.created_at.isoformat() if entry.created_at else None
+            }
+            user_data['time_entries'].append(entry_data)
+        
+        # Invoices and items
+        invoices = Invoice.query.join(Project).filter(Project.user_id == current_user.id).all()
+        user_data['invoices'] = []
+        
+        for invoice in invoices:
+            invoice_data = {
+                'id': invoice.id,
+                'invoice_number': invoice.invoice_number,
+                'amount': invoice.amount,
+                'currency': invoice.currency,
+                'status': invoice.status,
+                'due_date': invoice.due_date.isoformat() if invoice.due_date else None,
+                'notes': invoice.notes,
+                'client_id': invoice.client_id,
+                'client_name': clients[client_map[invoice.client_id]].name if invoice.client_id in client_map else None,
+                'project_id': invoice.project_id,
+                'project_name': projects[project_map[invoice.project_id]].name if invoice.project_id in project_map else None,
+                'created_at': invoice.created_at.isoformat() if invoice.created_at else None,
+                'items': []
+            }
+            
+            # Add invoice items
+            for item in invoice.items:
+                item_data = {
+                    'id': item.id,
+                    'description': item.description,
+                    'quantity': item.quantity,
+                    'rate': item.rate,
+                    'amount': item.amount
+                }
+                invoice_data['items'].append(item_data)
+            
+            user_data['invoices'].append(invoice_data)
+        
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"workvista_export_{timestamp}.json"
+        
+        # Convert to JSON with pretty formatting
+        json_data = json.dumps(user_data, indent=2)
+        
+        # Create response
+        from flask import Response
+        response = Response(
+            json_data,
+            mimetype='application/json',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+        
+        # Log export
+        logger.info(f"User {current_user.username} exported data in JSON format")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting JSON data: {str(e)}")
+        flash('An error occurred while exporting your data. Please try again.', 'danger')
+        return redirect(url_for('settings.export_data'))
+
+@settings_bp.route('/export-data/csv', methods=['GET'])
+@login_required
+def export_data_csv():
+    """Export user data in CSV format (as a ZIP file with multiple CSV files)."""
+    try:
+        import csv
+        import io
+        import zipfile
+        from datetime import datetime
+        
+        # Create a in-memory file-like object for ZIP file
+        memory_file = io.BytesIO()
+        
+        # Create a ZIP file in the memory file
+        with zipfile.ZipFile(memory_file, 'w', zipfile.ZIP_DEFLATED) as zf:
+            
+            # Get user data and create CSVs
+            
+            # ----- Clients CSV -----
+            clients_output = io.StringIO()
+            clients_writer = csv.writer(clients_output)
+            
+            # Write header
+            clients_writer.writerow(['ID', 'Name', 'Email', 'Company', 'Address', 'Created At'])
+            
+            # Write data
+            clients = Client.query.filter_by(user_id=current_user.id).all()
+            for client in clients:
+                clients_writer.writerow([
+                    client.id,
+                    client.name,
+                    client.email,
+                    client.company,
+                    client.address,
+                    client.created_at.strftime('%Y-%m-%d %H:%M:%S') if client.created_at else ''
+                ])
+            
+            # Add to ZIP
+            zf.writestr('clients.csv', clients_output.getvalue())
+            
+            # ----- Projects CSV -----
+            projects_output = io.StringIO()
+            projects_writer = csv.writer(projects_output)
+            
+            # Write header
+            projects_writer.writerow(['ID', 'Name', 'Description', 'Start Date', 'End Date', 
+                                     'Status', 'Client ID', 'Client Name', 'Created At'])
+            
+            # Write data
+            projects = Project.query.filter_by(user_id=current_user.id).all()
+            for project in projects:
+                client_name = client.name if (client := Client.query.get(project.client_id)) else ''
+                projects_writer.writerow([
+                    project.id,
+                    project.name,
+                    project.description,
+                    project.start_date.strftime('%Y-%m-%d') if project.start_date else '',
+                    project.end_date.strftime('%Y-%m-%d') if project.end_date else '',
+                    project.status,
+                    project.client_id,
+                    client_name,
+                    project.created_at.strftime('%Y-%m-%d %H:%M:%S') if project.created_at else ''
+                ])
+            
+            # Add to ZIP
+            zf.writestr('projects.csv', projects_output.getvalue())
+            
+            # ----- Tasks CSV -----
+            tasks_output = io.StringIO()
+            tasks_writer = csv.writer(tasks_output)
+            
+            # Write header
+            tasks_writer.writerow(['ID', 'Title', 'Description', 'Status', 'Due Date',
+                                  'Project ID', 'Project Name', 'Created At'])
+            
+            # Write data
+            tasks = Task.query.join(Project).filter(Project.user_id == current_user.id).all()
+            for task in tasks:
+                project_name = project.name if (project := Project.query.get(task.project_id)) else ''
+                tasks_writer.writerow([
+                    task.id,
+                    task.title,
+                    task.description,
+                    task.status,
+                    task.due_date.strftime('%Y-%m-%d') if task.due_date else '',
+                    task.project_id,
+                    project_name,
+                    task.created_at.strftime('%Y-%m-%d %H:%M:%S') if task.created_at else ''
+                ])
+            
+            # Add to ZIP
+            zf.writestr('tasks.csv', tasks_output.getvalue())
+            
+            # ----- Time Entries CSV -----
+            time_entries_output = io.StringIO()
+            time_entries_writer = csv.writer(time_entries_output)
+            
+            # Write header
+            time_entries_writer.writerow(['ID', 'Start Time', 'End Time', 'Duration (minutes)',
+                                         'Description', 'Project ID', 'Project Name', 
+                                         'Task ID', 'Task Name', 'Billable', 'Created At'])
+            
+            # Write data
+            time_entries = TimeEntry.query.join(Project).filter(Project.user_id == current_user.id).all()
+            for entry in time_entries:
+                project_name = project.name if (project := Project.query.get(entry.project_id)) else ''
+                task_name = task.title if entry.task_id and (task := Task.query.get(entry.task_id)) else ''
+                
+                time_entries_writer.writerow([
+                    entry.id,
+                    entry.start_time.strftime('%Y-%m-%d %H:%M:%S') if entry.start_time else '',
+                    entry.end_time.strftime('%Y-%m-%d %H:%M:%S') if entry.end_time else '',
+                    entry.duration,
+                    entry.description,
+                    entry.project_id,
+                    project_name,
+                    entry.task_id,
+                    task_name,
+                    'Yes' if entry.billable else 'No',
+                    entry.created_at.strftime('%Y-%m-%d %H:%M:%S') if entry.created_at else ''
+                ])
+            
+            # Add to ZIP
+            zf.writestr('time_entries.csv', time_entries_output.getvalue())
+            
+            # ----- Invoices CSV -----
+            invoices_output = io.StringIO()
+            invoices_writer = csv.writer(invoices_output)
+            
+            # Write header
+            invoices_writer.writerow(['ID', 'Invoice Number', 'Amount', 'Currency', 'Status',
+                                     'Due Date', 'Notes', 'Client ID', 'Client Name',
+                                     'Project ID', 'Project Name', 'Created At'])
+            
+            # Write data
+            invoices = Invoice.query.join(Project).filter(Project.user_id == current_user.id).all()
+            for invoice in invoices:
+                client_name = client.name if (client := Client.query.get(invoice.client_id)) else ''
+                project_name = project.name if (project := Project.query.get(invoice.project_id)) else ''
+                
+                invoices_writer.writerow([
+                    invoice.id,
+                    invoice.invoice_number,
+                    invoice.amount,
+                    invoice.currency,
+                    invoice.status,
+                    invoice.due_date.strftime('%Y-%m-%d') if invoice.due_date else '',
+                    invoice.notes,
+                    invoice.client_id,
+                    client_name,
+                    invoice.project_id,
+                    project_name,
+                    invoice.created_at.strftime('%Y-%m-%d %H:%M:%S') if invoice.created_at else ''
+                ])
+            
+            # Add to ZIP
+            zf.writestr('invoices.csv', invoices_output.getvalue())
+            
+            # ----- Invoice Items CSV -----
+            invoice_items_output = io.StringIO()
+            invoice_items_writer = csv.writer(invoice_items_output)
+            
+            # Write header
+            invoice_items_writer.writerow(['ID', 'Invoice ID', 'Invoice Number', 'Description',
+                                          'Quantity', 'Rate', 'Amount'])
+            
+            # Write data
+            invoice_items = InvoiceItem.query.join(Invoice).join(Project).filter(Project.user_id == current_user.id).all()
+            for item in invoice_items:
+                invoice_number = invoice.invoice_number if (invoice := Invoice.query.get(item.invoice_id)) else ''
+                
+                invoice_items_writer.writerow([
+                    item.id,
+                    item.invoice_id,
+                    invoice_number,
+                    item.description,
+                    item.quantity,
+                    item.rate,
+                    item.amount
+                ])
+            
+            # Add to ZIP
+            zf.writestr('invoice_items.csv', invoice_items_output.getvalue())
+            
+            # ----- User Settings CSV -----
+            settings_output = io.StringIO()
+            settings_writer = csv.writer(settings_output)
+            
+            # Write header
+            settings_writer.writerow(['Setting', 'Value'])
+            
+            # Write data
+            settings = current_user.get_or_create_settings()
+            settings_writer.writerow(['Company Name', settings.company_name or ''])
+            settings_writer.writerow(['Company Address', settings.company_address or ''])
+            settings_writer.writerow(['Company Phone', settings.company_phone or ''])
+            settings_writer.writerow(['Company Email', settings.company_email or ''])
+            settings_writer.writerow(['Company Website', settings.company_website or ''])
+            settings_writer.writerow(['Invoice Template', settings.invoice_template or ''])
+            settings_writer.writerow(['Invoice Primary Color', settings.invoice_color_primary or ''])
+            settings_writer.writerow(['Invoice Secondary Color', settings.invoice_color_secondary or ''])
+            settings_writer.writerow(['Invoice Footer Text', settings.invoice_footer_text or ''])
+            
+            # Add to ZIP
+            zf.writestr('settings.csv', settings_output.getvalue())
+            
+            # ----- README file -----
+            readme_content = f"""WorkVista Data Export
+Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+User: {current_user.username}
+
+This ZIP archive contains the following CSV files:
+- clients.csv: Your client records
+- projects.csv: Your project records
+- tasks.csv: Task records for all your projects
+- time_entries.csv: Time tracking entries for all your projects
+- invoices.csv: Your invoice records
+- invoice_items.csv: Line items for all your invoices
+- settings.csv: Your account settings and preferences
+
+For support, please contact support@workvista.example.com
+"""
+            zf.writestr('README.txt', readme_content)
+        
+        # Rewind the file pointer to the beginning of the file
+        memory_file.seek(0)
+        
+        # Generate timestamp for filename
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f"workvista_export_{timestamp}.zip"
+        
+        # Create response
+        from flask import send_file
+        response = send_file(
+            memory_file,
+            mimetype='application/zip',
+            as_attachment=True,
+            download_name=filename
+        )
+        
+        # Log export
+        logger.info(f"User {current_user.username} exported data in CSV format")
+        
+        return response
+        
+    except Exception as e:
+        logger.error(f"Error exporting CSV data: {str(e)}")
+        flash('An error occurred while exporting your data. Please try again.', 'danger')
+        return redirect(url_for('settings.export_data'))
+
 @settings_bp.route('/delete-account', methods=['GET', 'POST'])
 @login_required
 def delete_account():
