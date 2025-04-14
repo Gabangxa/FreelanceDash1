@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Register - Freelancer Suite{% endblock %}
+{% block title %}Register - WorkVista{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -9,7 +9,7 @@
             <div class="card-body p-5">
                 <h1 class="text-center mb-4">
                     <i class="fas fa-briefcase text-primary"></i>
-                    Freelancer Suite
+                    WorkVista
                 </h1>
                 <h4 class="card-title text-center mb-4">Create Account</h4>
                 <form method="POST" action="{{ url_for('auth.register') }}" novalidate>
@@ -30,10 +30,19 @@
                     </div>
                     <div class="mb-3">
                         {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else "")) }}
+                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), autocomplete="new-password") }}
                         {% for error in form.password.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
+                        <div class="form-text mt-1">
+                            <small class="text-muted">Password must:</small>
+                            <ul class="password-requirements mb-0 ps-3 mt-1">
+                                <li class="small"><span id="req-length" class="text-muted">Be at least 8 characters</span></li>
+                                <li class="small"><span id="req-uppercase" class="text-muted">Include an uppercase letter</span></li>
+                                <li class="small"><span id="req-lowercase" class="text-muted">Include a lowercase letter</span></li>
+                                <li class="small"><span id="req-number" class="text-muted">Include a number</span></li>
+                            </ul>
+                        </div>
                     </div>
                     <div class="mb-3">
                         {{ form.password2.label(class="form-label") }}
@@ -55,4 +64,48 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const passwordField = document.querySelector('input[name="password"]');
+        if (passwordField) {
+            passwordField.addEventListener('input', function() {
+                const password = this.value;
+                
+                // Check requirements
+                const lengthValid = password.length >= 8;
+                const uppercaseValid = /[A-Z]/.test(password);
+                const lowercaseValid = /[a-z]/.test(password);
+                const numberValid = /[0-9]/.test(password);
+                
+                // Update UI feedback
+                updateRequirement('req-length', lengthValid);
+                updateRequirement('req-uppercase', uppercaseValid);
+                updateRequirement('req-lowercase', lowercaseValid);
+                updateRequirement('req-number', numberValid);
+            });
+        }
+        
+        function updateRequirement(id, isValid) {
+            const element = document.getElementById(id);
+            if (element) {
+                if (isValid) {
+                    element.classList.remove('text-muted');
+                    element.classList.add('text-success');
+                    // Only add the check icon if it doesn't already exist
+                    if (!element.innerHTML.includes('fa-check')) {
+                        element.innerHTML = '<i class="fas fa-check me-1"></i>' + element.textContent;
+                    }
+                } else {
+                    element.classList.remove('text-success');
+                    element.classList.add('text-muted');
+                    // Remove check icon if it exists
+                    element.innerHTML = element.innerHTML.replace(/<i class="fas fa-check me-1"><\/i>/, '');
+                }
+            }
+        }
+    });
+</script>
 {% endblock %}
