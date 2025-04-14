@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+
+{% block title %}Export Your Data - WorkVista{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-primary text-white">
+                    <h2 class="h4 mb-0"><i class="fas fa-file-export me-2"></i>Export Your Data</h2>
+                </div>
+                <div class="card-body py-4">
+                    <p class="lead">Download your WorkVista data for backup or to transfer to another service.</p>
+                    
+                    <div class="alert alert-info">
+                        <h5 class="alert-heading"><i class="fas fa-info-circle me-2"></i>About Data Export</h5>
+                        <p>The export includes all your account data, including:</p>
+                        <ul>
+                            <li>Projects</li>
+                            <li>Clients</li>
+                            <li>Invoices</li>
+                            <li>Time entries</li>
+                            <li>Tasks</li>
+                            <li>Settings and preferences</li>
+                        </ul>
+                        <p class="mb-0">Files are provided in standard formats for easy importing into other systems.</p>
+                    </div>
+
+                    <div class="row mt-4">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <div class="icon-container d-inline-flex align-items-center justify-content-center rounded-circle mb-3" style="width: 60px; height: 60px; background-color: rgba(52, 152, 219, 0.1);">
+                                        <i class="fas fa-file-csv text-primary fa-2x"></i>
+                                    </div>
+                                    <h5 class="card-title">CSV Format</h5>
+                                    <p class="card-text">Export in CSV format for easy viewing in spreadsheet applications.</p>
+                                    <a href="{{ url_for('settings.export_data_csv') }}" class="btn btn-outline-primary mt-2">
+                                        <i class="fas fa-download me-1"></i>Download CSV
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100 border-0 shadow-sm">
+                                <div class="card-body text-center p-4">
+                                    <div class="icon-container d-inline-flex align-items-center justify-content-center rounded-circle mb-3" style="width: 60px; height: 60px; background-color: rgba(52, 152, 219, 0.1);">
+                                        <i class="fas fa-file-code text-primary fa-2x"></i>
+                                    </div>
+                                    <h5 class="card-title">JSON Format</h5>
+                                    <p class="card-text">Export in JSON format for developers or technical integrations.</p>
+                                    <a href="{{ url_for('settings.export_data_json') }}" class="btn btn-outline-primary mt-2">
+                                        <i class="fas fa-download me-1"></i>Download JSON
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="text-end mt-4">
+                        <a href="{{ url_for('settings.company_settings') }}" class="btn btn-secondary">
+                            <i class="fas fa-arrow-left me-1"></i>Back to Settings
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

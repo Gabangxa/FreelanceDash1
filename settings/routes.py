@@ -1,12 +1,12 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request
-from flask_login import login_required, current_user
+from flask import Blueprint, render_template, redirect, url_for, flash, request, session
+from flask_login import login_required, current_user, logout_user
 from sqlalchemy.exc import SQLAlchemyError
 import io
 import logging
 from PIL import Image
 from app import db
-from models import UserSettings
-from settings.forms import CompanySettingsForm, InvoiceTemplateForm
+from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem
+from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm
 from errors import handle_db_errors
 
 # Get the module logger
@@ -124,3 +124,70 @@ def invoice_template():
     logo_data_uri = settings.get_logo_data_uri() if settings.invoice_logo else None
     
     return render_template('invoice_template.html', form=form, settings=settings, logo_data_uri=logo_data_uri)
+
+@settings_bp.route('/delete-account', methods=['GET', 'POST'])
+@login_required
+def delete_account():
+    """Handle account deletion with confirmation steps."""
+    form = DeleteAccountForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Start database transaction
+            user_id = current_user.id
+            username = current_user.username
+            
+            # Delete all user data in the proper order to respect foreign key constraints
+            # First, delete all invoice items
+            invoice_ids = [invoice.id for invoice in Invoice.query.join(Project).filter(Project.user_id == user_id)]
+            if invoice_ids:
+                InvoiceItem.query.filter(InvoiceItem.invoice_id.in_(invoice_ids)).delete(synchronize_session=False)
+                db.session.flush()
+            
+            # Delete invoices
+            Invoice.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Delete time entries
+            TimeEntry.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Delete tasks
+            Task.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Delete projects
+            Project.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Delete clients
+            Client.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Delete user settings (should cascade with user deletion, but being explicit)
+            UserSettings.query.filter_by(user_id=user_id).delete(synchronize_session=False)
+            db.session.flush()
+            
+            # Finally, delete the user
+            User.query.filter_by(id=user_id).delete(synchronize_session=False)
+            
+            # Commit all changes
+            db.session.commit()
+            
+            # Log the account deletion
+            logger.info(f"User account deleted: {username} (ID: {user_id})")
+            
+            # Clear the session and log the user out
+            logout_user()
+            session.clear()
+            
+            # Show confirmation message
+            flash('Your account has been permanently deleted. We\'re sorry to see you go.', 'info')
+            return redirect(url_for('index'))
+            
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Error deleting account: {str(e)}")
+            flash('An error occurred while trying to delete your account. Please try again.', 'danger')
+    
+    return render_template('delete_account.html', form=form)

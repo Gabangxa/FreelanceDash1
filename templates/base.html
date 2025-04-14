@@ -79,9 +79,16 @@
                         <ul class="dropdown-menu dropdown-menu-end">
                             <li><a class="dropdown-item" href="{{ url_for('settings.company_settings') }}"><i class="fas fa-cog me-2"></i>Settings</a></li>
                             <!-- Subscription link temporarily disabled -->
+                            <li><hr class="dropdown-divider"></li>
                             <li>
                                 <a class="dropdown-item" href="{{ url_for('auth.logout') }}">
                                     <i class="fas fa-sign-out-alt me-2"></i>Logout
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <a class="dropdown-item text-danger" href="{{ url_for('settings.delete_account') }}">
+                                    <i class="fas fa-trash-alt me-2"></i>Delete Account
                                 </a>
                             </li>
                         </ul>

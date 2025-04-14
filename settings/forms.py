@@ -1,7 +1,8 @@
 from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
-from wtforms import StringField, TextAreaField, SelectField, SubmitField, HiddenField
-from wtforms.validators import Optional, Email, Length, URL
+from wtforms import StringField, TextAreaField, SelectField, SubmitField, HiddenField, PasswordField, BooleanField
+from wtforms.validators import Optional, Email, Length, URL, DataRequired, EqualTo, ValidationError
+from flask_login import current_user
 import os
 
 class CompanySettingsForm(FlaskForm):
@@ -54,3 +55,26 @@ class InvoiceTemplateForm(FlaskForm):
         Length(max=500, message="Footer text must be less than 500 characters")
     ])
     submit = SubmitField('Save Invoice Settings')
+
+class DeleteAccountForm(FlaskForm):
+    """Form for account deletion with confirmation steps."""
+    confirmation = StringField('Confirm Email', validators=[
+        DataRequired(message="Please enter your email address"),
+    ])
+    password = PasswordField('Password', validators=[
+        DataRequired(message="Password is required")
+    ])
+    understand = BooleanField('I understand', validators=[
+        DataRequired(message="You must acknowledge that this action is permanent")
+    ])
+    submit = SubmitField('Delete Account')
+    
+    def validate_confirmation(self, field):
+        """Validate that the confirmation email matches the user's email."""
+        if field.data != current_user.email:
+            raise ValidationError("The email address you entered doesn't match your account email")
+            
+    def validate_password(self, field):
+        """Validate that the password is correct."""
+        if not current_user.check_password(field.data):
+            raise ValidationError("Incorrect password. Please try again.")
