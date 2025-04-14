@@ -32,6 +32,10 @@ def init_app(app):
         if '$MAIL_USERNAME' in mail_default_sender:
             mail_default_sender = mail_default_sender.replace('$MAIL_USERNAME', mail_username or '')
             
+        # Format the sender display name if it's just an email
+        if mail_default_sender and '@' in mail_default_sender and '<' not in mail_default_sender:
+            mail_default_sender = f"WorkVista <{mail_default_sender}>"
+        
         # Log the configured sender for debugging
         logger.info(f"Configured mail sender: {mail_default_sender}")
     
@@ -118,7 +122,7 @@ def send_welcome_email(user):
     """Send a welcome email to a newly registered user."""
     from datetime import datetime
     
-    subject = "Welcome to Freelancer Suite!"
+    subject = "Welcome to WorkVista!"
     
     # Prepare context data for templates
     context = {
