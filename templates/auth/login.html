@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Login - Freelancer Suite{% endblock %}
+{% block title %}Login - WorkVista{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
@@ -9,7 +9,7 @@
             <div class="card-body p-5">
                 <h1 class="text-center mb-4">
                     <i class="fas fa-briefcase text-primary"></i>
-                    Freelancer Suite
+                    WorkVista
                 </h1>
                 <h4 class="card-title text-center mb-4">Sign In</h4>
                 <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
@@ -31,6 +31,8 @@
                     <div class="mb-3 form-check">
                         {{ form.remember_me(class="form-check-input") }}
                         {{ form.remember_me.label(class="form-check-label") }}
+                        <i class="fas fa-info-circle text-muted ms-1" data-bs-toggle="tooltip" data-bs-placement="top" 
+                           title="Stay signed in on this device for 30 days. Do not use on public computers."></i>
                     </div>
                     <div class="mb-3 text-end">
                         <a href="{{ url_for('auth.reset_password_request') }}" class="text-decoration-none small">Forgot your password?</a>
@@ -41,11 +43,23 @@
                 </form>
                 <hr class="my-4">
                 <p class="text-center mb-0">
-                    New to Freelancer Suite? 
+                    New to WorkVista? 
                     <a href="{{ url_for('auth.register') }}" class="text-decoration-none">Create an account</a>
                 </p>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    // Initialize tooltips
+    document.addEventListener('DOMContentLoaded', function() {
+        var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
+        var tooltipList = tooltipTriggerList.map(function (tooltipTriggerEl) {
+            return new bootstrap.Tooltip(tooltipTriggerEl);
+        });
+    });
+</script>
 {% endblock %}
