@@ -1,8 +1,8 @@
 import os
 import logging
 import time
-from datetime import datetime
-from flask import Flask, render_template, request, g
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, g, session
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, current_user
 from sqlalchemy.orm import DeclarativeBase
@@ -54,10 +54,19 @@ else:
     if not app.secret_key:
         logger.warning("No secret key set, generating a temporary one. This is not secure for production!")
         app.secret_key = secrets.token_hex(32)
-    app.config["SESSION_COOKIE_HTTPONLY"] = True
-    app.config["SESSION_COOKIE_SECURE"] = True
-    app.config["REMEMBER_COOKIE_HTTPONLY"] = True
-    app.config["REMEMBER_COOKIE_SECURE"] = True
+
+# Enhanced security settings for cookies and sessions
+app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access to session cookie
+app.config["SESSION_COOKIE_SECURE"] = not app.debug  # Force HTTPS in production
+app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Prevent CSRF attacks
+app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=1)  # Session expires after 1 day
+app.config["SESSION_REFRESH_EACH_REQUEST"] = True  # Update session on each request
+
+# Remember me cookie security
+app.config["REMEMBER_COOKIE_HTTPONLY"] = True
+app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
+app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
+app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)  # Remember for 30 days
 
 # Database configuration
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
@@ -119,10 +128,42 @@ def inject_common_variables():
 
 @app.after_request
 def add_security_headers_and_log_timing(response):
-    # Add security headers
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
-    response.headers['X-XSS-Protection'] = '1; mode=block'
+    # Add comprehensive security headers
+    response.headers['X-Content-Type-Options'] = 'nosniff'  # Prevents MIME type sniffing
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'  # Prevents clickjacking
+    response.headers['X-XSS-Protection'] = '1; mode=block'  # Browser XSS filtering
+    
+    # Add Content Security Policy
+    csp_directives = [
+        "default-src 'self'",  # Default policy for fetching content
+        "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com https://cdnjs.cloudflare.com 'unsafe-inline'",
+        "style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
+        "img-src 'self' data: https://cdnjs.buymeacoffee.com",
+        "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
+        "connect-src 'self'",
+        "frame-src 'self' https://cdnjs.buymeacoffee.com"
+    ]
+    response.headers['Content-Security-Policy'] = "; ".join(csp_directives)
+    
+    # Add Referrer Policy
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    
+    # Add Feature Policy (now called Permissions Policy) to limit features
+    feature_policies = [
+        "geolocation 'none'",
+        "microphone 'none'",
+        "camera 'none'",
+        "payment 'none'",
+        "usb 'none'"
+    ]
+    response.headers['Permissions-Policy'] = ", ".join(feature_policies)
+    
+    # Session security - ensure sessions are marked as permanent to apply lifetime
+    if current_user.is_authenticated and request.endpoint != 'static':
+        session.permanent = True
+        # Refresh CSRF token if it exists (this helps prevent CSRF token fixation)
+        if '_csrf_token' in session:
+            session.modified = True
     
     # Add server timing header for non-static resources in debug mode
     if hasattr(g, 'request_start_time') and app.debug and not request.path.startswith('/static/'):
@@ -164,14 +205,19 @@ from invoices.routes import invoices_bp
 from clients.routes import clients_bp
 from faq.routes import faq_bp
 from settings.routes import settings_bp
+from api import api_bp  # Import the API blueprint
 # import polar  # Temporarily disabled Polar.sh integration
 
+# Register web interface blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(projects_bp)
 app.register_blueprint(invoices_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(settings_bp)
+
+# Register API blueprint
+app.register_blueprint(api_bp)
 
 # Initialize Polar.sh integration - Temporarily disabled
 # polar.init_app(app)

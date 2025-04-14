@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+
+{% block title %}Delete Account - WorkVista{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div class="card shadow border-0">
+                <div class="card-header bg-danger text-white">
+                    <h2 class="h4 mb-0"><i class="fas fa-exclamation-triangle me-2"></i>Delete Your Account</h2>
+                </div>
+                <div class="card-body py-4">
+                    <div class="alert alert-warning">
+                        <h5 class="alert-heading"><i class="fas fa-exclamation-circle me-2"></i>This action cannot be undone</h5>
+                        <p>Deleting your account will permanently erase all your data, including:</p>
+                        <ul>
+                            <li>Projects</li>
+                            <li>Clients</li>
+                            <li>Invoices</li>
+                            <li>Time entries</li>
+                            <li>Tasks</li>
+                            <li>Settings and preferences</li>
+                        </ul>
+                        <p class="mb-0">Data cannot be recovered once deleted.</p>
+                    </div>
+
+                    <form method="POST" action="{{ url_for('settings.delete_account') }}" id="delete-account-form">
+                        {{ form.hidden_tag() }}
+
+                        <div class="mb-4">
+                            <label for="confirmation" class="form-label">To confirm, please type your email address <strong>{{ current_user.email }}</strong></label>
+                            {{ form.confirmation(class="form-control", id="confirmation", placeholder="Enter your email address") }}
+                            {% if form.confirmation.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.confirmation.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-4">
+                            <label for="password" class="form-label">Enter your password</label>
+                            {{ form.password(class="form-control", id="password", placeholder="Enter your password") }}
+                            {% if form.password.errors %}
+                                <div class="invalid-feedback d-block">
+                                    {% for error in form.password.errors %}
+                                        {{ error }}
+                                    {% endfor %}
+                                </div>
+                            {% endif %}
+                        </div>
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                {{ form.understand(class="form-check-input", id="understand") }}
+                                <label class="form-check-label" for="understand">
+                                    I understand that this action is permanent and cannot be undone
+                                </label>
+                                {% if form.understand.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.understand.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="text-end mt-4">
+                            <a href="{{ url_for('settings.company_settings') }}" class="btn btn-secondary me-2">
+                                <i class="fas fa-times me-1"></i>Cancel
+                            </a>
+                            <button type="submit" class="btn btn-danger" id="delete-account-btn">
+                                <i class="fas fa-trash-alt me-1"></i>Permanently Delete Account
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const deleteForm = document.getElementById('delete-account-form');
+        const deleteBtn = document.getElementById('delete-account-btn');
+        
+        deleteForm.addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            // Additional confirmation dialog
+            if (confirm('Are you absolutely sure you want to delete your account? This action CANNOT be undone.')) {
+                // If confirmed, submit the form
+                this.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}
