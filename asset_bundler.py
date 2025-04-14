@@ -37,6 +37,41 @@ def minify_css(css_content):
     
     return css_content
 
+def minify_js(js_content):
+    """
+    Basic JavaScript minification by removing comments and unnecessary whitespace.
+    
+    Args:
+        js_content (str): The JavaScript content to minify
+        
+    Returns:
+        str: Minified JavaScript content
+    """
+    # Remove single-line comments
+    js_content = re.sub(r'//.*?$', '', js_content, flags=re.MULTILINE)
+    
+    # Remove multi-line comments
+    js_content = re.sub(r'/\*[\s\S]*?\*/', '', js_content)
+    
+    # Remove whitespace at the beginning and end of lines
+    js_content = re.sub(r'^\s+', '', js_content, flags=re.MULTILINE)
+    js_content = re.sub(r'\s+$', '', js_content, flags=re.MULTILINE)
+    
+    # Compress multiple spaces to a single space
+    js_content = re.sub(r'\s{2,}', ' ', js_content)
+    
+    # Remove whitespace around operators and punctuation
+    js_content = re.sub(r'\s*([=\+\-\*/&|<>!%:;,\{\}\[\]\(\)])\s*', r'\1', js_content)
+    
+    # Add back space after keywords
+    for keyword in ['if', 'else', 'for', 'while', 'do', 'try', 'catch', 'finally', 'with', 'return', 'function']:
+        js_content = re.sub(rf'\b{keyword}\b([^\\s])', f'{keyword} \\1', js_content)
+    
+    # Remove newlines
+    js_content = re.sub(r'\n', '', js_content)
+    
+    return js_content
+
 def process_css_files(app):
     """
     Process CSS files and create minified versions.
@@ -78,6 +113,48 @@ def process_css_files(app):
             logger.error(f"Error processing {css_file}: {str(e)}")
     
     logger.info(f"CSS minification complete. Files saved to {minified_folder}")
+
+def process_js_files(app):
+    """
+    Process JavaScript files and create minified versions.
+    
+    Args:
+        app: The Flask application instance
+    """
+    static_folder = Path(app.static_folder)
+    js_folder = static_folder / 'js'
+    minified_folder = js_folder / 'min'
+    
+    # Create minified directory if it doesn't exist
+    os.makedirs(minified_folder, exist_ok=True)
+    
+    # Process each JS file
+    for js_file in js_folder.glob('*.js'):
+        if js_file.name.endswith('.min.js'):
+            continue
+            
+        output_file = minified_folder / f"{js_file.stem}.min.js"
+        
+        try:
+            with open(js_file, 'r', encoding='utf-8') as f:
+                js_content = f.read()
+                
+            minified_content = minify_js(js_content)
+            
+            with open(output_file, 'w', encoding='utf-8') as f:
+                f.write(minified_content)
+                
+            # Calculate reduction percentage
+            original_size = len(js_content)
+            minified_size = len(minified_content)
+            reduction = (original_size - minified_size) / original_size * 100
+            
+            logger.info(f"Minified {js_file.name}: {original_size:,} bytes → {minified_size:,} bytes ({reduction:.1f}% reduction)")
+            
+        except Exception as e:
+            logger.error(f"Error processing {js_file}: {str(e)}")
+    
+    logger.info(f"JavaScript minification complete. Files saved to {minified_folder}")
     
 def init_app(app):
     """
@@ -86,9 +163,10 @@ def init_app(app):
     Args:
         app: The Flask application instance
     """
-    # Process CSS files when the app starts
+    # Process asset files when the app starts
     with app.app_context():
         process_css_files(app)
+        process_js_files(app)
         
     # Add context processor to make asset_url available in templates
     @app.context_processor
@@ -114,6 +192,14 @@ def init_app(app):
                     if len(path_parts) > 1:
                         file_part = path_parts[-1]
                         path_parts[-1] = f"min/{file_part.rsplit('.', 1)[0]}.min.css"
+                        url = '/'.join(path_parts)
+                    else:
+                        url = filename
+                elif filename.startswith('js/') and not filename.endswith('.min.js'):
+                    path_parts = filename.split('/')
+                    if len(path_parts) > 1:
+                        file_part = path_parts[-1]
+                        path_parts[-1] = f"min/{file_part.rsplit('.', 1)[0]}.min.js"
                         url = '/'.join(path_parts)
                     else:
                         url = filename
