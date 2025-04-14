@@ -191,10 +191,18 @@ class TimeEntry(db.Model):
     billable = db.Column(db.Boolean, default=True, index=True)  # Flag for billable time
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
-    # Composite index for reporting queries
+    # Composite indexes for reporting queries
     __table_args__ = (
+        # Index for project-based time tracking reports by date
         Index('idx_time_entry_project_date', 'project_id', 'start_time'),
+        # Index for filtering billable entries
         Index('idx_time_entry_billable', 'billable'),
+        # Index for date range reports
+        Index('idx_time_entry_date_range', 'start_time', 'end_time'),
+        # Index for task-based reporting
+        Index('idx_time_entry_task_date', 'task_id', 'start_time'),
+        # Index for billable project time reports
+        Index('idx_time_entry_project_billable', 'project_id', 'billable')
     )
 
 class Invoice(db.Model):
