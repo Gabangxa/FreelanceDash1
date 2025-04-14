@@ -11,6 +11,7 @@ import secrets
 from errors import setup_logging, register_error_handlers, register_user_friendly_error_handler
 from performance import PerformanceMonitor
 import mail
+import asset_bundler
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -79,6 +80,9 @@ logger = setup_logging(app)
 
 # Initialize mail service
 mail.init_app(app)
+
+# Initialize asset bundling for CSS minification
+asset_bundler.init_app(app)
 
 # Initialize performance monitoring
 # Set higher thresholds for production to reduce noise
