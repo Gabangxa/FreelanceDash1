@@ -1,20 +1,24 @@
 {% extends "base.html" %}
 
-{% block title %}{{ client.name }} - Freelancer Suite{% endblock %}
+{% block title %}{{ client.name }} - Client Details{% endblock %}
 
 {% block content %}
 <div class="d-flex justify-content-between align-items-center mb-4">
     <div>
         <h2>{{ client.name }}</h2>
-        {% if client.company %}
-        <p class="text-muted mb-0">{{ client.company }}</p>
-        {% endif %}
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('clients.list_clients') }}">Clients</a></li>
+                <li class="breadcrumb-item active">{{ client.name }}</li>
+            </ol>
+        </nav>
     </div>
     <div class="btn-group">
         <a href="{{ url_for('clients.edit_client', id=client.id) }}" class="btn btn-outline-primary">
             <i class="fas fa-edit me-2"></i>Edit Client
         </a>
-        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteClientModal">
             <i class="fas fa-trash me-2"></i>Delete
         </button>
     </div>
@@ -25,37 +29,43 @@
     <div class="col-md-4">
         <div class="card mb-4">
             <div class="card-header">
-                <h5 class="mb-0">Contact Information</h5>
+                <h5 class="mb-0">Client Details</h5>
             </div>
             <div class="card-body">
+                {% if client.company %}
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Company</strong></p>
+                    <p class="mb-0">{{ client.company }}</p>
+                </div>
+                {% endif %}
+                
                 {% if client.email %}
                 <div class="mb-3">
                     <p class="mb-1"><strong>Email</strong></p>
                     <p class="mb-0">
-                        <a href="mailto:{{ client.email }}" class="text-decoration-none">
-                            {{ client.email }}
-                        </a>
+                        <a href="mailto:{{ client.email }}">{{ client.email }}</a>
                     </p>
                 </div>
                 {% endif %}
-
+                
                 {% if client.address %}
-                <div class="mb-0">
+                <div class="mb-3">
                     <p class="mb-1"><strong>Address</strong></p>
                     <p class="mb-0 text-pre-wrap">{{ client.address }}</p>
                 </div>
                 {% endif %}
                 
-                {% if not client.email and not client.address %}
-                <p class="text-muted">No contact information provided</p>
-                {% endif %}
+                <div class="mb-0">
+                    <p class="mb-1"><strong>Client Since</strong></p>
+                    <p class="mb-0">{{ client.created_at.strftime('%Y-%m-%d') }}</p>
+                </div>
             </div>
         </div>
         
-        <!-- Quick Stats -->
+        <!-- Stats Card -->
         <div class="card">
             <div class="card-header">
-                <h5 class="mb-0">Quick Stats</h5>
+                <h5 class="mb-0">Overview</h5>
             </div>
             <div class="card-body">
                 <div class="row">
@@ -68,16 +78,21 @@
                         <h4>{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</h4>
                     </div>
                 </div>
+                <div class="mt-3">
+                    <a href="{{ url_for('projects.create_project', client_id=client.id) }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus me-1"></i>New Project
+                    </a>
+                </div>
             </div>
         </div>
     </div>
     
-    <!-- Projects -->
+    <!-- Projects List -->
     <div class="col-md-8">
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h5 class="mb-0">Projects</h5>
-                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary btn-sm">
+                <a href="{{ url_for('projects.create_project', client_id=client.id) }}" class="btn btn-sm btn-primary">
                     <i class="fas fa-plus me-1"></i>New Project
                 </a>
             </div>
@@ -87,11 +102,10 @@
                     <table class="table table-hover">
                         <thead>
                             <tr>
-                                <th>Project Name</th>
+                                <th>Project</th>
                                 <th>Status</th>
                                 <th>Start Date</th>
                                 <th>End Date</th>
-                                <th>Tasks</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -104,13 +118,18 @@
                                     </a>
                                 </td>
                                 <td>
-                                    <span class="badge bg-{{ {'active': 'success', 'on_hold': 'warning', 'completed': 'secondary', 'cancelled': 'danger'}[project.status] }}">
+                                    <span class="badge bg-{{ {'active': 'success', 'completed': 'secondary', 'on_hold': 'warning', 'cancelled': 'danger'}[project.status] }}">
                                         {{ project.status|replace('_', ' ')|title }}
                                     </span>
                                 </td>
                                 <td>{{ project.start_date.strftime('%Y-%m-%d') }}</td>
-                                <td>{{ project.end_date.strftime('%Y-%m-%d') if project.end_date else '-' }}</td>
-                                <td>{{ project.tasks|length }}</td>
+                                <td>
+                                    {% if project.end_date %}
+                                        {{ project.end_date.strftime('%Y-%m-%d') }}
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
                                 <td>
                                     <div class="btn-group">
                                         <a href="{{ url_for('projects.view_project', id=project.id) }}" 
@@ -130,43 +149,105 @@
                 </div>
                 {% else %}
                 <div class="text-center py-4">
-                    <p class="text-muted mb-3">No projects found for this client</p>
-                    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
-                        <i class="fas fa-plus me-1"></i>Add First Project
+                    <p class="text-muted mb-3">No projects created for this client yet</p>
+                    <a href="{{ url_for('projects.create_project', client_id=client.id) }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Create First Project
                     </a>
                 </div>
                 {% endif %}
             </div>
         </div>
+        
+        <!-- Invoices Summary (if relevant) -->
+        {% if client.invoices %}
+        <div class="card mt-4">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Recent Invoices</h5>
+                <a href="{{ url_for('invoices.create_invoice', client_id=client.id) }}" class="btn btn-sm btn-primary">
+                    <i class="fas fa-plus me-1"></i>New Invoice
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Invoice #</th>
+                                <th>Date</th>
+                                <th>Amount</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for invoice in client.invoices|sort(attribute='created_at', reverse=True)|slice(0, 5) %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" class="text-decoration-none">
+                                        {{ invoice.invoice_number }}
+                                    </a>
+                                </td>
+                                <td>{{ invoice.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ invoice.currency }} {{ "%.2f"|format(invoice.amount) }}</td>
+                                <td>
+                                    <span class="badge bg-{{ {'draft': 'secondary', 'sent': 'primary', 'paid': 'success', 'overdue': 'danger'}[invoice.status] }}">
+                                        {{ invoice.status|title }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% if client.invoices|length > 5 %}
+                <div class="text-center mt-3">
+                    <a href="{{ url_for('invoices.list_invoices', client_id=client.id) }}" class="btn btn-sm btn-outline-primary">
+                        View All Invoices
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 
 <!-- Delete Client Modal -->
-<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+<div class="modal fade" id="deleteClientModal" tabindex="-1" aria-labelledby="deleteClientModalLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <h5 class="modal-title" id="deleteClientModalLabel">Confirm Delete</h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                <p>Are you sure you want to delete client <strong>{{ client.name }}</strong>?</p>
                 {% if projects|length > 0 %}
-                <div class="alert alert-warning">
-                    This client has {{ projects|length }} associated project(s). 
-                    You must remove these projects before deleting this client.
+                <div class="alert alert-danger">
+                    <p><strong>Cannot delete this client</strong></p>
+                    <p>This client has {{ projects|length }} associated projects. You must delete or reassign these projects before deleting the client.</p>
                 </div>
                 {% else %}
+                <p>Are you sure you want to delete <strong>{{ client.name }}</strong>?</p>
                 <p class="text-danger">This action cannot be undone.</p>
                 {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                {% if projects|length == 0 %}
                 <form action="{{ url_for('clients.delete_client', id=client.id) }}" method="POST">
-                    <button type="submit" class="btn btn-danger" {% if projects|length > 0 %}disabled{% endif %}>
-                        Delete
-                    </button>
+                    <button type="submit" class="btn btn-danger">Delete Client</button>
                 </form>
+                {% else %}
+                <button type="button" class="btn btn-danger" disabled>Delete Client</button>
+                {% endif %}
             </div>
         </div>
     </div>
