@@ -180,7 +180,7 @@
                             {% for task in project.tasks %}
                             <tr>
                                 <td>
-                                    <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="text-decoration-none">
+                                    <a href="{{ url_for('projects.view_task', id=task.id) }}" class="text-decoration-none">
                                         {{ task.title }}
                                     </a>
                                 </td>
@@ -239,7 +239,9 @@
                                 <td>{{ entry.start_time.strftime('%Y-%m-%d %H:%M') }}</td>
                                 <td>
                                     {% if entry.task %}
-                                        {{ entry.task.title }}
+                                        <a href="{{ url_for('projects.view_task', id=entry.task.id) }}" class="text-decoration-none">
+                                            {{ entry.task.title }}
+                                        </a>
                                     {% else %}
                                         -
                                     {% endif %}

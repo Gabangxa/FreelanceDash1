@@ -1,0 +1,263 @@
+{% extends "base.html" %}
+
+{% block title %}{{ task.title }} - Task Details{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>{{ task.title }}</h2>
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.dashboard') }}">Dashboard</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('projects.view_project', id=task.project.id) }}">{{ task.project.name }}</a></li>
+                <li class="breadcrumb-item active">{{ task.title }}</li>
+            </ol>
+        </nav>
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="btn btn-outline-primary">
+            <i class="fas fa-edit me-2"></i>Edit Task
+        </a>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteTaskModal">
+            <i class="fas fa-trash me-2"></i>Delete
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Task Details -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Task Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Status</strong></p>
+                    <p class="mb-0">
+                        <span class="badge bg-{{ {'pending': 'warning', 'in_progress': 'info', 'completed': 'success', 'on_hold': 'secondary'}[task.status] }}">
+                            {{ task.status|replace('_', ' ')|title }}
+                        </span>
+                    </p>
+                </div>
+                
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Project</strong></p>
+                    <p class="mb-0">
+                        <a href="{{ url_for('projects.view_project', id=task.project.id) }}" class="text-decoration-none">
+                            {{ task.project.name }}
+                        </a>
+                    </p>
+                </div>
+                
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Client</strong></p>
+                    <p class="mb-0">
+                        <a href="{{ url_for('clients.view_client', id=task.project.client.id) }}" class="text-decoration-none">
+                            {{ task.project.client.name }}
+                        </a>
+                    </p>
+                </div>
+                
+                {% if task.due_date %}
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Due Date</strong></p>
+                    <p class="mb-0">{{ task.due_date.strftime('%Y-%m-%d') }}</p>
+                </div>
+                {% endif %}
+                
+                <div class="mb-0">
+                    <p class="mb-1"><strong>Created On</strong></p>
+                    <p class="mb-0">{{ task.created_at.strftime('%Y-%m-%d') }}</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Time Tracking Stats -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Time Tracking</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="text-muted mb-1">Total Hours</p>
+                        <h4>{{ total_hours }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">Billable</p>
+                        <h4>{{ billable_hours }}</h4>
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <a href="#" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#recordTimeModal">
+                        <i class="fas fa-clock me-1"></i>Record Time
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Description and Time Entries -->
+    <div class="col-md-8">
+        <!-- Description -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Description</h5>
+            </div>
+            <div class="card-body">
+                {% if task.description %}
+                <p class="text-pre-wrap mb-0">{{ task.description }}</p>
+                {% else %}
+                <p class="text-muted mb-0">No description provided</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Time Entries -->
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Time Entries</h5>
+            </div>
+            <div class="card-body">
+                {% if time_entries %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Duration</th>
+                                <th>Description</th>
+                                <th>Billable</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for entry in time_entries %}
+                            <tr>
+                                <td>{{ entry.start_time.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    {% if entry.duration %}
+                                        {% set hours = (entry.duration // 60)|int %}
+                                        {% set minutes = entry.duration % 60 %}
+                                        {% if hours > 0 %}{{ hours }}h{% endif %} {{ minutes }}m
+                                    {% else %}
+                                        —
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if entry.description %}
+                                        {{ entry.description|truncate(50) }}
+                                    {% else %}
+                                        <span class="text-muted">No description</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if entry.billable %}
+                                        <span class="badge bg-success">Yes</span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">No</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('projects.edit_time_entry', id=entry.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted mb-3">No time entries recorded for this task</p>
+                    <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#recordTimeModal">
+                        <i class="fas fa-clock me-1"></i>Record Time
+                    </button>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Task Modal -->
+<div class="modal fade" id="deleteTaskModal" tabindex="-1" aria-labelledby="deleteTaskModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteTaskModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete the task <strong>{{ task.title }}</strong>?</p>
+                {% if time_entries %}
+                <div class="alert alert-warning">
+                    This task has {{ time_entries|length }} associated time entries. These will also be deleted.
+                </div>
+                {% endif %}
+                <p class="text-danger">This action cannot be undone.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('projects.delete_task', id=task.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger">Delete</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Record Time Modal -->
+<div class="modal fade" id="recordTimeModal" tabindex="-1" aria-labelledby="recordTimeModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="recordTimeModalLabel">Record Time for {{ task.title }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form action="{{ url_for('projects.create_time_entry') }}" method="POST" id="time-entry-form">
+                    <input type="hidden" name="project_id" value="{{ task.project_id }}">
+                    <input type="hidden" name="task_id" value="{{ task.id }}">
+                    
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Start Time</label>
+                            <input type="datetime-local" name="start_time" class="form-control" required>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">End Time</label>
+                            <input type="datetime-local" name="end_time" class="form-control">
+                        </div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Manual Duration (in minutes)</label>
+                        <input type="number" name="duration" class="form-control" placeholder="Or enter duration directly">
+                        <div class="form-text">Fill this only if you don't provide an end time.</div>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label">Description</label>
+                        <textarea name="description" class="form-control" rows="3"></textarea>
+                    </div>
+                    
+                    <div class="mb-3 form-check">
+                        <input type="checkbox" class="form-check-input" name="billable" id="billable" checked>
+                        <label class="form-check-label" for="billable">Billable</label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="time-entry-form" class="btn btn-primary">Save Time Entry</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -304,6 +304,71 @@ def create_task():
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
+@projects_bp.route('/tasks/<int:id>')
+@login_required
+@handle_db_errors
+def view_task(id):
+    try:
+        # Secured query with join to ensure task belongs to user's project
+        task = Task.query.join(Project).filter(
+            Task.id == id,
+            Project.user_id == current_user.id
+        ).first_or_404()
+        
+        # Get time entries for this task
+        time_entries = TimeEntry.query.filter_by(task_id=id).order_by(TimeEntry.start_time.desc()).all()
+        
+        # Calculate total time spent on the task
+        total_minutes = sum(entry.duration or 0 for entry in time_entries)
+        total_hours = round(total_minutes / 60, 2)
+        
+        # Calculate billable time
+        billable_minutes = sum(entry.duration or 0 for entry in time_entries if entry.billable)
+        billable_hours = round(billable_minutes / 60, 2)
+        
+        return render_template(
+            'projects/task_detail.html', 
+            task=task, 
+            time_entries=time_entries,
+            total_hours=total_hours,
+            billable_hours=billable_hours
+        )
+        
+    except SQLAlchemyError as e:
+        logger.error(f"Error viewing task {id}: {str(e)}")
+        flash('Error loading task details. Please try again.', 'danger')
+        return redirect(url_for('projects.view_project', id=task.project_id))
+
+@projects_bp.route('/tasks/<int:id>/delete', methods=['POST'])
+@login_required
+@handle_db_errors
+def delete_task(id):
+    try:
+        # Secured query with join to ensure task belongs to user's project
+        task = Task.query.join(Project).filter(
+            Task.id == id,
+            Project.user_id == current_user.id
+        ).first_or_404()
+        
+        project_id = task.project_id
+        task_name = task.title
+        
+        try:
+            db.session.delete(task)
+            db.session.commit()
+            logger.info(f"Task {id} ({task_name}) deleted by user {current_user.id}")
+            flash('Task deleted successfully', 'success')
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error deleting task {id}: {str(e)}")
+            flash('Error deleting task. Please try again.', 'danger')
+            
+        return redirect(url_for('projects.view_project', id=project_id))
+    except Exception as e:
+        logger.error(f"Unexpected error in delete_task {id}: {str(e)}")
+        flash('An unexpected error occurred. Please try again.', 'danger')
+        return redirect(url_for('projects.list_projects'))
+
 @projects_bp.route('/tasks/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
 @handle_db_errors
