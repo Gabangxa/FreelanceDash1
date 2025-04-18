@@ -269,10 +269,22 @@ def delete_project(id):
 @login_required
 @handle_db_errors
 def create_task():
+    """Create a new task with optional project selection."""
     form = TaskForm()
 
     try:
-        form.project_id.choices = [(p.id, p.name) for p in Project.query.filter_by(user_id=current_user.id)]
+        # Get all user's projects for the dropdown
+        projects = Project.query.filter_by(user_id=current_user.id).all()
+        form.project_id.choices = [(p.id, p.name) for p in projects]
+        
+        # Check if a project_id was passed in the query string (from a project page)
+        project_id = request.args.get('project_id', type=int)
+        if project_id and request.method == 'GET':
+            # Verify the project exists and belongs to the user
+            project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
+            if project:
+                # Set the default selection in the form
+                form.project_id.data = project_id
 
         if form.validate_on_submit():
             try:
@@ -298,11 +310,30 @@ def create_task():
                 logger.error(f"Error creating task: {str(e)}")
                 flash('Error creating task. Please try again.', 'danger')
 
-        return render_template('projects/task_form.html', form=form, title='New Task')
+        # Pass the current project as context if it exists
+        project_context = None
+        if project_id:
+            project_context = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
+            
+        return render_template(
+            'projects/task_form.html', 
+            form=form, 
+            title='New Task',
+            project=project_context
+        )
     except Exception as e:
         logger.error(f"Unexpected error in create_task: {str(e)}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
+
+
+@projects_bp.route('/projects/<int:project_id>/tasks/new', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def create_project_task(project_id):
+    """Create a new task specifically for a project."""
+    # Redirect to the generic task creation route with project_id in the query string
+    return redirect(url_for('projects.create_task', project_id=project_id))
 
 @projects_bp.route('/tasks/<int:id>')
 @login_required
