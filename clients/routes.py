@@ -49,6 +49,12 @@ def create_client():
         client_count = Client.query.filter_by(user_id=current_user.id).count()
         clients_limit = current_user.has_subscription_feature('clients_limit')
         
+        # Ensure clients_limit is an integer
+        try:
+            clients_limit = int(clients_limit) if clients_limit is not None else 3
+        except (ValueError, TypeError):
+            clients_limit = 3  # Default if there's an issue
+        
         # If client limit is reached, show a subscription upgrade message
         if client_count >= clients_limit:
             flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '

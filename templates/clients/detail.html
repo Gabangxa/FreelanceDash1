@@ -75,7 +75,7 @@
                     </div>
                     <div class="col-6">
                         <p class="text-muted mb-1">Active Projects</p>
-                        <h4>{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</h4>
+                        <h4>{{ projects|selectattr('status', 'equalto', 'active')|list|length if projects else 0 }}</h4>
                     </div>
                 </div>
                 <div class="mt-3">
@@ -180,7 +180,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for invoice in client.invoices|sort(attribute='created_at', reverse=True)|slice(0, 5) %}
+                            {% for invoice in client.invoices|sort(attribute='created_at', reverse=True)[:5] %}
                             <tr>
                                 <td>
                                     <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" class="text-decoration-none">
