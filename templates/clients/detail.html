@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+
+{% block title %}{{ client.name }} - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2>{{ client.name }}</h2>
+        {% if client.company %}
+        <p class="text-muted mb-0">{{ client.company }}</p>
+        {% endif %}
+    </div>
+    <div class="btn-group">
+        <a href="{{ url_for('clients.edit_client', id=client.id) }}" class="btn btn-outline-primary">
+            <i class="fas fa-edit me-2"></i>Edit Client
+        </a>
+        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+            <i class="fas fa-trash me-2"></i>Delete
+        </button>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Client Details -->
+    <div class="col-md-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0">Contact Information</h5>
+            </div>
+            <div class="card-body">
+                {% if client.email %}
+                <div class="mb-3">
+                    <p class="mb-1"><strong>Email</strong></p>
+                    <p class="mb-0">
+                        <a href="mailto:{{ client.email }}" class="text-decoration-none">
+                            {{ client.email }}
+                        </a>
+                    </p>
+                </div>
+                {% endif %}
+
+                {% if client.address %}
+                <div class="mb-0">
+                    <p class="mb-1"><strong>Address</strong></p>
+                    <p class="mb-0 text-pre-wrap">{{ client.address }}</p>
+                </div>
+                {% endif %}
+                
+                {% if not client.email and not client.address %}
+                <p class="text-muted">No contact information provided</p>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Quick Stats -->
+        <div class="card">
+            <div class="card-header">
+                <h5 class="mb-0">Quick Stats</h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-6">
+                        <p class="text-muted mb-1">Projects</p>
+                        <h4>{{ projects|length }}</h4>
+                    </div>
+                    <div class="col-6">
+                        <p class="text-muted mb-1">Active Projects</p>
+                        <h4>{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</h4>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Projects -->
+    <div class="col-md-8">
+        <div class="card">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h5 class="mb-0">Projects</h5>
+                <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary btn-sm">
+                    <i class="fas fa-plus me-1"></i>New Project
+                </a>
+            </div>
+            <div class="card-body">
+                {% if projects %}
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Project Name</th>
+                                <th>Status</th>
+                                <th>Start Date</th>
+                                <th>End Date</th>
+                                <th>Tasks</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for project in projects %}
+                            <tr>
+                                <td>
+                                    <a href="{{ url_for('projects.view_project', id=project.id) }}" class="text-decoration-none">
+                                        {{ project.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ {'active': 'success', 'on_hold': 'warning', 'completed': 'secondary', 'cancelled': 'danger'}[project.status] }}">
+                                        {{ project.status|replace('_', ' ')|title }}
+                                    </span>
+                                </td>
+                                <td>{{ project.start_date.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ project.end_date.strftime('%Y-%m-%d') if project.end_date else '-' }}</td>
+                                <td>{{ project.tasks|length }}</td>
+                                <td>
+                                    <div class="btn-group">
+                                        <a href="{{ url_for('projects.view_project', id=project.id) }}" 
+                                           class="btn btn-sm btn-outline-primary" title="View">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                        <a href="{{ url_for('projects.edit_project', id=project.id) }}" 
+                                           class="btn btn-sm btn-outline-secondary" title="Edit">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                    <p class="text-muted mb-3">No projects found for this client</p>
+                    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
+                        <i class="fas fa-plus me-1"></i>Add First Project
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Client Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel">Confirm Delete</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete client <strong>{{ client.name }}</strong>?</p>
+                {% if projects|length > 0 %}
+                <div class="alert alert-warning">
+                    This client has {{ projects|length }} associated project(s). 
+                    You must remove these projects before deleting this client.
+                </div>
+                {% else %}
+                <p class="text-danger">This action cannot be undone.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('clients.delete_client', id=client.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger" {% if projects|length > 0 %}disabled{% endif %}>
+                        Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

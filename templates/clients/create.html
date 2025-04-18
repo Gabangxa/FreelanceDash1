@@ -1,40 +1,115 @@
 {% extends "base.html" %}
 
-{% block title %}New Client - Freelancer Suite{% endblock %}
+{% block title %}{% if client %}Edit{% else %}New{% endif %} Client - Freelancer Suite{% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-lg-10">
         <div class="card">
             <div class="card-header">
-                <h4 class="mb-0">New Client</h4>
+                <h4 class="mb-0">{% if client %}Edit{% else %}New{% endif %} Client</h4>
             </div>
             <div class="card-body">
                 <form method="POST">
                     {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
-                        {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
-                        {% for error in form.name.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
+                    <h5 class="mb-3">Client Information</h5>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.name.label(class="form-label") }}
+                                {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                                {% for error in form.name.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.email.label(class="form-label") }}
+                                {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
+                                {% for error in form.email.errors %}
+                                    <div class="invalid-feedback">{{ error }}</div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.company.label(class="form-label") }}
+                                {{ form.company(class="form-control") }}
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                {{ form.address.label(class="form-label") }}
+                                {{ form.address(class="form-control", rows="3") }}
+                            </div>
+                        </div>
+                    </div>
+
+                    {% if not client %}
+                    <!-- Projects Section - Only show for new clients -->
+                    <hr class="my-4">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Projects</h5>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="addProjectBtn">
+                            <i class="fas fa-plus me-1"></i>Add Project
+                        </button>
+                    </div>
+                    
+                    <div id="projects-container">
+                        {% for project_form in form.projects %}
+                        <div class="project-entry card mb-3">
+                            <div class="card-body">
+                                <div class="d-flex justify-content-between align-items-center mb-3">
+                                    <h6 class="card-title mb-0">Project #{{ loop.index }}</h6>
+                                    {% if loop.index > 1 %}
+                                    <button type="button" class="btn btn-outline-danger btn-sm remove-project">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ project_form.name.label(class="form-label") }}
+                                            {{ project_form.name(class="form-control") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ project_form.description.label(class="form-label") }}
+                                            {{ project_form.description(class="form-control") }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ project_form.start_date.label(class="form-label") }}
+                                            {{ project_form.start_date(class="form-control", type="date") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ project_form.end_date.label(class="form-label") }}
+                                            {{ project_form.end_date(class="form-control", type="date") }}
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-check">
+                                    {{ project_form.include_project(class="form-check-input") }}
+                                    {{ project_form.include_project.label(class="form-check-label") }}
+                                </div>
+                            </div>
+                        </div>
                         {% endfor %}
                     </div>
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
-                        {% for error in form.email.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.company.label(class="form-label") }}
-                        {{ form.company(class="form-control") }}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.address.label(class="form-label") }}
-                        {{ form.address(class="form-control", rows="3") }}
-                    </div>
-                    <div class="text-end">
+                    {% endif %}
+
+                    <div class="text-end mt-4">
                         <a href="{{ url_for('clients.list_clients') }}" class="btn btn-secondary me-2">Cancel</a>
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
@@ -43,4 +118,83 @@
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const projectsContainer = document.getElementById('projects-container');
+    const addProjectBtn = document.getElementById('addProjectBtn');
+    
+    if (addProjectBtn) {
+        addProjectBtn.addEventListener('click', function() {
+            // Get the current number of projects
+            const projectCount = document.querySelectorAll('.project-entry').length;
+            
+            // Clone the first project template
+            const firstProject = document.querySelector('.project-entry');
+            const newProject = firstProject.cloneNode(true);
+            
+            // Update the title
+            newProject.querySelector('.card-title').textContent = `Project #${projectCount + 1}`;
+            
+            // Add remove button if needed
+            if (!newProject.querySelector('.remove-project')) {
+                const titleDiv = newProject.querySelector('.d-flex');
+                const removeBtn = document.createElement('button');
+                removeBtn.className = 'btn btn-outline-danger btn-sm remove-project';
+                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+                titleDiv.appendChild(removeBtn);
+            }
+            
+            // Clear the input values
+            newProject.querySelectorAll('input[type="text"], textarea').forEach(input => {
+                input.value = '';
+            });
+            
+            // Update the field names to have proper indices
+            newProject.querySelectorAll('input, textarea, select').forEach(input => {
+                if (input.name) {
+                    input.name = input.name.replace(/projects-\d+/, `projects-${projectCount}`);
+                    input.id = input.id.replace(/projects-\d+/, `projects-${projectCount}`);
+                }
+            });
+            
+            // Update labels to point to the correct inputs
+            newProject.querySelectorAll('label').forEach(label => {
+                if (label.htmlFor) {
+                    label.htmlFor = label.htmlFor.replace(/projects-\d+/, `projects-${projectCount}`);
+                }
+            });
+            
+            // Add the new project to the container
+            projectsContainer.appendChild(newProject);
+            
+            // Add event listeners to the remove buttons
+            addRemoveListeners();
+        });
+        
+        // Function to handle remove project buttons
+        function addRemoveListeners() {
+            document.querySelectorAll('.remove-project').forEach(button => {
+                button.addEventListener('click', function() {
+                    // Don't remove if it's the last project
+                    if (document.querySelectorAll('.project-entry').length > 1) {
+                        this.closest('.project-entry').remove();
+                        
+                        // Renumber the projects
+                        document.querySelectorAll('.project-entry').forEach((project, index) => {
+                            project.querySelector('.card-title').textContent = `Project #${index + 1}`;
+                        });
+                    }
+                });
+            });
+        }
+        
+        // Initialize remove buttons
+        addRemoveListeners();
+    }
+});
+</script>
+{% endblock %}
+
 {% endblock %}

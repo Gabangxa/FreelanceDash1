@@ -8,6 +8,23 @@ from errors import handle_db_errors, UserFriendlyError
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
 
+@clients_bp.route('/<int:id>')
+@login_required
+@handle_db_errors
+def view_client(id):
+    try:
+        # Secure query ensuring client belongs to current user with eager loading of projects
+        client = Client.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+        
+        # Get all projects for this client
+        projects = Project.query.filter_by(client_id=id).all()
+        
+        return render_template('clients/detail.html', client=client, projects=projects)
+    except SQLAlchemyError as e:
+        logger.error(f"Error viewing client {id}: {str(e)}")
+        flash('Error loading client details. Please try again.', 'danger')
+        return redirect(url_for('clients.list_clients'))
+
 @clients_bp.route('/')
 @login_required
 @handle_db_errors
@@ -40,6 +57,7 @@ def create_client():
         
         if form.validate_on_submit():
             try:
+                # Start a database transaction to ensure client and projects are created together
                 client = Client(
                     name=form.name.data.strip(),
                     email=form.email.data.lower().strip() if form.email.data else None,
@@ -48,10 +66,38 @@ def create_client():
                     user_id=current_user.id
                 )
                 db.session.add(client)
+                db.session.flush()  # Flush to get the client ID without committing
+                
+                # Process projects
+                projects_created = 0
+                for project_form in form.projects:
+                    # Only create projects that are marked to be included
+                    if project_form.include_project.data and project_form.name.data.strip():
+                        project = Project(
+                            name=project_form.name.data.strip(),
+                            description=project_form.description.data.strip() if project_form.description.data else None,
+                            start_date=project_form.start_date.data,
+                            end_date=project_form.end_date.data if project_form.end_date.data else None,
+                            client_id=client.id,
+                            user_id=current_user.id,
+                            status='active'
+                        )
+                        db.session.add(project)
+                        projects_created += 1
+                
                 db.session.commit()
-                logger.info(f"New client created by user {current_user.id}: {client.name}")
-                flash('Client added successfully', 'success')
-                return redirect(url_for('clients.list_clients'))
+                
+                # Log the creation
+                logger.info(f"New client created by user {current_user.id}: {client.name} with {projects_created} projects")
+                
+                if projects_created > 0:
+                    flash(f'Client added successfully with {projects_created} project(s)', 'success')
+                else:
+                    flash('Client added successfully', 'success')
+                
+                # Redirect to the new client detail page instead of the list
+                return redirect(url_for('clients.view_client', id=client.id))
+                
             except SQLAlchemyError as e:
                 db.session.rollback()
                 logger.error(f"Database error creating client: {str(e)}")

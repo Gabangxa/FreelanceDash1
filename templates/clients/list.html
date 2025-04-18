@@ -27,10 +27,18 @@
                 <tbody>
                     {% for client in clients %}
                     <tr>
-                        <td>{{ client.name }}</td>
+                        <td>
+                            <a href="{{ url_for('clients.view_client', id=client.id) }}" class="text-decoration-none">
+                                {{ client.name }}
+                            </a>
+                        </td>
                         <td>{{ client.company or 'N/A' }}</td>
                         <td>{{ client.email }}</td>
-                        <td>{{ client.projects|length }}</td>
+                        <td>
+                            <a href="{{ url_for('clients.view_client', id=client.id) }}" class="text-decoration-none">
+                                {{ client.projects|length }}
+                            </a>
+                        </td>
                         <td>
                             <div class="btn-group">
                                 <a href="{{ url_for('clients.edit_client', id=client.id) }}" 
