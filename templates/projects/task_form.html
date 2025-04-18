@@ -8,17 +8,15 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">{{ title }}</h4>
-                {% if project %}
-                <span class="badge bg-primary">Project: {{ project.name }}</span>
-                {% endif %}
+                <span id="project-badge" class="badge bg-primary" {% if not project %}style="display: none;"{% endif %}>
+                    Project: {% if project %}{{ project.name }}{% endif %}
+                </span>
             </div>
             <div class="card-body">
-                {% if project %}
-                <div class="alert alert-info mb-4">
+                <div id="project-alert" class="alert alert-info mb-4" {% if not project %}style="display: none;"{% endif %}>
                     <i class="fas fa-info-circle me-2"></i>
-                    Creating a task for project: <strong>{{ project.name }}</strong>
+                    Creating a task for project: <strong id="project-name">{% if project %}{{ project.name }}{% endif %}</strong>
                 </div>
-                {% endif %}
                 
                 <form method="POST">
                     {{ form.hidden_tag() }}
@@ -35,15 +33,13 @@
                     </div>
                     <div class="mb-3">
                         {{ form.project_id.label(class="form-label") }}
-                        {{ form.project_id(class="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
+                        {{ form.project_id(class="form-select" + (" is-invalid" if form.project_id.errors else ""), id="project-select") }}
                         {% for error in form.project_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
-                        {% if project %}
-                        <small class="form-text text-muted">
+                        <small id="project-help-text" class="form-text text-muted" {% if not project %}style="display: none;"{% endif %}>
                             Pre-selected based on the project you came from.
                         </small>
-                        {% endif %}
                     </div>
                     <div class="mb-3">
                         {{ form.status.label(class="form-label") }}
@@ -61,9 +57,9 @@
                     </div>
                     <div class="text-end">
                         {% if project %}
-                        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="btn btn-secondary me-2">Cancel</a>
+                        <a id="cancel-link" href="{{ url_for('projects.view_project', id=project.id) }}" class="btn btn-secondary me-2">Cancel</a>
                         {% else %}
-                        <a href="{{ url_for('projects.dashboard') }}" class="btn btn-secondary me-2">Cancel</a>
+                        <a id="cancel-link" href="{{ url_for('projects.dashboard') }}" class="btn btn-secondary me-2">Cancel</a>
                         {% endif %}
                         {{ form.submit(class="btn btn-primary") }}
                     </div>
@@ -72,4 +68,50 @@
         </div>
     </div>
 </div>
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const projectSelect = document.getElementById('project-select');
+        const projectBadge = document.getElementById('project-badge');
+        const projectAlert = document.getElementById('project-alert');
+        const projectName = document.getElementById('project-name');
+        const projectHelpText = document.getElementById('project-help-text');
+        
+        // Store original project ID if it came from a project page
+        const originalProjectId = {% if project %}{{ project.id }}{% else %}null{% endif %};
+        
+        // Function to update UI based on project selection
+        function updateProjectUI() {
+            const selectedOption = projectSelect.options[projectSelect.selectedIndex];
+            const selectedProjectId = parseInt(projectSelect.value);
+            const selectedProjectName = selectedOption.text;
+            
+            if (selectedProjectId && selectedProjectId > 0) {
+                // If a valid project is selected, show the project name in the badge and alert
+                projectBadge.style.display = 'inline-block';
+                projectBadge.textContent = 'Project: ' + selectedProjectName;
+                
+                projectName.textContent = selectedProjectName;
+                projectAlert.style.display = 'block';
+                
+                // Only show the help text if the selected project matches the original
+                projectHelpText.style.display = (selectedProjectId === originalProjectId) ? 'block' : 'none';
+            } else {
+                // Hide project-specific UI elements if no project is selected
+                projectBadge.style.display = 'none';
+                projectAlert.style.display = 'none';
+                projectHelpText.style.display = 'none';
+            }
+        }
+        
+        // Listen for changes to the project select dropdown
+        projectSelect.addEventListener('change', updateProjectUI);
+        
+        // Initial UI update
+        updateProjectUI();
+    });
+</script>
+{% endblock %}
+
 {% endblock %}
