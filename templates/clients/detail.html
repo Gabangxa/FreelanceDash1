@@ -180,7 +180,7 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for invoice in client.invoices|sort(attribute='created_at', reverse=True)[:5] %}
+                            {% for invoice in client.invoices|sort(attribute='created_at', reverse=True)|slice(0, 5) %}
                             <tr>
                                 <td>
                                     <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" class="text-decoration-none">

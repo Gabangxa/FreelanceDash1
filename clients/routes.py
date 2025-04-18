@@ -43,22 +43,22 @@ def list_clients():
 @login_required
 @handle_db_errors
 def create_client():
-    # Create a new client form
+    """Create a new client with optional projects."""
+    form = ClientForm()
+    
+    # On GET: just display the form
     if request.method == 'GET':
-        form = ClientForm()
         return render_template('clients/create.html', form=form)
-        
-    # Process form submission
-    elif request.method == 'POST':
+    
+    # On POST: process the form
+    if form.validate_on_submit():
         try:
-            form = ClientForm(request.form)
-            
             # Check client limit based on subscription tier
             client_count = Client.query.filter_by(user_id=current_user.id).count()
+            clients_limit = current_user.has_subscription_feature('clients_limit')
             
-            # Get clients limit and ensure it's an integer
+            # Ensure clients_limit is an integer
             try:
-                clients_limit = current_user.has_subscription_feature('clients_limit')
                 clients_limit = int(clients_limit) if clients_limit is not None else 3
             except (ValueError, TypeError):
                 clients_limit = 3  # Default if there's an issue
@@ -69,78 +69,61 @@ def create_client():
                       f'Please upgrade your subscription to add more clients.', 'warning')
                 return redirect(url_for('polar.index'))
             
-            # Validate form
-            if form.validate():
-                # Start a database transaction to ensure client and projects are created together
-                # Extract client data safely
-                client = Client(
-                    name=form.name.data.strip() if form.name.data else "",
-                    email=form.email.data.lower().strip() if form.email.data else None,
-                    company=form.company.data.strip() if form.company.data else None,
-                    address=form.address.data.strip() if form.address.data else None,
-                    user_id=current_user.id
+            # Create new client
+            client = Client(
+                name=form.name.data.strip(),
+                email=form.email.data.lower().strip() if form.email.data else None,
+                company=form.company.data.strip() if form.company.data else None,
+                address=form.address.data.strip() if form.address.data else None,
+                user_id=current_user.id
+            )
+            
+            db.session.add(client)
+            db.session.flush()  # Get the client ID without committing
+            
+            # Process projects
+            projects_created = 0
+            for project_entry in form.projects.entries:
+                # Skip if this project should not be included or has no name
+                if not project_entry.form.include_project.data or not project_entry.form.name.data:
+                    continue
+                
+                # Create the project
+                project = Project(
+                    name=project_entry.form.name.data.strip(),
+                    description=project_entry.form.description.data.strip() if project_entry.form.description.data else None,
+                    start_date=project_entry.form.start_date.data,
+                    end_date=project_entry.form.end_date.data,
+                    client_id=client.id,
+                    user_id=current_user.id,
+                    status='active'
                 )
                 
-                db.session.add(client)
-                db.session.flush()  # Get client ID before committing
-                
-                # Process projects
-                projects_created = 0
-                
-                # For each project form entry
-                for i in range(len(form.projects.entries)):
-                    project_form = form.projects[i]
-                    
-                    # Only create if include_project is checked and name is provided
-                    if not hasattr(project_form, 'include_project') or not hasattr(project_form, 'name'):
-                        continue
-                        
-                    if project_form.include_project.data and project_form.name.data:
-                        # Create new project
-                        project = Project(
-                            name=project_form.name.data.strip(),
-                            description=project_form.description.data.strip() if project_form.description.data else None,
-                            start_date=project_form.start_date.data if project_form.start_date.data else datetime.now(),
-                            end_date=project_form.end_date.data if project_form.end_date.data else None,
-                            client_id=client.id,
-                            user_id=current_user.id,
-                            status='active'
-                        )
-                        
-                        db.session.add(project)
-                        projects_created += 1
-                
-                # Commit all changes
-                db.session.commit()
-                
-                # Log and notify
-                logger.info(f"New client created by user {current_user.id}: {client.name} with {projects_created} projects")
-                
-                if projects_created > 0:
-                    flash(f'Client added successfully with {projects_created} project(s)', 'success')
-                else:
-                    flash('Client added successfully', 'success')
-                
-                # Redirect to the new client detail page
-                return redirect(url_for('clients.view_client', id=client.id))
+                db.session.add(project)
+                projects_created += 1
+            
+            # Commit all changes
+            db.session.commit()
+            
+            # Log the creation
+            logger.info(f"New client created by user {current_user.id}: {client.name} with {projects_created} projects")
+            
+            # Show success message
+            if projects_created > 0:
+                flash(f'Client added successfully with {projects_created} project(s)', 'success')
             else:
-                # Form validation errors
-                for field, errors in form.errors.items():
-                    for error in errors:
-                        flash(f"{field}: {error}", 'danger')
-                
-                return render_template('clients/create.html', form=form)
-                
-        except SQLAlchemyError as e:
-            db.session.rollback()
-            logger.error(f"Database error creating client: {str(e)}")
-            flash('Error creating client. Please try again.', 'danger')
-            return render_template('clients/create.html', form=form)
+                flash('Client added successfully', 'success')
+            
+            # Redirect to the new client detail page
+            return redirect(url_for('clients.list_clients'))
             
         except Exception as e:
-            logger.error(f"Unexpected error in create_client: {str(e)}")
-            flash('An unexpected error occurred. Please try again.', 'danger')
-            return redirect(url_for('clients.list_clients'))
+            db.session.rollback()
+            logger.error(f"Error creating client: {str(e)}")
+            flash('An error occurred while creating the client. Please try again.', 'danger')
+    
+    # If form validation failed or we're just displaying the form
+    return render_template('clients/create.html', form=form)
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
