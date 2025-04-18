@@ -52,60 +52,44 @@
                     <!-- Projects Section - Only show for new clients -->
                     <hr class="my-4">
                     <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Projects</h5>
-                        <button type="button" class="btn btn-outline-primary btn-sm" id="addProjectBtn">
-                            <i class="fas fa-plus me-1"></i>Add Project
-                        </button>
+                        <h5 class="mb-0">Initial Project (Optional)</h5>
                     </div>
                     
-                    <div id="projects-container">
-                        {% for project_form in form.projects %}
-                        <div class="project-entry card mb-3">
-                            <div class="card-body">
-                                <div class="d-flex justify-content-between align-items-center mb-3">
-                                    <h6 class="card-title mb-0">Project #{{ loop.index }}</h6>
-                                    {% if loop.index > 1 %}
-                                    <button type="button" class="btn btn-outline-danger btn-sm remove-project">
-                                        <i class="fas fa-times"></i>
-                                    </button>
-                                    {% endif %}
-                                </div>
-                                
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            {{ project_form.name.label(class="form-label") }}
-                                            {{ project_form.name(class="form-control") }}
-                                        </div>
-                                    </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            {{ project_form.description.label(class="form-label") }}
-                                            {{ project_form.description(class="form-control") }}
-                                        </div>
+                    <div class="card mb-3">
+                        <div class="card-body">
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="project_name">Project Name</label>
+                                        <input type="text" class="form-control" id="project_name" name="project_name">
                                     </div>
                                 </div>
-                                <div class="row">
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            {{ project_form.start_date.label(class="form-label") }}
-                                            {{ project_form.start_date(class="form-control", type="date") }}
-                                        </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="project_description">Description</label>
+                                        <textarea class="form-control" id="project_description" name="project_description"></textarea>
                                     </div>
-                                    <div class="col-md-6">
-                                        <div class="mb-3">
-                                            {{ project_form.end_date.label(class="form-label") }}
-                                            {{ project_form.end_date(class="form-control", type="date") }}
-                                        </div>
-                                    </div>
-                                </div>
-                                <div class="form-check">
-                                    {{ project_form.include_project(class="form-check-input") }}
-                                    {{ project_form.include_project.label(class="form-check-label") }}
                                 </div>
                             </div>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="project_start_date">Start Date</label>
+                                        <input type="date" class="form-control" id="project_start_date" name="project_start_date" value="{{ now.strftime('%Y-%m-%d') }}">
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="mb-3">
+                                        <label class="form-label" for="project_end_date">End Date</label>
+                                        <input type="date" class="form-control" id="project_end_date" name="project_end_date">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="include_project" name="include_project" checked>
+                                <label class="form-check-label" for="include_project">Create this project</label>
+                            </div>
                         </div>
-                        {% endfor %}
                     </div>
                     {% endif %}
 
@@ -118,83 +102,4 @@
         </div>
     </div>
 </div>
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const projectsContainer = document.getElementById('projects-container');
-    const addProjectBtn = document.getElementById('addProjectBtn');
-    
-    if (addProjectBtn) {
-        addProjectBtn.addEventListener('click', function() {
-            // Get the current number of projects
-            const projectCount = document.querySelectorAll('.project-entry').length;
-            
-            // Clone the first project template
-            const firstProject = document.querySelector('.project-entry');
-            const newProject = firstProject.cloneNode(true);
-            
-            // Update the title
-            newProject.querySelector('.card-title').textContent = `Project #${projectCount + 1}`;
-            
-            // Add remove button if needed
-            if (!newProject.querySelector('.remove-project')) {
-                const titleDiv = newProject.querySelector('.d-flex');
-                const removeBtn = document.createElement('button');
-                removeBtn.className = 'btn btn-outline-danger btn-sm remove-project';
-                removeBtn.innerHTML = '<i class="fas fa-times"></i>';
-                titleDiv.appendChild(removeBtn);
-            }
-            
-            // Clear the input values
-            newProject.querySelectorAll('input[type="text"], textarea').forEach(input => {
-                input.value = '';
-            });
-            
-            // Update the field names to have proper indices
-            newProject.querySelectorAll('input, textarea, select').forEach(input => {
-                if (input.name) {
-                    input.name = input.name.replace(/projects-\d+/, `projects-${projectCount}`);
-                    input.id = input.id.replace(/projects-\d+/, `projects-${projectCount}`);
-                }
-            });
-            
-            // Update labels to point to the correct inputs
-            newProject.querySelectorAll('label').forEach(label => {
-                if (label.htmlFor) {
-                    label.htmlFor = label.htmlFor.replace(/projects-\d+/, `projects-${projectCount}`);
-                }
-            });
-            
-            // Add the new project to the container
-            projectsContainer.appendChild(newProject);
-            
-            // Add event listeners to the remove buttons
-            addRemoveListeners();
-        });
-        
-        // Function to handle remove project buttons
-        function addRemoveListeners() {
-            document.querySelectorAll('.remove-project').forEach(button => {
-                button.addEventListener('click', function() {
-                    // Don't remove if it's the last project
-                    if (document.querySelectorAll('.project-entry').length > 1) {
-                        this.closest('.project-entry').remove();
-                        
-                        // Renumber the projects
-                        document.querySelectorAll('.project-entry').forEach((project, index) => {
-                            project.querySelector('.card-title').textContent = `Project #${index + 1}`;
-                        });
-                    }
-                });
-            });
-        }
-        
-        // Initialize remove buttons
-        addRemoveListeners();
-    }
-});
-</script>
-{% endblock %}
-
 {% endblock %}

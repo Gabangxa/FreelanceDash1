@@ -43,22 +43,24 @@ def list_clients():
 @login_required
 @handle_db_errors
 def create_client():
-    """Create a new client with optional projects."""
+    """Create a new client with an optional initial project."""
     form = ClientForm()
     
-    # On GET: just display the form
+    # On GET: display the form
     if request.method == 'GET':
-        return render_template('clients/create.html', form=form)
+        # Pass current date for project start date default
+        now = datetime.now()
+        return render_template('clients/create.html', form=form, now=now)
     
     # On POST: process the form
     if form.validate_on_submit():
         try:
             # Check client limit based on subscription tier
             client_count = Client.query.filter_by(user_id=current_user.id).count()
-            clients_limit = current_user.has_subscription_feature('clients_limit')
             
-            # Ensure clients_limit is an integer
+            # Get clients limit and ensure it's an integer
             try:
+                clients_limit = current_user.has_subscription_feature('clients_limit')
                 clients_limit = int(clients_limit) if clients_limit is not None else 3
             except (ValueError, TypeError):
                 clients_limit = 3  # Default if there's an issue
@@ -79,51 +81,73 @@ def create_client():
             )
             
             db.session.add(client)
-            db.session.flush()  # Get the client ID without committing
+            db.session.flush()  # Get client ID without committing
             
-            # Process projects
+            # Process optional project from simple form
             projects_created = 0
-            for project_entry in form.projects.entries:
-                # Skip if this project should not be included or has no name
-                if not project_entry.form.include_project.data or not project_entry.form.name.data:
-                    continue
+            
+            # Check if a project should be included
+            include_project = request.form.get('include_project') == 'on'
+            project_name = request.form.get('project_name', '').strip()
+            
+            if include_project and project_name:
+                # Get project details from form
+                project_description = request.form.get('project_description', '').strip()
+                
+                # Handle dates
+                try:
+                    project_start_date = datetime.strptime(
+                        request.form.get('project_start_date', ''), 
+                        '%Y-%m-%d'
+                    ) if request.form.get('project_start_date') else datetime.now()
+                except ValueError:
+                    project_start_date = datetime.now()
+                
+                try:
+                    project_end_date = datetime.strptime(
+                        request.form.get('project_end_date', ''), 
+                        '%Y-%m-%d'
+                    ) if request.form.get('project_end_date') else None
+                except ValueError:
+                    project_end_date = None
                 
                 # Create the project
                 project = Project(
-                    name=project_entry.form.name.data.strip(),
-                    description=project_entry.form.description.data.strip() if project_entry.form.description.data else None,
-                    start_date=project_entry.form.start_date.data,
-                    end_date=project_entry.form.end_date.data,
+                    name=project_name,
+                    description=project_description or None,
+                    start_date=project_start_date,
+                    end_date=project_end_date,
                     client_id=client.id,
                     user_id=current_user.id,
                     status='active'
                 )
                 
                 db.session.add(project)
-                projects_created += 1
+                projects_created = 1
             
             # Commit all changes
             db.session.commit()
             
-            # Log the creation
+            # Log and notify
             logger.info(f"New client created by user {current_user.id}: {client.name} with {projects_created} projects")
             
             # Show success message
             if projects_created > 0:
-                flash(f'Client added successfully with {projects_created} project(s)', 'success')
+                flash(f'Client added successfully with {projects_created} project', 'success')
             else:
                 flash('Client added successfully', 'success')
             
-            # Redirect to the new client detail page
-            return redirect(url_for('clients.list_clients'))
+            # Redirect to the client list
+            return redirect(url_for('clients.view_client', id=client.id))
             
         except Exception as e:
             db.session.rollback()
             logger.error(f"Error creating client: {str(e)}")
             flash('An error occurred while creating the client. Please try again.', 'danger')
     
-    # If form validation failed or we're just displaying the form
-    return render_template('clients/create.html', form=form)
+    # If form validation failed or we had an error
+    now = datetime.now()
+    return render_template('clients/create.html', form=form, now=now)
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
