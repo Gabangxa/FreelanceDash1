@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request
 from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
+from datetime import datetime
 from app import db, logger
 from models import Client, Project
 from clients.forms import ClientForm
@@ -42,85 +43,77 @@ def list_clients():
 @login_required
 @handle_db_errors
 def create_client():
-    form = ClientForm()
-
-    try:
-        # Check client limit based on subscription tier
-        client_count = Client.query.filter_by(user_id=current_user.id).count()
-        clients_limit = current_user.has_subscription_feature('clients_limit')
+    # Create a new client form
+    if request.method == 'GET':
+        form = ClientForm()
+        return render_template('clients/create.html', form=form)
         
-        # Ensure clients_limit is an integer
+    # Process form submission
+    elif request.method == 'POST':
         try:
-            clients_limit = int(clients_limit) if clients_limit is not None else 3
-        except (ValueError, TypeError):
-            clients_limit = 3  # Default if there's an issue
-        
-        # If client limit is reached, show a subscription upgrade message
-        if client_count >= clients_limit:
-            flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '
-                  f'Please upgrade your subscription to add more clients.', 'warning')
-            return redirect(url_for('polar.index'))
-        
-        if form.validate_on_submit():
+            form = ClientForm(request.form)
+            
+            # Check client limit based on subscription tier
+            client_count = Client.query.filter_by(user_id=current_user.id).count()
+            
+            # Get clients limit and ensure it's an integer
             try:
+                clients_limit = current_user.has_subscription_feature('clients_limit')
+                clients_limit = int(clients_limit) if clients_limit is not None else 3
+            except (ValueError, TypeError):
+                clients_limit = 3  # Default if there's an issue
+            
+            # If client limit is reached, show a subscription upgrade message
+            if client_count >= clients_limit:
+                flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '
+                      f'Please upgrade your subscription to add more clients.', 'warning')
+                return redirect(url_for('polar.index'))
+            
+            # Validate form
+            if form.validate():
                 # Start a database transaction to ensure client and projects are created together
-                # Handle form data safely with proper type checking
-                name = form.name.data.strip() if hasattr(form.name, 'data') and form.name.data else ""
-                email = form.email.data.lower().strip() if hasattr(form.email, 'data') and form.email.data else None
-                company = form.company.data.strip() if hasattr(form.company, 'data') and form.company.data else None
-                address = form.address.data.strip() if hasattr(form.address, 'data') and form.address.data else None
-                
+                # Extract client data safely
                 client = Client(
-                    name=name,
-                    email=email,
-                    company=company,
-                    address=address,
+                    name=form.name.data.strip() if form.name.data else "",
+                    email=form.email.data.lower().strip() if form.email.data else None,
+                    company=form.company.data.strip() if form.company.data else None,
+                    address=form.address.data.strip() if form.address.data else None,
                     user_id=current_user.id
                 )
+                
                 db.session.add(client)
-                db.session.flush()  # Flush to get the client ID without committing
+                db.session.flush()  # Get client ID before committing
                 
                 # Process projects
                 projects_created = 0
-                for project_form in form.projects:
-                    # Only create projects that are marked to be included
-                    include_project = (hasattr(project_form.include_project, 'data') and 
-                                      project_form.include_project.data)
-                    has_name = (hasattr(project_form.name, 'data') and 
-                               project_form.name.data and 
-                               project_form.name.data.strip())
+                
+                # For each project form entry
+                for i in range(len(form.projects.entries)):
+                    project_form = form.projects[i]
                     
-                    if include_project and has_name:
-                        # Safely extract project form data
-                        p_name = project_form.name.data.strip()
+                    # Only create if include_project is checked and name is provided
+                    if not hasattr(project_form, 'include_project') or not hasattr(project_form, 'name'):
+                        continue
                         
-                        p_description = None
-                        if hasattr(project_form.description, 'data') and project_form.description.data:
-                            p_description = project_form.description.data.strip()
-                        
-                        p_start_date = None
-                        if hasattr(project_form.start_date, 'data'):
-                            p_start_date = project_form.start_date.data
-                        
-                        p_end_date = None
-                        if hasattr(project_form.end_date, 'data') and project_form.end_date.data:
-                            p_end_date = project_form.end_date.data
-                        
+                    if project_form.include_project.data and project_form.name.data:
+                        # Create new project
                         project = Project(
-                            name=p_name,
-                            description=p_description,
-                            start_date=p_start_date,
-                            end_date=p_end_date,
+                            name=project_form.name.data.strip(),
+                            description=project_form.description.data.strip() if project_form.description.data else None,
+                            start_date=project_form.start_date.data if project_form.start_date.data else datetime.now(),
+                            end_date=project_form.end_date.data if project_form.end_date.data else None,
                             client_id=client.id,
                             user_id=current_user.id,
                             status='active'
                         )
+                        
                         db.session.add(project)
                         projects_created += 1
                 
+                # Commit all changes
                 db.session.commit()
                 
-                # Log the creation
+                # Log and notify
                 logger.info(f"New client created by user {current_user.id}: {client.name} with {projects_created} projects")
                 
                 if projects_created > 0:
@@ -128,19 +121,26 @@ def create_client():
                 else:
                     flash('Client added successfully', 'success')
                 
-                # Redirect to the new client detail page instead of the list
+                # Redirect to the new client detail page
                 return redirect(url_for('clients.view_client', id=client.id))
+            else:
+                # Form validation errors
+                for field, errors in form.errors.items():
+                    for error in errors:
+                        flash(f"{field}: {error}", 'danger')
                 
-            except SQLAlchemyError as e:
-                db.session.rollback()
-                logger.error(f"Database error creating client: {str(e)}")
-                flash('Error creating client. Please try again.', 'danger')
-
-        return render_template('clients/create.html', form=form)
-    except Exception as e:
-        logger.error(f"Unexpected error in create_client: {str(e)}")
-        flash('An unexpected error occurred. Please try again.', 'danger')
-        return redirect(url_for('clients.list_clients'))
+                return render_template('clients/create.html', form=form)
+                
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error creating client: {str(e)}")
+            flash('Error creating client. Please try again.', 'danger')
+            return render_template('clients/create.html', form=form)
+            
+        except Exception as e:
+            logger.error(f"Unexpected error in create_client: {str(e)}")
+            flash('An unexpected error occurred. Please try again.', 'danger')
+            return redirect(url_for('clients.list_clients'))
 
 @clients_bp.route('/<int:id>/edit', methods=['GET', 'POST'])
 @login_required
