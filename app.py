@@ -14,6 +14,7 @@ import mail
 import asset_bundler
 from pathlib import Path
 from dotenv import load_dotenv
+import jinja2
 
 # Load environment variables from .env file if it exists
 env_path = Path('.') / '.env'
@@ -92,6 +93,15 @@ mail.init_app(app)
 
 # Initialize asset bundling for CSS minification
 asset_bundler.init_app(app)
+
+# Custom Jinja2 template filters
+def slice_filter(iterable, start, end=None):
+    """Slice an iterable like Python's list slicing."""
+    if end is None:
+        return list(iterable)[start:]
+    return list(iterable)[start:end]
+
+app.jinja_env.filters['slice'] = slice_filter
 
 # Initialize performance monitoring
 # Set higher thresholds for production to reduce noise

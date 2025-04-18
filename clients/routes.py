@@ -64,11 +64,17 @@ def create_client():
         if form.validate_on_submit():
             try:
                 # Start a database transaction to ensure client and projects are created together
+                # Handle form data safely with proper type checking
+                name = form.name.data.strip() if hasattr(form.name, 'data') and form.name.data else ""
+                email = form.email.data.lower().strip() if hasattr(form.email, 'data') and form.email.data else None
+                company = form.company.data.strip() if hasattr(form.company, 'data') and form.company.data else None
+                address = form.address.data.strip() if hasattr(form.address, 'data') and form.address.data else None
+                
                 client = Client(
-                    name=form.name.data.strip(),
-                    email=form.email.data.lower().strip() if form.email.data else None,
-                    company=form.company.data.strip() if form.company.data else None,
-                    address=form.address.data.strip() if form.address.data else None,
+                    name=name,
+                    email=email,
+                    company=company,
+                    address=address,
                     user_id=current_user.id
                 )
                 db.session.add(client)
@@ -78,12 +84,33 @@ def create_client():
                 projects_created = 0
                 for project_form in form.projects:
                     # Only create projects that are marked to be included
-                    if project_form.include_project.data and project_form.name.data.strip():
+                    include_project = (hasattr(project_form.include_project, 'data') and 
+                                      project_form.include_project.data)
+                    has_name = (hasattr(project_form.name, 'data') and 
+                               project_form.name.data and 
+                               project_form.name.data.strip())
+                    
+                    if include_project and has_name:
+                        # Safely extract project form data
+                        p_name = project_form.name.data.strip()
+                        
+                        p_description = None
+                        if hasattr(project_form.description, 'data') and project_form.description.data:
+                            p_description = project_form.description.data.strip()
+                        
+                        p_start_date = None
+                        if hasattr(project_form.start_date, 'data'):
+                            p_start_date = project_form.start_date.data
+                        
+                        p_end_date = None
+                        if hasattr(project_form.end_date, 'data') and project_form.end_date.data:
+                            p_end_date = project_form.end_date.data
+                        
                         project = Project(
-                            name=project_form.name.data.strip(),
-                            description=project_form.description.data.strip() if project_form.description.data else None,
-                            start_date=project_form.start_date.data,
-                            end_date=project_form.end_date.data if project_form.end_date.data else None,
+                            name=p_name,
+                            description=p_description,
+                            start_date=p_start_date,
+                            end_date=p_end_date,
                             client_id=client.id,
                             user_id=current_user.id,
                             status='active'
@@ -126,10 +153,11 @@ def edit_client(id):
         form = ClientForm(obj=client)
         if form.validate_on_submit():
             try:
-                client.name = form.name.data.strip()
-                client.email = form.email.data.lower().strip() if form.email.data else None
-                client.company = form.company.data.strip() if form.company.data else None
-                client.address = form.address.data.strip() if form.address.data else None
+                # Handle form data safely with proper type checking
+                client.name = form.name.data.strip() if hasattr(form.name, 'data') and form.name.data else ""
+                client.email = form.email.data.lower().strip() if hasattr(form.email, 'data') and form.email.data else None
+                client.company = form.company.data.strip() if hasattr(form.company, 'data') and form.company.data else None
+                client.address = form.address.data.strip() if hasattr(form.address, 'data') and form.address.data else None
 
                 db.session.commit()
                 logger.info(f"Client {id} updated by user {current_user.id}")
