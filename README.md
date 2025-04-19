@@ -13,17 +13,21 @@ A comprehensive SaaS platform designed to streamline freelance project managemen
 - Create and manage client profiles
 - Store client contact information and addresses
 - Organize projects by client
+- Simplified client creation with optional immediate project assignment
+- Clear client-to-project relationship visualization
 
 ### Project Management
 - Create detailed project profiles
 - Set project timeframes with start and end dates
 - Track project status (active, completed, on-hold)
 - Link projects to specific clients
+- Hierarchical client-to-project navigation
 
 ### Task Management
-- Create tasks within projects
+- Create tasks within projects with context-aware task creation
 - Set due dates and track completion status
 - Organize work into manageable units
+- Seamless workflow from projects to related tasks
 
 ### Time Tracking
 - Record time entries for specific tasks and projects
