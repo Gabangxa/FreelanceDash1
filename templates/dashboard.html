@@ -2,10 +2,34 @@
 
 {% block title %}Dashboard - Freelancer Suite{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-chart-line me-1"></i>Dashboard
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row mb-4">
-    <div class="col">
-        <h2 class="mb-4">Welcome, {{ current_user.username }}!</h2>
+    <div class="col-md-8">
+        <h2 class="mb-1">Welcome back, {{ current_user.username }}!</h2>
+        <p class="text-muted">Here's your project overview and recent activity</p>
+    </div>
+    <div class="col-md-4 text-end">
+        <div class="btn-group" role="group" aria-label="Quick actions">
+            <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus me-1"></i>New Project
+            </a>
+            <a href="{{ url_for('clients.create_client') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-user-plus me-1"></i>New Client
+            </a>
+            <a href="{{ url_for('projects.create_task') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-tasks me-1"></i>New Task
+            </a>
+        </div>
     </div>
 </div>
 

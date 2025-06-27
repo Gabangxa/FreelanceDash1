@@ -14,9 +14,9 @@
 </head>
 <body>
     {% if current_user.is_authenticated %}
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary shadow-sm">
         <div class="container">
-            <a class="navbar-brand" href="{{ url_for('projects.dashboard') }}">
+            <a class="navbar-brand fw-bold" href="{{ url_for('projects.dashboard') }}">
                 <i class="fas fa-briefcase me-2"></i>WorkVista
             </a>
             <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
@@ -25,27 +25,27 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('projects.dashboard') }}">
+                        <a class="nav-link {{ 'active' if request.endpoint == 'projects.dashboard' else '' }}" href="{{ url_for('projects.dashboard') }}">
                             <i class="fas fa-chart-line me-1"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('projects.list_projects') }}">
+                        <a class="nav-link {{ 'active' if 'projects' in request.endpoint else '' }}" href="{{ url_for('projects.list_projects') }}">
                             <i class="fas fa-project-diagram me-1"></i>Projects
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('clients.list_clients') }}">
+                        <a class="nav-link {{ 'active' if 'clients' in request.endpoint else '' }}" href="{{ url_for('clients.list_clients') }}">
                             <i class="fas fa-users me-1"></i>Clients
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('invoices.list_invoices') }}">
+                        <a class="nav-link {{ 'active' if 'invoices' in request.endpoint else '' }}" href="{{ url_for('invoices.list_invoices') }}">
                             <i class="fas fa-file-invoice-dollar me-1"></i>Invoices
                         </a>
                     </li>
                     <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle" href="#" id="timeDropdown" role="button" data-bs-toggle="dropdown">
+                        <a class="nav-link dropdown-toggle {{ 'active' if 'time' in request.endpoint else '' }}" href="#" id="timeDropdown" role="button" data-bs-toggle="dropdown">
                             <i class="fas fa-clock me-1"></i>Time Tracking
                         </a>
                         <ul class="dropdown-menu">
@@ -55,11 +55,6 @@
                                 </a>
                             </li>
                         </ul>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="{{ url_for('faq.index') }}">
-                            <i class="fas fa-question-circle me-1"></i>FAQ
-                        </a>
                     </li>
                 </ul>
                 <ul class="navbar-nav">
@@ -101,6 +96,9 @@
     {% endif %}
 
     <main class="container py-4">
+        <!-- Breadcrumb Navigation -->
+        {% block breadcrumbs %}{% endblock %}
+        
         {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
                 {% for category, message in messages %}

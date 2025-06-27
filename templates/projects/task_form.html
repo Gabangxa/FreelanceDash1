@@ -2,6 +2,39 @@
 
 {% block title %}{{ title }} - Freelancer Suite{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.dashboard') }}" class="text-decoration-none">
+                <i class="fas fa-chart-line me-1"></i>Dashboard
+            </a>
+        </li>
+        {% if project %}
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">
+                <i class="fas fa-project-diagram me-1"></i>Projects
+            </a>
+        </li>
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.view_project', id=project.id) }}" class="text-decoration-none">
+                <i class="fas fa-folder me-1"></i>{{ project.name }}
+            </a>
+        </li>
+        {% else %}
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">
+                <i class="fas fa-project-diagram me-1"></i>Projects
+            </a>
+        </li>
+        {% endif %}
+        <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-tasks me-1"></i>{{ title }}
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
     <div class="col-md-8">

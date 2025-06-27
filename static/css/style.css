@@ -12,7 +12,9 @@
     --gray-color: #95a5a6;
     --dark-color: #2c3e50;
     --border-radius: 0.5rem;
+    --border-radius-lg: 0.75rem;
     --box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    --box-shadow-lg: 0 8px 25px rgba(0, 0, 0, 0.15);
     --transition: all 0.3s ease;
     
     /* Light Mode Specific */
@@ -494,6 +496,375 @@ body {
 .icon-container:hover {
     transform: translateY(-5px);
     box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Enhanced UI Improvements */
+.breadcrumb {
+    background: transparent;
+    margin-bottom: 1.5rem;
+    padding: 0.75rem 0;
+    font-size: 0.9rem;
+}
+
+.breadcrumb-item + .breadcrumb-item::before {
+    content: ">";
+    color: var(--gray-color);
+}
+
+.breadcrumb-item a {
+    color: var(--primary-color);
+    transition: var(--transition);
+}
+
+.breadcrumb-item a:hover {
+    color: var(--primary-dark);
+    text-decoration: none;
+}
+
+/* Enhanced cards with better shadows */
+.card {
+    border: 1px solid var(--card-border);
+    border-radius: var(--border-radius-lg);
+    box-shadow: var(--box-shadow);
+    transition: var(--transition);
+    background-color: var(--card-bg);
+}
+
+.card:hover {
+    box-shadow: var(--box-shadow-lg);
+    transform: translateY(-2px);
+}
+
+.card-header {
+    background-color: rgba(52, 152, 219, 0.05);
+    border-bottom: 1px solid var(--card-border);
+    border-radius: var(--border-radius-lg) var(--border-radius-lg) 0 0 !important;
+}
+
+/* Enhanced buttons */
+.btn {
+    border-radius: var(--border-radius);
+    font-weight: 500;
+    padding: 0.5rem 1rem;
+    transition: var(--transition);
+}
+
+.btn-group .btn {
+    border-radius: 0;
+}
+
+.btn-group .btn:first-child {
+    border-radius: var(--border-radius) 0 0 var(--border-radius);
+}
+
+.btn-group .btn:last-child {
+    border-radius: 0 var(--border-radius) var(--border-radius) 0;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border-color: var(--primary-color);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, var(--primary-dark), #1f5582);
+    border-color: var(--primary-dark);
+    transform: translateY(-1px);
+}
+
+.btn-outline-primary:hover {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    transform: translateY(-1px);
+}
+
+/* Enhanced navigation pills */
+.nav-pills .nav-link {
+    border-radius: var(--border-radius);
+    margin: 0 0.25rem;
+    transition: var(--transition);
+    font-weight: 500;
+}
+
+.nav-pills .nav-link.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+}
+
+.nav-pills .nav-link:hover:not(.active) {
+    background-color: rgba(52, 152, 219, 0.1);
+    transform: translateY(-1px);
+}
+
+/* Enhanced tables */
+.table {
+    border-radius: var(--border-radius-lg);
+    overflow: hidden;
+}
+
+.table th {
+    border-top: none;
+    background-color: rgba(52, 152, 219, 0.05);
+    font-weight: 600;
+    color: var(--secondary-color);
+    padding: 1rem;
+}
+
+.table td {
+    padding: 1rem;
+    vertical-align: middle;
+}
+
+.table-hover tbody tr:hover {
+    background-color: rgba(52, 152, 219, 0.05);
+    transform: scale(1.01);
+    transition: var(--transition);
+}
+
+/* Status badges with improved styling */
+.badge {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.5rem 0.75rem;
+    border-radius: var(--border-radius);
+}
+
+.badge.bg-success {
+    background: linear-gradient(135deg, var(--success-color), #27ae60) !important;
+}
+
+.badge.bg-warning {
+    background: linear-gradient(135deg, var(--warning-color), #e67e22) !important;
+    color: white;
+}
+
+.badge.bg-danger {
+    background: linear-gradient(135deg, var(--accent-color), #c0392b) !important;
+}
+
+/* Enhanced form controls */
+.form-control, .form-select {
+    border-radius: var(--border-radius);
+    border: 2px solid var(--input-border);
+    padding: 0.75rem 1rem;
+    transition: var(--transition);
+    background-color: var(--input-bg);
+}
+
+.form-control:focus, .form-select:focus {
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 0.2rem rgba(52, 152, 219, 0.25);
+    transform: translateY(-1px);
+}
+
+/* Enhanced alerts */
+.alert {
+    border-radius: var(--border-radius-lg);
+    border: none;
+    box-shadow: var(--box-shadow);
+    margin-bottom: 1.5rem;
+}
+
+.alert-info {
+    background: linear-gradient(135deg, rgba(52, 152, 219, 0.1), rgba(52, 152, 219, 0.05));
+    border-left: 4px solid var(--primary-color);
+    color: var(--primary-dark);
+}
+
+.alert-success {
+    background: linear-gradient(135deg, rgba(46, 204, 113, 0.1), rgba(46, 204, 113, 0.05));
+    border-left: 4px solid var(--success-color);
+    color: #1e8449;
+}
+
+.alert-warning {
+    background: linear-gradient(135deg, rgba(243, 156, 18, 0.1), rgba(243, 156, 18, 0.05));
+    border-left: 4px solid var(--warning-color);
+    color: #b7950b;
+}
+
+.alert-danger {
+    background: linear-gradient(135deg, rgba(231, 76, 60, 0.1), rgba(231, 76, 60, 0.05));
+    border-left: 4px solid var(--accent-color);
+    color: #a93226;
+}
+
+/* Page header improvements */
+.page-header {
+    margin-bottom: 2rem;
+    padding-bottom: 1rem;
+    border-bottom: 2px solid rgba(52, 152, 219, 0.1);
+}
+
+.page-title {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--secondary-color);
+    margin-bottom: 0.5rem;
+}
+
+.page-subtitle {
+    color: var(--gray-color);
+    font-size: 1.1rem;
+    margin-bottom: 0;
+}
+
+/* Quick action improvements */
+.quick-actions {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.quick-actions .btn {
+    white-space: nowrap;
+}
+
+/* Floating Action Button */
+.fab {
+    position: fixed;
+    bottom: 2rem;
+    right: 2rem;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--primary-color), var(--primary-dark));
+    border: none;
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+    color: white;
+    font-size: 1.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: var(--transition);
+    z-index: 1000;
+    text-decoration: none;
+}
+
+.fab:hover {
+    transform: translateY(-3px) scale(1.1);
+    box-shadow: 0 12px 35px rgba(52, 152, 219, 0.6);
+    color: white;
+}
+
+.fab:active {
+    transform: translateY(-1px) scale(1.05);
+}
+
+/* Empty state improvements */
+.empty-state {
+    text-align: center;
+    padding: 3rem 2rem;
+    color: var(--gray-color);
+}
+
+.empty-state-icon {
+    font-size: 4rem;
+    margin-bottom: 1rem;
+    opacity: 0.5;
+}
+
+.empty-state h3 {
+    color: var(--secondary-color);
+    margin-bottom: 1rem;
+    font-weight: 600;
+}
+
+.empty-state p {
+    margin-bottom: 2rem;
+    font-size: 1.1rem;
+}
+
+/* Enhanced navigation active states */
+.navbar-nav .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.15);
+    border-radius: var(--border-radius);
+    font-weight: 600;
+}
+
+/* Loading states */
+.loading-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 50%;
+    border-top-color: #fff;
+    animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Enhanced tooltips */
+.tooltip {
+    font-size: 0.875rem;
+}
+
+.tooltip-inner {
+    background-color: var(--secondary-color);
+    border-radius: var(--border-radius);
+    padding: 0.5rem 0.75rem;
+}
+
+/* Project status indicators */
+.status-indicator {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 0.5rem;
+}
+
+.status-indicator.active {
+    background-color: var(--success-color);
+    box-shadow: 0 0 6px rgba(46, 204, 113, 0.5);
+}
+
+.status-indicator.completed {
+    background-color: var(--primary-color);
+}
+
+.status-indicator.on-hold {
+    background-color: var(--warning-color);
+}
+
+/* Responsive improvements */
+@media (max-width: 768px) {
+    .breadcrumb {
+        font-size: 0.8rem;
+    }
+    
+    .quick-actions {
+        justify-content: flex-start;
+        width: 100%;
+    }
+    
+    .nav-pills {
+        flex-direction: column;
+    }
+    
+    .nav-pills .nav-link {
+        margin: 0.25rem 0;
+        text-align: center;
+    }
+    
+    .fab {
+        bottom: 1rem;
+        right: 1rem;
+        width: 50px;
+        height: 50px;
+        font-size: 1.25rem;
+    }
+    
+    .page-title {
+        font-size: 1.75rem;
+    }
+    
+    .page-subtitle {
+        font-size: 1rem;
+    }
 }
 
 [data-bs-theme="dark"] .icon-container {

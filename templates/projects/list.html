@@ -2,12 +2,61 @@
 
 {% block title %}Projects - Freelancer Suite{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.dashboard') }}" class="text-decoration-none">
+                <i class="fas fa-chart-line me-1"></i>Dashboard
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-project-diagram me-1"></i>Projects
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Projects</h2>
-    <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
-        <i class="fas fa-plus me-2"></i>New Project
-    </a>
+<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
+    <div class="mb-3 mb-md-0">
+        <h2 class="mb-1">Projects</h2>
+        <p class="text-muted mb-0">Manage your client projects and track progress</p>
+    </div>
+    <div class="d-flex gap-2">
+        <a href="{{ url_for('clients.list_clients') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-users me-1"></i>View Clients
+        </a>
+        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
+            <i class="fas fa-plus me-2"></i>New Project
+        </a>
+    </div>
+</div>
+
+<!-- Quick Filter Tabs -->
+<div class="mb-4">
+    <ul class="nav nav-pills nav-fill bg-light rounded p-1" id="project-filter-tabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all-projects" type="button" role="tab">
+                <i class="fas fa-list me-1"></i>All Projects
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="active-tab" data-bs-toggle="pill" data-bs-target="#active-projects" type="button" role="tab">
+                <i class="fas fa-play-circle me-1"></i>Active
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-projects" type="button" role="tab">
+                <i class="fas fa-check-circle me-1"></i>Completed
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="recent-tab" data-bs-toggle="pill" data-bs-target="#recent-projects" type="button" role="tab">
+                <i class="fas fa-clock me-1"></i>Recent
+            </button>
+        </li>
+    </ul>
 </div>
 
 <div class="card">
