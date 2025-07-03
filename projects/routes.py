@@ -137,8 +137,22 @@ def dashboard():
 @handle_db_errors
 def list_projects():
     try:
-        # Optimized query with eager loading
-        projects = Project.query.filter_by(user_id=current_user.id).all()
+        # Query projects with pending tasks count
+        projects_query = db.session.query(
+            Project,
+            func.count(Task.id).label('pending_tasks_count')
+        ).outerjoin(
+            Task, (Task.project_id == Project.id) & (Task.status == 'pending')
+        ).filter(
+            Project.user_id == current_user.id
+        ).group_by(Project.id).all()
+        
+        # Convert to list of projects with pending_tasks_count attribute
+        projects = []
+        for project, pending_count in projects_query:
+            project.pending_tasks_count = pending_count
+            projects.append(project)
+            
         return render_template('projects/list.html', projects=projects)
     except SQLAlchemyError as e:
         logger.error(f"Database error in list_projects: {str(e)}")
