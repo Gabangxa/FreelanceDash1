@@ -246,7 +246,11 @@ class WebhookProcessor:
             db.session.add(notification)
             db.session.commit()
             
-            logger.info(f"Created notification {notification.id} for user {user_id}")
+            # Deliver the notification
+            from notifications.services import NotificationDeliveryService
+            delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
+            
+            logger.info(f"Created notification {notification.id} for user {user_id}. Delivery: {delivery_result}")
             return True
             
         except Exception as e:
@@ -283,7 +287,19 @@ class WebhookProcessor:
             
             db.session.commit()
             
-            logger.info(f"Created {notifications_created} system notifications")
+            # Deliver notifications for all users who have them
+            from notifications.services import NotificationDeliveryService
+            delivered_count = 0
+            
+            # Get the notifications we just created for delivery
+            recent_notifications = Notification.query.filter_by(webhook_event_id=webhook_event.id).all()
+            
+            for notification in recent_notifications:
+                delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
+                if any(r.get('status') == 'success' for r in delivery_result.values() if isinstance(r, dict)):
+                    delivered_count += 1
+            
+            logger.info(f"Created {notifications_created} system notifications, delivered {delivered_count}")
             return True
             
         except Exception as e:

@@ -303,6 +303,12 @@ class Notification(db.Model):
     action_url = db.Column(db.String(500))  # Optional URL for notification action
     webhook_event_id = db.Column(db.Integer, db.ForeignKey('webhook_event.id'), index=True)
     extra_data = db.Column(db.Text)  # JSON data for additional context
+    
+    # Delivery tracking fields
+    delivered = db.Column(db.Boolean, default=False, index=True)
+    delivery_attempts = db.Column(db.Integer, default=0)
+    last_delivery_attempt = db.Column(db.DateTime, index=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     
     # Composite indexes for common queries

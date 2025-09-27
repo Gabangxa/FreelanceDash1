@@ -63,34 +63,37 @@ def init_app(app):
 
 def send_email_async(app, msg):
     """Send an email asynchronously."""
-    with app.app_context():
-        try:
-            # Log detailed debugging information
-            logger.info(f"Attempting to send email to {msg.recipients}")
-            logger.info(f"Email server: {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
-            logger.info(f"TLS enabled: {app.config.get('MAIL_USE_TLS')}")
-            logger.info(f"SSL enabled: {app.config.get('MAIL_USE_SSL')}")
-            logger.info(f"Sender: {msg.sender}")
-            
-            # Send the email
-            mail.send(msg)
-            logger.info(f"Email successfully sent to {msg.recipients}")
-            
-        except Exception as e:
-            logger.error(f"Failed to send email: {str(e)}")
-            
-            # Provide more detailed error information
-            if "Username and Password not accepted" in str(e):
-                logger.error("Email authentication failed. If using Gmail, make sure you're using an App Password, not your regular password.")
-                logger.error("For Gmail, go to your Google account → Security → 2-Step Verification → App passwords")
-            elif "SMTP connection failed" in str(e):
-                logger.error(f"Could not connect to SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
-            elif "SMTP AUTH extension not supported" in str(e):
-                logger.error("SMTP server doesn't support authentication or TLS/SSL settings are incorrect")
+    try:
+        with app.app_context():
+            try:
+                # Log detailed debugging information
+                logger.info(f"Attempting to send email to {msg.recipients}")
+                logger.info(f"Email server: {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
+                logger.info(f"TLS enabled: {app.config.get('MAIL_USE_TLS')}")
+                logger.info(f"SSL enabled: {app.config.get('MAIL_USE_SSL')}")
+                logger.info(f"Sender: {msg.sender}")
                 
-            # Re-raise exception if we're in debug mode
-            if app.debug:
-                raise
+                # Send the email
+                mail.send(msg)
+                logger.info(f"Email successfully sent to {msg.recipients}")
+                
+            except Exception as e:
+                logger.error(f"Failed to send email: {str(e)}")
+                
+                # Provide more detailed error information
+                if "Username and Password not accepted" in str(e):
+                    logger.error("Email authentication failed. If using Gmail, make sure you're using an App Password, not your regular password.")
+                    logger.error("For Gmail, go to your Google account → Security → 2-Step Verification → App passwords")
+                elif "SMTP connection failed" in str(e):
+                    logger.error(f"Could not connect to SMTP server {app.config.get('MAIL_SERVER')}:{app.config.get('MAIL_PORT')}")
+                elif "SMTP AUTH extension not supported" in str(e):
+                    logger.error("SMTP server doesn't support authentication or TLS/SSL settings are incorrect")
+                    
+                # Re-raise exception if we're in debug mode
+                if app.debug:
+                    raise
+    except Exception as e:
+        logger.error(f"Failed to set up application context for email: {str(e)}")
 
 def send_email(subject, recipients, text_body, html_body=None, sender=None):
     """
@@ -162,6 +165,34 @@ def send_password_reset_email(user, token):
     # Render templates with context
     text_body = render_template('email/reset_password.txt', **context)
     html_body = render_template('email/reset_password.html', **context)
+    
+    return send_email(
+        subject=subject,
+        recipients=[user.email],
+        text_body=text_body,
+        html_body=html_body
+    )
+
+def send_notification_email(user, notification):
+    """Send a notification email to a user."""
+    from datetime import datetime
+    
+    subject = f"[Freelancer Suite] {notification.title}"
+    
+    # Build the app URL
+    app_url = os.environ.get('APP_URL', 'http://localhost:5000')
+    
+    # Prepare context data for templates
+    context = {
+        'user': user,
+        'notification': notification,
+        'app_url': app_url,
+        'current_year': datetime.utcnow().year
+    }
+    
+    # Render templates with context
+    text_body = render_template('email/notification.txt', **context)
+    html_body = render_template('email/notification.html', **context)
     
     return send_email(
         subject=subject,

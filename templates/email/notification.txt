@@ -1,0 +1,17 @@
+{{ notification.title }}
+
+Priority: {{ notification.priority|title }}
+
+{{ notification.message }}
+
+{% if notification.data %}
+Additional Details:
+{{ notification.data | tojson(indent=2) }}
+{% endif %}
+
+Received: {{ notification.created_at.strftime('%B %d, %Y at %I:%M %p UTC') }}
+
+---
+This notification was sent by Freelancer Suite
+Manage notification preferences: {{ app_url }}/settings
+View Dashboard: {{ app_url }}
