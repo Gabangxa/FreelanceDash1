@@ -216,6 +216,7 @@ from clients.routes import clients_bp
 from faq.routes import faq_bp
 from settings.routes import settings_bp
 from api import api_bp  # Import the API blueprint
+from webhooks.routes import bp as webhooks_bp  # Import webhook blueprint
 # import polar  # Temporarily disabled Polar.sh integration
 
 # Register web interface blueprints
@@ -228,6 +229,9 @@ app.register_blueprint(settings_bp)
 
 # Register API blueprint
 app.register_blueprint(api_bp)
+
+# Register webhook blueprint
+app.register_blueprint(webhooks_bp)
 
 # Initialize Polar.sh integration - Temporarily disabled
 # polar.init_app(app)
