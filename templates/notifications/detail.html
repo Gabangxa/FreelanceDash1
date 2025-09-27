@@ -1,0 +1,277 @@
+{% extends "base.html" %}
+
+{% block title %}{{ notification.title }} - Notifications - WorkVista{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="{{ url_for('projects.dashboard') }}">Dashboard</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('notifications.list_notifications') }}">Notifications</a></li>
+        <li class="breadcrumb-item active">{{ notification.title[:50] }}{% if notification.title|length > 50 %}...{% endif %}</li>
+    </ol>
+</nav>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12 col-lg-8 mx-auto">
+        <div class="card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-start">
+                    <div class="flex-grow-1">
+                        <div class="d-flex align-items-center mb-2">
+                            <!-- Notification Type Icon -->
+                            <span class="notification-icon me-3">
+                                {% if notification.type == 'system' %}
+                                    <i class="fas fa-cog fa-lg text-secondary"></i>
+                                {% elif notification.type == 'webhook' %}
+                                    <i class="fas fa-link fa-lg text-info"></i>
+                                {% elif notification.type == 'project' %}
+                                    <i class="fas fa-project-diagram fa-lg text-primary"></i>
+                                {% elif notification.type == 'invoice' %}
+                                    <i class="fas fa-file-invoice fa-lg text-success"></i>
+                                {% elif notification.type == 'time_tracking' %}
+                                    <i class="fas fa-clock fa-lg text-warning"></i>
+                                {% else %}
+                                    <i class="fas fa-bell fa-lg text-muted"></i>
+                                {% endif %}
+                            </span>
+                            
+                            <div>
+                                <h1 class="h4 mb-1">{{ notification.title }}</h1>
+                                <div class="d-flex align-items-center">
+                                    <span class="badge bg-primary me-2">{{ notification.type|title }}</span>
+                                    {% if not notification.read %}
+                                        <span class="badge bg-warning">Unread</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Read</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Actions -->
+                    <div class="dropdown">
+                        <button class="btn btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
+                            <i class="fas fa-ellipsis-v"></i>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            {% if not notification.read %}
+                            <li>
+                                <button class="dropdown-item" id="mark-read-btn" data-notification-id="{{ notification.id }}">
+                                    <i class="fas fa-check me-2"></i>Mark as Read
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            {% endif %}
+                            <li>
+                                <a class="dropdown-item" href="{{ url_for('notifications.list_notifications') }}">
+                                    <i class="fas fa-list me-2"></i>All Notifications
+                                </a>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button class="dropdown-item text-danger" id="delete-notification-btn" data-notification-id="{{ notification.id }}">
+                                    <i class="fas fa-trash me-2"></i>Delete
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card-body">
+                <!-- Notification metadata -->
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center text-muted">
+                            <i class="fas fa-calendar-alt me-2"></i>
+                            <strong class="me-2">Created:</strong>
+                            {{ notification.created_at.strftime('%B %d, %Y at %I:%M %p') if notification.created_at else 'Unknown' }}
+                        </div>
+                    </div>
+                    {% if notification.read and notification.read_at %}
+                    <div class="col-md-6">
+                        <div class="d-flex align-items-center text-muted">
+                            <i class="fas fa-check me-2"></i>
+                            <strong class="me-2">Read:</strong>
+                            {{ notification.read_at.strftime('%B %d, %Y at %I:%M %p') }}
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Notification message -->
+                <div class="notification-content">
+                    <h6 class="text-muted mb-3">Message:</h6>
+                    <div class="bg-light p-3 rounded">
+                        {{ notification.message|nl2br|safe }}
+                    </div>
+                </div>
+                
+                <!-- Additional data if available -->
+                {% if notification.data %}
+                <div class="mt-4">
+                    <h6 class="text-muted mb-3">Additional Information:</h6>
+                    <div class="bg-light p-3 rounded">
+                        <pre class="mb-0"><code>{{ notification.data|tojson(indent=2) }}</code></pre>
+                    </div>
+                </div>
+                {% endif %}
+                
+                <!-- Delivery information -->
+                {% if notification.delivery_status %}
+                <div class="mt-4">
+                    <h6 class="text-muted mb-3">Delivery Status:</h6>
+                    <div class="bg-light p-3 rounded">
+                        {% set delivery_data = notification.delivery_status|fromjson if notification.delivery_status else {} %}
+                        {% if delivery_data %}
+                        <div class="row">
+                            {% if delivery_data.email %}
+                            <div class="col-md-6 mb-2">
+                                <strong>Email:</strong>
+                                <span class="badge bg-{{ 'success' if delivery_data.email.status == 'success' else 'danger' }} ms-2">
+                                    {{ delivery_data.email.status|title }}
+                                </span>
+                                {% if delivery_data.email.timestamp %}
+                                <div class="small text-muted">
+                                    {{ delivery_data.email.timestamp[:19]|replace('T', ' ') }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                            {% if delivery_data.in_app %}
+                            <div class="col-md-6 mb-2">
+                                <strong>In-App:</strong>
+                                <span class="badge bg-{{ 'success' if delivery_data.in_app.status == 'success' else 'danger' }} ms-2">
+                                    {{ delivery_data.in_app.status|title }}
+                                </span>
+                                {% if delivery_data.in_app.timestamp %}
+                                <div class="small text-muted">
+                                    {{ delivery_data.in_app.timestamp[:19]|replace('T', ' ') }}
+                                </div>
+                                {% endif %}
+                            </div>
+                            {% endif %}
+                        </div>
+                        {% else %}
+                        <p class="text-muted mb-0">No delivery information available</p>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            
+            <div class="card-footer bg-transparent">
+                <div class="d-flex justify-content-between align-items-center">
+                    <a href="{{ url_for('notifications.list_notifications') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-arrow-left me-2"></i>Back to Notifications
+                    </a>
+                    
+                    <div>
+                        {% if not notification.read %}
+                        <button type="button" class="btn btn-primary me-2" id="mark-read-btn-footer" data-notification-id="{{ notification.id }}">
+                            <i class="fas fa-check me-1"></i>Mark as Read
+                        </button>
+                        {% endif %}
+                        <button type="button" class="btn btn-outline-danger" id="delete-notification-btn-footer" data-notification-id="{{ notification.id }}">
+                            <i class="fas fa-trash me-1"></i>Delete
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Mark as read functionality
+    function markAsRead(notificationId) {
+        fetch(`{{ url_for("notifications.mark_as_read", notification_id=0) }}`.replace('0', notificationId), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content')
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert('Error marking notification as read');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error marking notification as read');
+        });
+    }
+
+    // Delete functionality
+    function deleteNotification(notificationId) {
+        if (confirm('Delete this notification? This action cannot be undone.')) {
+            fetch(`{{ url_for("notifications.delete_notification", notification_id=0) }}`.replace('0', notificationId), {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': document.querySelector('meta[name=csrf-token]')?.getAttribute('content')
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    window.location.href = '{{ url_for("notifications.list_notifications") }}';
+                } else {
+                    alert('Error deleting notification');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                alert('Error deleting notification');
+            });
+        }
+    }
+
+    // Attach event listeners to all mark as read buttons
+    document.querySelectorAll('[id^="mark-read-btn"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const notificationId = this.getAttribute('data-notification-id');
+            markAsRead(notificationId);
+        });
+    });
+
+    // Attach event listeners to all delete buttons
+    document.querySelectorAll('[id^="delete-notification-btn"]').forEach(btn => {
+        btn.addEventListener('click', function() {
+            const notificationId = this.getAttribute('data-notification-id');
+            deleteNotification(notificationId);
+        });
+    });
+});
+</script>
+
+<style>
+.notification-content {
+    font-size: 1.1rem;
+    line-height: 1.6;
+}
+
+.notification-icon {
+    width: 40px;
+    text-align: center;
+}
+
+pre code {
+    background: none;
+    color: inherit;
+    font-size: 0.875rem;
+}
+
+.bg-light pre {
+    background-color: transparent !important;
+}
+</style>
+{% endblock %}
