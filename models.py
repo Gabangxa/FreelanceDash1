@@ -22,6 +22,7 @@ class User(UserMixin, db.Model):
     # Relationships
     projects = db.relationship('Project', backref='user', lazy=True, cascade='all, delete-orphan')
     clients = db.relationship('Client', backref='user', lazy=True, cascade='all, delete-orphan')
+    notifications = db.relationship('Notification', backref='user', lazy=True, cascade='all, delete-orphan')
 
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
@@ -118,11 +119,13 @@ class User(UserMixin, db.Model):
         
     def get_or_create_settings(self):
         """Get the user settings or create default settings if none exist."""
-        if not hasattr(self, 'settings') or self.settings is None:
-            settings = UserSettings(user_id=self.id)
+        settings = UserSettings.query.filter_by(user_id=self.id).first()
+        if settings is None:
+            settings = UserSettings()
+            settings.user_id = self.id
             db.session.add(settings)
             db.session.commit()
-        return self.settings
+        return settings
 
 class Client(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -262,3 +265,94 @@ class UserSettings(db.Model):
         import base64
         encoded = base64.b64encode(self.invoice_logo).decode('utf-8')
         return f"data:{self.invoice_logo_mimetype};base64,{encoded}"
+
+
+class WebhookEvent(db.Model):
+    """Store incoming webhook events for processing"""
+    id = db.Column(db.Integer, primary_key=True)
+    source = db.Column(db.String(50), nullable=False, index=True)  # e.g., 'github', 'stripe', 'custom'
+    event_type = db.Column(db.String(100), nullable=False, index=True)  # e.g., 'push', 'payment.failed'
+    payload = db.Column(db.Text, nullable=False)  # JSON payload
+    processed = db.Column(db.Boolean, default=False, index=True)
+    processed_at = db.Column(db.DateTime, index=True)
+    error_message = db.Column(db.Text)
+    signature = db.Column(db.String(256))  # Webhook signature for verification
+    headers = db.Column(db.Text)  # Store important headers as JSON
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Relationships
+    notifications = db.relationship('Notification', backref='webhook_event', lazy=True, cascade='all, delete-orphan')
+    
+    # Composite indexes for common queries
+    __table_args__ = (
+        Index('idx_webhook_source_type', 'source', 'event_type'),
+        Index('idx_webhook_processed', 'processed', 'created_at'),
+    )
+
+
+class Notification(db.Model):
+    """Store notifications for users"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False)
+    message = db.Column(db.Text, nullable=False)
+    notification_type = db.Column(db.String(50), nullable=False, index=True)  # e.g., 'webhook', 'system', 'reminder'
+    priority = db.Column(db.String(20), default='normal', index=True)  # 'low', 'normal', 'high', 'urgent'
+    read = db.Column(db.Boolean, default=False, index=True)
+    read_at = db.Column(db.DateTime, index=True)
+    action_url = db.Column(db.String(500))  # Optional URL for notification action
+    webhook_event_id = db.Column(db.Integer, db.ForeignKey('webhook_event.id'), index=True)
+    extra_data = db.Column(db.Text)  # JSON data for additional context
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    
+    # Composite indexes for common queries
+    __table_args__ = (
+        Index('idx_notification_user_read', 'user_id', 'read'),
+        Index('idx_notification_user_type', 'user_id', 'notification_type'),
+        Index('idx_notification_priority', 'priority', 'created_at'),
+    )
+
+
+class NotificationSettings(db.Model):
+    """User preferences for notifications"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True, index=True)
+    
+    # Email notification preferences
+    email_enabled = db.Column(db.Boolean, default=True)
+    email_webhook_events = db.Column(db.Boolean, default=True)
+    email_project_updates = db.Column(db.Boolean, default=True)
+    email_invoice_updates = db.Column(db.Boolean, default=True)
+    email_payment_notifications = db.Column(db.Boolean, default=True)
+    email_system_notifications = db.Column(db.Boolean, default=True)
+    
+    # In-app notification preferences
+    inapp_enabled = db.Column(db.Boolean, default=True)
+    inapp_webhook_events = db.Column(db.Boolean, default=True)
+    inapp_project_updates = db.Column(db.Boolean, default=True)
+    inapp_invoice_updates = db.Column(db.Boolean, default=True)
+    inapp_payment_notifications = db.Column(db.Boolean, default=True)
+    inapp_system_notifications = db.Column(db.Boolean, default=True)
+    
+    # Frequency and delivery preferences
+    digest_frequency = db.Column(db.String(20), default='daily')  # 'immediate', 'hourly', 'daily', 'weekly'
+    quiet_hours_enabled = db.Column(db.Boolean, default=False)
+    quiet_hours_start = db.Column(db.Time)
+    quiet_hours_end = db.Column(db.Time)
+    timezone = db.Column(db.String(50), default='UTC')
+    
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = db.relationship('User', backref=db.backref('notification_settings', uselist=False, cascade='all, delete-orphan'))
+    
+    @staticmethod
+    def get_or_create_for_user(user_id):
+        """Get or create notification settings for a user"""
+        settings = NotificationSettings.query.filter_by(user_id=user_id).first()
+        if settings is None:
+            settings = NotificationSettings()
+            settings.user_id = user_id
+            db.session.add(settings)
+            db.session.commit()
+        return settings
