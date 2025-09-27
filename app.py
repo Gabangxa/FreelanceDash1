@@ -39,8 +39,8 @@ login_manager = LoginManager()
 # Create Flask app
 app = Flask(__name__)
 
-# Fix for proper IP handling behind proxies
-app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+# Fix for proper IP handling behind proxies - sanitize forwarded headers
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)
 
 # Configuration
 if os.environ.get("FLASK_ENV") == "development":

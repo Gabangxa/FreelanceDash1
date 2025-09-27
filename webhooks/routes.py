@@ -1,15 +1,15 @@
 """
 Webhook routes for handling external notifications from various services
+Enhanced with comprehensive security system
 """
 import json
-import hmac
-import hashlib
 import logging
 from datetime import datetime
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify, current_app, g
 from app import db
 from models import WebhookEvent, Notification, User
 from webhooks.services import WebhookProcessor
+from webhooks.security import require_webhook_security, require_admin_auth, WebhookSecurity
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -17,37 +17,46 @@ bp = Blueprint('webhooks', __name__, url_prefix='/webhooks')
 
 
 @bp.route('/receive/<source>', methods=['POST'])
+@require_webhook_security
 def receive_webhook(source):
     """
     Generic webhook endpoint for receiving notifications from external services
+    Security validation is handled by @require_webhook_security decorator
     
     Args:
         source: The source service (e.g., 'github', 'stripe', 'custom')
     """
     try:
-        # Log incoming webhook
-        logger.info(f"Received webhook from {source}")
+        # Log incoming webhook with security context
+        security_info = getattr(g, 'webhook_security', {})
+        logger.info(
+            f"Processing authenticated webhook from {source} "
+            f"(IP: {security_info.get('client_ip', 'unknown')}, "
+            f"Size: {security_info.get('payload_size', 0)} bytes)"
+        )
         
-        # Get request data
+        # Get request data (already validated by security decorator)
         payload = request.get_data(as_text=True)
         headers = dict(request.headers)
         
         # Extract event type from headers or payload
         event_type = _extract_event_type(source, headers, payload)
         
-        # Verify webhook signature if configured
-        signature_valid = _verify_webhook_signature(source, payload, headers)
-        if not signature_valid:
-            logger.warning(f"Invalid webhook signature from {source}")
-            return jsonify({'error': 'Invalid signature'}), 401
-        
-        # Store webhook event in database
+        # Store webhook event in database with security information
         webhook_event = WebhookEvent()
         webhook_event.source = source
         webhook_event.event_type = event_type
         webhook_event.payload = payload
-        webhook_event.signature = headers.get('X-Signature') or headers.get('X-Hub-Signature-256')
-        webhook_event.headers = json.dumps({k: v for k, v in headers.items() if k.lower().startswith('x-')})
+        webhook_event.signature = headers.get('X-Signature') or headers.get('X-Hub-Signature-256') or headers.get('Stripe-Signature')
+        webhook_event.headers = json.dumps(security_info.get('headers', {}))
+        
+        # Add security metadata as JSON
+        webhook_event.metadata = json.dumps({
+            'client_ip': security_info.get('client_ip'),
+            'payload_size': security_info.get('payload_size'),
+            'validation_time': security_info.get('validation_time'),
+            'security_version': '2.0'
+        })
         
         db.session.add(webhook_event)
         db.session.commit()  # Commit the event first
@@ -79,6 +88,7 @@ def receive_webhook(source):
 
 
 @bp.route('/events', methods=['GET'])
+@require_admin_auth
 def list_webhook_events():
     """List recent webhook events for debugging"""
     try:
@@ -86,19 +96,86 @@ def list_webhook_events():
         
         events_data = []
         for event in events:
+            # Parse metadata if available
+            metadata = {}
+            if event.metadata:
+                try:
+                    metadata = json.loads(event.metadata)
+                except json.JSONDecodeError:
+                    metadata = {}
+            
             events_data.append({
                 'id': event.id,
                 'source': event.source,
                 'event_type': event.event_type,
                 'processed': event.processed,
                 'created_at': event.created_at.isoformat() if event.created_at else None,
-                'error_message': event.error_message
+                'error_message': event.error_message,
+                'metadata': metadata
             })
         
         return jsonify({'events': events_data}), 200
         
     except Exception as e:
         logger.error(f"Error listing webhook events: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@bp.route('/security/status', methods=['GET'])
+@require_admin_auth
+def security_status():
+    """Get webhook security status and statistics"""
+    try:
+        # Import here to avoid circular imports
+        from webhooks.security import rate_limit_storage, failed_attempts_storage
+        
+        # Calculate security metrics
+        active_rate_limits = len(rate_limit_storage)
+        failed_attempts = sum(len(attempts) for attempts in failed_attempts_storage.values())
+        
+        # Get recent webhook event statistics
+        from datetime import timedelta
+        recent_events = WebhookEvent.query.filter(
+            WebhookEvent.created_at >= datetime.utcnow() - timedelta(hours=24)
+        ).count()
+        
+        failed_events = WebhookEvent.query.filter(
+            WebhookEvent.created_at >= datetime.utcnow() - timedelta(hours=24),
+            WebhookEvent.error_message.isnot(None)
+        ).count()
+        
+        return jsonify({
+            'security_status': {
+                'active_rate_limits': active_rate_limits,
+                'failed_attempts_24h': failed_attempts,
+                'total_events_24h': recent_events,
+                'failed_events_24h': failed_events,
+                'success_rate': round((recent_events - failed_events) / max(recent_events, 1) * 100, 2)
+            },
+            'sources': list(WebhookSecurity.RATE_LIMITS.keys()),
+            'timestamp': datetime.utcnow().isoformat()
+        }), 200
+        
+    except Exception as e:
+        logger.error(f"Error getting security status: {str(e)}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+
+@bp.route('/security/clear-cache', methods=['POST'])
+@require_admin_auth
+def clear_security_cache():
+    """Clear rate limiting and failed attempts cache"""
+    try:
+        from webhooks.security import rate_limit_storage, failed_attempts_storage
+        
+        rate_limit_storage.clear()
+        failed_attempts_storage.clear()
+        
+        logger.info("Webhook security cache cleared by admin")
+        return jsonify({'message': 'Security cache cleared successfully'}), 200
+        
+    except Exception as e:
+        logger.error(f"Error clearing security cache: {str(e)}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -135,77 +212,5 @@ def _extract_event_type(source, headers, payload):
         return 'unknown'
 
 
-def _verify_webhook_signature(source, payload, headers):
-    """Verify webhook signature based on source"""
-    try:
-        # Get webhook secret from environment based on source
-        secret_key = current_app.config.get(f'WEBHOOK_{source.upper()}_SECRET')
-        
-        if not secret_key:
-            logger.info(f"No webhook secret configured for {source}, skipping signature verification")
-            return True  # Allow webhooks without secrets for development
-        
-        # GitHub signature verification
-        if source == 'github':
-            signature = headers.get('X-Hub-Signature-256')
-            if not signature:
-                return False
-            
-            expected_signature = 'sha256=' + hmac.new(
-                secret_key.encode('utf-8'),
-                payload.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
-            
-            return hmac.compare_digest(signature, expected_signature)
-        
-        # Stripe signature verification
-        elif source == 'stripe':
-            signature = headers.get('Stripe-Signature')
-            if not signature:
-                return False
-            
-            # Parse Stripe signature format: t=timestamp,v1=signature
-            signature_elements = dict(item.split('=') for item in signature.split(',') if '=' in item)
-            timestamp = signature_elements.get('t')
-            stripe_signature = signature_elements.get('v1')
-            
-            if not timestamp or not stripe_signature:
-                return False
-            
-            # Create the signed payload (timestamp + payload)
-            signed_payload = timestamp + '.' + payload
-            
-            # Compute expected signature
-            expected_signature = hmac.new(
-                secret_key.encode('utf-8'),
-                signed_payload.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
-            
-            # Verify signature and timestamp (prevent replay attacks)
-            timestamp_valid = abs(int(timestamp) - int(datetime.utcnow().timestamp())) < 300  # 5 minutes
-            
-            return hmac.compare_digest(stripe_signature, expected_signature) and timestamp_valid
-        
-        # Generic HMAC verification
-        else:
-            signature = headers.get('X-Signature') or headers.get('X-Hub-Signature')
-            if not signature:
-                return False
-            
-            expected_signature = hmac.new(
-                secret_key.encode('utf-8'),
-                payload.encode('utf-8'),
-                hashlib.sha256
-            ).hexdigest()
-            
-            # Handle different signature formats
-            if signature.startswith('sha256='):
-                signature = signature[7:]
-            
-            return hmac.compare_digest(signature, expected_signature)
-            
-    except Exception as e:
-        logger.error(f"Error verifying webhook signature for {source}: {str(e)}")
-        return False
+# Legacy signature verification function removed
+# Security is now handled by the WebhookSecurity class and @require_webhook_security decorator
