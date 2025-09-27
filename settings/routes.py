@@ -5,8 +5,8 @@ import io
 import logging
 from PIL import Image
 from app import db
-from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem
-from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm
+from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem, NotificationSettings
+from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm, NotificationSettingsForm
 from errors import handle_db_errors
 
 # Get the module logger
@@ -124,6 +124,107 @@ def invoice_template():
     logo_data_uri = settings.get_logo_data_uri() if settings.invoice_logo else None
     
     return render_template('invoice_template.html', form=form, settings=settings, logo_data_uri=logo_data_uri)
+
+@settings_bp.route('/notifications', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def notification_settings():
+    """Manage notification preferences."""
+    from datetime import time
+    
+    # Get or create notification settings
+    notification_settings = NotificationSettings.get_or_create_for_user(current_user.id)
+    
+    form = NotificationSettingsForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Update email notification settings
+            notification_settings.email_enabled = form.email_enabled.data
+            notification_settings.email_webhook_events = form.email_webhook_events.data
+            notification_settings.email_project_updates = form.email_project_updates.data
+            notification_settings.email_invoice_updates = form.email_invoice_updates.data
+            notification_settings.email_payment_notifications = form.email_payment_notifications.data
+            notification_settings.email_system_notifications = form.email_system_notifications.data
+            
+            # Update in-app notification settings
+            notification_settings.inapp_enabled = form.inapp_enabled.data
+            notification_settings.inapp_webhook_events = form.inapp_webhook_events.data
+            notification_settings.inapp_project_updates = form.inapp_project_updates.data
+            notification_settings.inapp_invoice_updates = form.inapp_invoice_updates.data
+            notification_settings.inapp_payment_notifications = form.inapp_payment_notifications.data
+            notification_settings.inapp_system_notifications = form.inapp_system_notifications.data
+            
+            # Update delivery preferences
+            notification_settings.digest_frequency = form.digest_frequency.data
+            notification_settings.timezone = form.timezone.data
+            
+            # Update quiet hours
+            notification_settings.quiet_hours_enabled = form.quiet_hours_enabled.data
+            
+            # Parse quiet hours times
+            if form.quiet_hours_start.data:
+                try:
+                    hour, minute = map(int, form.quiet_hours_start.data.split(':'))
+                    notification_settings.quiet_hours_start = time(hour, minute)
+                except (ValueError, TypeError):
+                    notification_settings.quiet_hours_start = None
+            else:
+                notification_settings.quiet_hours_start = None
+                
+            if form.quiet_hours_end.data:
+                try:
+                    hour, minute = map(int, form.quiet_hours_end.data.split(':'))
+                    notification_settings.quiet_hours_end = time(hour, minute)
+                except (ValueError, TypeError):
+                    notification_settings.quiet_hours_end = None
+            else:
+                notification_settings.quiet_hours_end = None
+            
+            # Update timestamp
+            from datetime import datetime
+            notification_settings.updated_at = datetime.utcnow()
+            
+            db.session.commit()
+            flash('Notification settings updated successfully', 'success')
+            
+            # Redirect to the same page to prevent form resubmission
+            return redirect(url_for('settings.notification_settings'))
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error updating notification settings: {str(e)}")
+            flash('Error updating notification settings. Please try again.', 'danger')
+    
+    # Populate form with existing data
+    if request.method == 'GET':
+        # Email settings
+        form.email_enabled.data = notification_settings.email_enabled
+        form.email_webhook_events.data = notification_settings.email_webhook_events
+        form.email_project_updates.data = notification_settings.email_project_updates
+        form.email_invoice_updates.data = notification_settings.email_invoice_updates
+        form.email_payment_notifications.data = notification_settings.email_payment_notifications
+        form.email_system_notifications.data = notification_settings.email_system_notifications
+        
+        # In-app settings
+        form.inapp_enabled.data = notification_settings.inapp_enabled
+        form.inapp_webhook_events.data = notification_settings.inapp_webhook_events
+        form.inapp_project_updates.data = notification_settings.inapp_project_updates
+        form.inapp_invoice_updates.data = notification_settings.inapp_invoice_updates
+        form.inapp_payment_notifications.data = notification_settings.inapp_payment_notifications
+        form.inapp_system_notifications.data = notification_settings.inapp_system_notifications
+        
+        # Delivery preferences
+        form.digest_frequency.data = notification_settings.digest_frequency
+        form.timezone.data = notification_settings.timezone
+        
+        # Quiet hours
+        form.quiet_hours_enabled.data = notification_settings.quiet_hours_enabled
+        if notification_settings.quiet_hours_start:
+            form.quiet_hours_start.data = notification_settings.quiet_hours_start.strftime('%H:%M')
+        if notification_settings.quiet_hours_end:
+            form.quiet_hours_end.data = notification_settings.quiet_hours_end.strftime('%H:%M')
+    
+    return render_template('notification_settings.html', form=form, settings=notification_settings)
 
 @settings_bp.route('/export-data', methods=['GET'])
 @login_required

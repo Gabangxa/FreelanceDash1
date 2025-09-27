@@ -78,3 +78,57 @@ class DeleteAccountForm(FlaskForm):
         """Validate that the password is correct."""
         if not current_user.check_password(field.data):
             raise ValidationError("Incorrect password. Please try again.")
+
+class NotificationSettingsForm(FlaskForm):
+    """Form for managing notification preferences."""
+    
+    # Email notification preferences
+    email_enabled = BooleanField('Enable Email Notifications')
+    email_webhook_events = BooleanField('Webhook Events (External integrations)')
+    email_project_updates = BooleanField('Project Updates (Tasks, time entries)')
+    email_invoice_updates = BooleanField('Invoice Updates (Created, paid, overdue)')
+    email_payment_notifications = BooleanField('Payment Notifications (Successful payments)')
+    email_system_notifications = BooleanField('System Notifications (Important updates)')
+    
+    # In-app notification preferences
+    inapp_enabled = BooleanField('Enable In-App Notifications')
+    inapp_webhook_events = BooleanField('Webhook Events')
+    inapp_project_updates = BooleanField('Project Updates')
+    inapp_invoice_updates = BooleanField('Invoice Updates')
+    inapp_payment_notifications = BooleanField('Payment Notifications')
+    inapp_system_notifications = BooleanField('System Notifications')
+    
+    # Delivery preferences
+    digest_frequency = SelectField('Email Digest Frequency', choices=[
+        ('immediate', 'Immediate - Send emails right away'),
+        ('hourly', 'Hourly - Send digest every hour'),
+        ('daily', 'Daily - Send daily digest'),
+        ('weekly', 'Weekly - Send weekly digest')
+    ])
+    
+    # Quiet hours
+    quiet_hours_enabled = BooleanField('Enable Quiet Hours (No notifications during specified times)')
+    quiet_hours_start = StringField('Start Time (HH:MM)', validators=[
+        Optional(),
+        Length(max=5, message="Time must be in HH:MM format")
+    ])
+    quiet_hours_end = StringField('End Time (HH:MM)', validators=[
+        Optional(),
+        Length(max=5, message="Time must be in HH:MM format")
+    ])
+    
+    timezone = SelectField('Timezone', choices=[
+        ('UTC', 'UTC'),
+        ('America/New_York', 'Eastern Time (ET)'),
+        ('America/Chicago', 'Central Time (CT)'),
+        ('America/Denver', 'Mountain Time (MT)'),
+        ('America/Los_Angeles', 'Pacific Time (PT)'),
+        ('Europe/London', 'London'),
+        ('Europe/Paris', 'Paris'),
+        ('Europe/Berlin', 'Berlin'),
+        ('Asia/Tokyo', 'Tokyo'),
+        ('Asia/Shanghai', 'Shanghai'),
+        ('Australia/Sydney', 'Sydney')
+    ])
+    
+    submit = SubmitField('Save Notification Settings')

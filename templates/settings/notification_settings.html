@@ -1,0 +1,289 @@
+{% extends "base.html" %}
+
+{% block title %}Notification Settings - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Notification Settings</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Notification Settings</li>
+                    </ol>
+                </nav>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Manage Your Notification Preferences</h5>
+                            <small class="text-muted">Control how and when you receive notifications</small>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('settings.notification_settings') }}">
+                                {{ form.hidden_tag() }}
+
+                                <!-- Email Notifications Section -->
+                                <div class="mb-5">
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-envelope me-2"></i>Email Notifications
+                                    </h6>
+                                    
+                                    <div class="form-check mb-3">
+                                        {{ form.email_enabled(class="form-check-input") }}
+                                        {{ form.email_enabled.label(class="form-check-label fw-semibold") }}
+                                        <div class="form-text">Master switch for all email notifications</div>
+                                    </div>
+
+                                    <div class="ms-4" id="email-options">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    {{ form.email_webhook_events(class="form-check-input") }}
+                                                    {{ form.email_webhook_events.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.email_project_updates(class="form-check-input") }}
+                                                    {{ form.email_project_updates.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.email_invoice_updates(class="form-check-input") }}
+                                                    {{ form.email_invoice_updates.label(class="form-check-label") }}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    {{ form.email_payment_notifications(class="form-check-input") }}
+                                                    {{ form.email_payment_notifications.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.email_system_notifications(class="form-check-input") }}
+                                                    {{ form.email_system_notifications.label(class="form-check-label") }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- In-App Notifications Section -->
+                                <div class="mb-5">
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-bell me-2"></i>In-App Notifications
+                                    </h6>
+                                    
+                                    <div class="form-check mb-3">
+                                        {{ form.inapp_enabled(class="form-check-input") }}
+                                        {{ form.inapp_enabled.label(class="form-check-label fw-semibold") }}
+                                        <div class="form-text">Show notifications in the application interface</div>
+                                    </div>
+
+                                    <div class="ms-4" id="inapp-options">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    {{ form.inapp_webhook_events(class="form-check-input") }}
+                                                    {{ form.inapp_webhook_events.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.inapp_project_updates(class="form-check-input") }}
+                                                    {{ form.inapp_project_updates.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.inapp_invoice_updates(class="form-check-input") }}
+                                                    {{ form.inapp_invoice_updates.label(class="form-check-label") }}
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="form-check mb-2">
+                                                    {{ form.inapp_payment_notifications(class="form-check-input") }}
+                                                    {{ form.inapp_payment_notifications.label(class="form-check-label") }}
+                                                </div>
+                                                <div class="form-check mb-2">
+                                                    {{ form.inapp_system_notifications(class="form-check-input") }}
+                                                    {{ form.inapp_system_notifications.label(class="form-check-label") }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Delivery Preferences Section -->
+                                <div class="mb-5">
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-clock me-2"></i>Delivery Preferences
+                                    </h6>
+                                    
+                                    <div class="mb-3">
+                                        {{ form.digest_frequency.label(class="form-label") }}
+                                        {{ form.digest_frequency(class="form-select") }}
+                                        <div class="form-text">Choose how often you want to receive email notifications</div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        {{ form.timezone.label(class="form-label") }}
+                                        {{ form.timezone(class="form-select") }}
+                                        <div class="form-text">Used for timing notifications and quiet hours</div>
+                                    </div>
+                                </div>
+
+                                <!-- Quiet Hours Section -->
+                                <div class="mb-5">
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-moon me-2"></i>Quiet Hours
+                                    </h6>
+                                    
+                                    <div class="form-check mb-3">
+                                        {{ form.quiet_hours_enabled(class="form-check-input") }}
+                                        {{ form.quiet_hours_enabled.label(class="form-check-label fw-semibold") }}
+                                        <div class="form-text">Suppress notifications during specified hours</div>
+                                    </div>
+
+                                    <div class="ms-4" id="quiet-hours-options">
+                                        <div class="row">
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    {{ form.quiet_hours_start.label(class="form-label") }}
+                                                    {{ form.quiet_hours_start(class="form-control", placeholder="22:00") }}
+                                                    <div class="form-text">24-hour format (e.g., 22:00)</div>
+                                                </div>
+                                            </div>
+                                            <div class="col-md-6">
+                                                <div class="mb-3">
+                                                    {{ form.quiet_hours_end.label(class="form-label") }}
+                                                    {{ form.quiet_hours_end(class="form-control", placeholder="08:00") }}
+                                                    <div class="form-text">24-hour format (e.g., 08:00)</div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Submit Button -->
+                                <div class="d-flex justify-content-between">
+                                    <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                                        <i class="fas fa-arrow-left me-2"></i>Back to Dashboard
+                                    </a>
+                                    {{ form.submit(class="btn btn-primary") }}
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Help Section -->
+                <div class="col-md-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-info-circle me-2"></i>Notification Types
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <div class="mb-3">
+                                <strong>Webhook Events</strong>
+                                <p class="small text-muted mb-2">Notifications from external services like GitHub, Stripe, or custom webhooks.</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Project Updates</strong>
+                                <p class="small text-muted mb-2">Updates when tasks are completed, time entries are added, or project status changes.</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Invoice Updates</strong>
+                                <p class="small text-muted mb-2">Notifications when invoices are created, sent, paid, or become overdue.</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>Payment Notifications</strong>
+                                <p class="small text-muted mb-2">Alerts for successful payments, failed transactions, and payment reminders.</p>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <strong>System Notifications</strong>
+                                <p class="small text-muted mb-2">Important updates about your account, security alerts, and system maintenance.</p>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="card mt-3">
+                        <div class="card-header">
+                            <h6 class="card-title mb-0">
+                                <i class="fas fa-lightbulb me-2"></i>Tips
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="small text-muted list-unstyled">
+                                <li class="mb-2">• Use "Immediate" for urgent notifications</li>
+                                <li class="mb-2">• Set "Daily" digest for less critical updates</li>
+                                <li class="mb-2">• Enable quiet hours to avoid notifications during sleep</li>
+                                <li class="mb-2">• In-app notifications appear in your dashboard</li>
+                                <li class="mb-2">• Email notifications are sent to {{ current_user.email }}</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Handle email notifications master switch
+    const emailEnabled = document.getElementById('email_enabled');
+    const emailOptions = document.getElementById('email-options');
+    
+    function toggleEmailOptions() {
+        if (emailEnabled.checked) {
+            emailOptions.style.opacity = '1';
+            emailOptions.querySelectorAll('input').forEach(input => input.disabled = false);
+        } else {
+            emailOptions.style.opacity = '0.5';
+            emailOptions.querySelectorAll('input').forEach(input => input.disabled = true);
+        }
+    }
+    
+    emailEnabled.addEventListener('change', toggleEmailOptions);
+    toggleEmailOptions(); // Initialize on page load
+    
+    // Handle in-app notifications master switch
+    const inappEnabled = document.getElementById('inapp_enabled');
+    const inappOptions = document.getElementById('inapp-options');
+    
+    function toggleInappOptions() {
+        if (inappEnabled.checked) {
+            inappOptions.style.opacity = '1';
+            inappOptions.querySelectorAll('input').forEach(input => input.disabled = false);
+        } else {
+            inappOptions.style.opacity = '0.5';
+            inappOptions.querySelectorAll('input').forEach(input => input.disabled = true);
+        }
+    }
+    
+    inappEnabled.addEventListener('change', toggleInappOptions);
+    toggleInappOptions(); // Initialize on page load
+    
+    // Handle quiet hours options
+    const quietHoursEnabled = document.getElementById('quiet_hours_enabled');
+    const quietHoursOptions = document.getElementById('quiet-hours-options');
+    
+    function toggleQuietHoursOptions() {
+        if (quietHoursEnabled.checked) {
+            quietHoursOptions.style.opacity = '1';
+            quietHoursOptions.querySelectorAll('input').forEach(input => input.disabled = false);
+        } else {
+            quietHoursOptions.style.opacity = '0.5';
+            quietHoursOptions.querySelectorAll('input').forEach(input => input.disabled = true);
+        }
+    }
+    
+    quietHoursEnabled.addEventListener('change', toggleQuietHoursOptions);
+    toggleQuietHoursOptions(); // Initialize on page load
+});
+</script>
+{% endblock %}
