@@ -77,7 +77,7 @@ def invoice_template():
                     if img.width > max_width:
                         ratio = max_width / float(img.width)
                         height = int(float(img.height) * ratio)
-                        img = img.resize((max_width, height), Image.LANCZOS)
+                        img = img.resize((max_width, height), Image.Resampling.LANCZOS)
                     
                     # Save to bytes
                     output_buffer = io.BytesIO()

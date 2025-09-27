@@ -113,7 +113,9 @@ def send_email(subject, recipients, text_body, html_body=None, sender=None):
             msg.html = html_body
         
         # Send the email asynchronously to avoid blocking
-        app = current_app._get_current_object()
+        # Get the app instance for passing to the thread
+        from flask import g
+        app = current_app._get_current_object() if hasattr(current_app, '_get_current_object') else current_app
         Thread(target=send_email_async, args=(app, msg)).start()
         
         return True
