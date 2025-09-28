@@ -37,7 +37,7 @@ def list_notifications():
         
         # Apply filters
         if notification_type:
-            query = query.filter(Notification.type == notification_type)
+            query = query.filter(Notification.notification_type == notification_type)
         
         if status == 'read':
             query = query.filter(Notification.read == True)
@@ -62,7 +62,7 @@ def list_notifications():
         ).count()
         
         # Get available notification types for filter dropdown
-        notification_types = db.session.query(Notification.type)\
+        notification_types = db.session.query(Notification.notification_type)\
             .filter(Notification.user_id == current_user.id)\
             .distinct().all()
         notification_types = [t[0] for t in notification_types]
@@ -267,7 +267,7 @@ def get_recent_notifications():
                 'id': notification.id,
                 'title': notification.title,
                 'message': notification.message[:100] + '...' if len(notification.message) > 100 else notification.message,
-                'type': notification.type,
+                'type': notification.notification_type,
                 'read': notification.read,
                 'created_at': notification.created_at.isoformat() if notification.created_at else None,
                 'url': url_for('notifications.view_notification', notification_id=notification.id)
