@@ -218,6 +218,7 @@ from settings.routes import settings_bp
 from notifications.routes import notifications_bp  # Import notifications blueprint
 from api import api_bp  # Import the API blueprint
 from webhooks.routes import bp as webhooks_bp  # Import webhook blueprint
+from admin import bp as admin_bp  # Import admin blueprint
 # import polar  # Temporarily disabled Polar.sh integration
 
 # Register web interface blueprints
@@ -228,6 +229,7 @@ app.register_blueprint(clients_bp)
 app.register_blueprint(faq_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(notifications_bp)
+app.register_blueprint(admin_bp)
 
 # Register API blueprint
 app.register_blueprint(api_bp)

@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+
+{% block title %}Webhook Events - Admin{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="page-header mb-4">
+        <h1 class="page-title">
+            <i class="fas fa-webhook me-2"></i>Webhook Events
+        </h1>
+        <div class="quick-actions">
+            <a href="{{ url_for('admin.dashboard') }}" class="btn btn-outline-primary btn-sm">
+                <i class="fas fa-arrow-left"></i> Back to Dashboard
+            </a>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header">
+            <h5 class="mb-0">Recent Webhook Events ({{ webhook_events.total }})</h5>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-hover mb-0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Source</th>
+                            <th>Event Type</th>
+                            <th>Status</th>
+                            <th>Created</th>
+                            <th>Processed</th>
+                            <th>Error</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in webhook_events.items %}
+                        <tr>
+                            <td>{{ event.id }}</td>
+                            <td>
+                                <span class="badge bg-primary">{{ event.source }}</span>
+                            </td>
+                            <td>{{ event.event_type }}</td>
+                            <td>
+                                {% if event.processed %}
+                                <span class="badge bg-success">Processed</span>
+                                {% else %}
+                                <span class="badge bg-warning">Pending</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ event.created_at.strftime('%Y-%m-%d %H:%M:%S') }}</td>
+                            <td>
+                                {% if event.processed_at %}
+                                {{ event.processed_at.strftime('%Y-%m-%d %H:%M:%S') }}
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if event.error_message %}
+                                <span class="badge bg-danger" title="{{ event.error_message }}">Error</span>
+                                {% else %}
+                                -
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        {% if webhook_events.pages > 1 %}
+        <div class="card-footer">
+            <nav aria-label="Page navigation">
+                <ul class="pagination justify-content-center mb-0">
+                    {% if webhook_events.has_prev %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.webhooks', page=webhook_events.prev_num) }}">
+                            <i class="fas fa-chevron-left"></i> Previous
+                        </a>
+                    </li>
+                    {% endif %}
+                    
+                    {% for page_num in webhook_events.iter_pages(left_edge=1, right_edge=1, left_current=2, right_current=2) %}
+                        {% if page_num %}
+                            <li class="page-item {% if page_num == webhook_events.page %}active{% endif %}">
+                                <a class="page-link" href="{{ url_for('admin.webhooks', page=page_num) }}">{{ page_num }}</a>
+                            </li>
+                        {% else %}
+                            <li class="page-item disabled"><span class="page-link">...</span></li>
+                        {% endif %}
+                    {% endfor %}
+                    
+                    {% if webhook_events.has_next %}
+                    <li class="page-item">
+                        <a class="page-link" href="{{ url_for('admin.webhooks', page=webhook_events.next_num) }}">
+                            Next <i class="fas fa-chevron-right"></i>
+                        </a>
+                    </li>
+                    {% endif %}
+                </ul>
+            </nav>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

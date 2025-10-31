@@ -56,6 +56,13 @@
                             </li>
                         </ul>
                     </li>
+                    {% if current_user.is_admin %}
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if 'admin' in request.endpoint else '' }}" href="{{ url_for('admin.dashboard') }}">
+                            <i class="fas fa-shield-alt me-1"></i>Admin
+                        </a>
+                    </li>
+                    {% endif %}
                 </ul>
                 <ul class="navbar-nav">
                     <!-- Notifications -->
