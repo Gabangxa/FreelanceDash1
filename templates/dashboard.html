@@ -13,65 +13,73 @@
 {% endblock %}
 
 {% block content %}
-<div class="row mb-4">
-    <div class="col-md-8">
-        <h2 class="mb-1">Welcome back, {{ current_user.username }}!</h2>
-        <p class="text-muted">Here's your project overview and recent activity</p>
-    </div>
-    <div class="col-md-4 text-end">
-        <div class="btn-group" role="group" aria-label="Quick actions">
-            <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary btn-sm">
-                <i class="fas fa-plus me-1"></i>New Project
-            </a>
-            <a href="{{ url_for('clients.create_client') }}" class="btn btn-outline-primary btn-sm">
-                <i class="fas fa-user-plus me-1"></i>New Client
-            </a>
-            <a href="{{ url_for('projects.create_task') }}" class="btn btn-outline-secondary btn-sm">
-                <i class="fas fa-tasks me-1"></i>New Task
-            </a>
+<!-- Welcome Banner -->
+<div class="welcome-banner">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <span class="section-badge">
+                <i class="fas fa-sparkles"></i>
+                Dashboard
+            </span>
+            <h2>Welcome back, <span class="gradient-text">{{ current_user.username }}</span>!</h2>
+            <p>Here's your project overview and recent activity</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                <a href="{{ url_for('projects.create_project') }}" class="quick-action-btn primary">
+                    <i class="fas fa-plus"></i>New Project
+                </a>
+                <a href="{{ url_for('clients.create_client') }}" class="quick-action-btn secondary">
+                    <i class="fas fa-user-plus"></i>New Client
+                </a>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- Stats Cards -->
 <div class="row g-4 mb-4">
-    <!-- Quick Stats -->
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">
-            <div class="card bg-primary text-white h-100 dashboard-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Number of projects currently in active status">
-                <div class="card-body">
-                    <h6 class="card-title">Active Projects</h6>
-                    <h2 class="mb-0">{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</h2>
+            <div class="stat-card-gradient blue" data-bs-toggle="tooltip" data-bs-placement="top" title="Number of projects currently in active status">
+                <div class="stat-icon">
+                    <i class="fas fa-project-diagram"></i>
                 </div>
+                <div class="stat-value">{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</div>
+                <div class="stat-label">Active Projects</div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <a href="{{ url_for('projects.list_projects') }}" class="text-decoration-none">
-            <div class="card bg-success text-white h-100 dashboard-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Tasks waiting to be started or currently in progress">
-                <div class="card-body">
-                    <h6 class="card-title">Pending Tasks</h6>
-                    <h2 class="mb-0">{{ tasks|selectattr('status', 'equalto', 'pending')|list|length }}</h2>
+            <div class="stat-card-gradient green" data-bs-toggle="tooltip" data-bs-placement="top" title="Tasks waiting to be started or currently in progress">
+                <div class="stat-icon">
+                    <i class="fas fa-tasks"></i>
                 </div>
+                <div class="stat-value">{{ tasks|selectattr('status', 'equalto', 'pending')|list|length }}</div>
+                <div class="stat-label">Pending Tasks</div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <a href="{{ url_for('projects.batch_time_entries') }}" class="text-decoration-none">
-            <div class="card bg-info text-white h-100 dashboard-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Total hours recorded for all projects this week">
-                <div class="card-body">
-                    <h6 class="card-title">Time Tracked (This Week)</h6>
-                    <h2 class="mb-0">{{ '%0.1f'|format(weekly_hours|default(0)) }}h</h2>
+            <div class="stat-card-gradient cyan" data-bs-toggle="tooltip" data-bs-placement="top" title="Total hours recorded for all projects this week">
+                <div class="stat-icon">
+                    <i class="fas fa-clock"></i>
                 </div>
+                <div class="stat-value">{{ '%0.1f'|format(weekly_hours|default(0)) }}h</div>
+                <div class="stat-label">Time This Week</div>
             </div>
         </a>
     </div>
-    <div class="col-md-3">
+    <div class="col-6 col-lg-3">
         <a href="{{ url_for('invoices.list_invoices') }}" class="text-decoration-none">
-            <div class="card bg-warning text-white h-100 dashboard-card" data-bs-toggle="tooltip" data-bs-placement="top" title="Invoices in 'Draft' or 'Pending' status requiring your attention">
-                <div class="card-body">
-                    <h6 class="card-title">Pending Invoices</h6>
-                    <h2 class="mb-0">{{ pending_invoices|default(0) }}</h2>
+            <div class="stat-card-gradient orange" data-bs-toggle="tooltip" data-bs-placement="top" title="Invoices in 'Draft' or 'Pending' status requiring your attention">
+                <div class="stat-icon">
+                    <i class="fas fa-file-invoice-dollar"></i>
                 </div>
+                <div class="stat-value">{{ pending_invoices|default(0) }}</div>
+                <div class="stat-label">Pending Invoices</div>
             </div>
         </a>
     </div>
@@ -79,97 +87,96 @@
 
 <div class="row g-4">
     <!-- Recent Projects -->
-    <div class="col-md-6">
+    <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Recent Projects</h5>
-                <a href="{{ url_for('projects.create_project') }}" class="btn btn-sm btn-primary">
-                    <i class="fas fa-plus me-1"></i>New Project
+                <div>
+                    <h5 class="mb-0">Recent Projects</h5>
+                </div>
+                <a href="{{ url_for('projects.create_project') }}" class="quick-action-btn primary" style="padding: 0.5rem 0.75rem; font-size: 0.8125rem;">
+                    <i class="fas fa-plus"></i>New
                 </a>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Project</th>
-                                <th>Client</th>
-                                <th>Status</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for project in projects[:5] %}
-                            <tr>
-                                <td>
-                                    <a href="{{ url_for('projects.view_project', id=project.id) }}" class="text-decoration-none">
-                                        {{ project.name }}
-                                    </a>
-                                </td>
-                                <td>{{ project.client.name }}</td>
-                                <td>
-                                    <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }}">
-                                        {{ project.status }}
-                                    </span>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body p-0">
+                {% if projects[:5] %}
+                    {% for project in projects[:5] %}
+                    <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card text-decoration-none" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-top: 0;">
+                        <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.15) 0%, rgba(0, 102, 255, 0.05) 100%);">
+                            <i class="fas fa-folder text-primary"></i>
+                        </div>
+                        <div class="item-content">
+                            <div class="item-title">{{ project.name }}</div>
+                            <div class="item-subtitle">{{ project.client.name }}</div>
+                        </div>
+                        <div class="item-actions">
+                            <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }}">
+                                {{ project.status }}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state-modern" style="padding: 3rem 1.5rem;">
+                        <div class="empty-icon">
+                            <i class="fas fa-folder-open"></i>
+                        </div>
+                        <h3>No projects yet</h3>
+                        <p>Create your first project to get started</p>
+                        <a href="{{ url_for('projects.create_project') }}" class="quick-action-btn primary">
+                            <i class="fas fa-plus"></i>Create Project
+                        </a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
 
     <!-- Upcoming Tasks -->
-    <div class="col-md-6">
+    <div class="col-lg-6">
         <div class="card h-100">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0">Upcoming Tasks</h5>
-                <a href="{{ url_for('projects.create_task') }}" class="btn btn-sm btn-primary">
-                    <i class="fas fa-plus me-1"></i>New Task
+                <div>
+                    <h5 class="mb-0">Upcoming Tasks</h5>
+                </div>
+                <a href="{{ url_for('projects.create_task') }}" class="quick-action-btn primary" style="padding: 0.5rem 0.75rem; font-size: 0.8125rem;">
+                    <i class="fas fa-plus"></i>New
                 </a>
             </div>
-            <div class="card-body">
-                <div class="table-responsive">
-                    <table class="table table-hover">
-                        <thead>
-                            <tr>
-                                <th>Task</th>
-                                <th>Project</th>
-                                <th>Status</th>
-                                <th>Due Date</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for task in tasks[:5] %}
-                            <tr class="{{ 'table-warning' if task.status == 'pending' and task.due_date and task.due_date.date() <= today }}">
-                                <td>
-                                    <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="text-decoration-none">
-                                        {{ task.title }}
-                                    </a>
-                                </td>
-                                <td>
-                                    <a href="{{ url_for('projects.view_project', id=task.project.id) }}" class="text-decoration-none">
-                                        {{ task.project.name }}
-                                    </a>
-                                </td>
-                                <td>
-                                    <span class="badge bg-{{ {'pending': 'warning', 'in_progress': 'info', 'completed': 'success', 'on_hold': 'secondary'}[task.status] }}">
-                                        {{ task.status|replace('_', ' ')|title }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if task.due_date %}
-                                        {{ task.due_date.strftime('%Y-%m-%d') }}
-                                    {% else %}
-                                        No deadline
-                                    {% endif %}
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
+            <div class="card-body p-0">
+                {% if tasks[:5] %}
+                    {% for task in tasks[:5] %}
+                    <a href="{{ url_for('projects.edit_task', id=task.id) }}" class="list-item-card text-decoration-none {{ 'border-warning' if task.status == 'pending' and task.due_date and task.due_date.date() <= today else '' }}" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; border-top: 0;">
+                        <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 168, 112, 0.15) 0%, rgba(0, 168, 112, 0.05) 100%);">
+                            <i class="fas fa-check-circle text-success"></i>
+                        </div>
+                        <div class="item-content">
+                            <div class="item-title">{{ task.title }}</div>
+                            <div class="item-subtitle">
+                                {{ task.project.name }}
+                                {% if task.due_date %}
+                                    <span class="ms-2"><i class="fas fa-calendar-alt me-1"></i>{{ task.due_date.strftime('%b %d') }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                        <div class="item-actions">
+                            <span class="badge bg-{{ {'pending': 'warning', 'in_progress': 'info', 'completed': 'success', 'on_hold': 'secondary'}[task.status] }}">
+                                {{ task.status|replace('_', ' ')|title }}
+                            </span>
+                        </div>
+                    </a>
+                    {% endfor %}
+                {% else %}
+                    <div class="empty-state-modern" style="padding: 3rem 1.5rem;">
+                        <div class="empty-icon">
+                            <i class="fas fa-tasks"></i>
+                        </div>
+                        <h3>No tasks yet</h3>
+                        <p>Create your first task to track your work</p>
+                        <a href="{{ url_for('projects.create_task') }}" class="quick-action-btn primary">
+                            <i class="fas fa-plus"></i>Create Task
+                        </a>
+                    </div>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -179,20 +186,22 @@
 <div class="row mt-4">
     <div class="col-12">
         <div class="card">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <h5 class="mb-0" id="week-display-title">Time Tracking Overview: {{ week_display }}</h5>
+            <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-3">
+                <div>
+                    <h5 class="mb-1" id="week-display-title">Time Tracking: {{ week_display }}</h5>
+                    <p class="text-muted mb-0" style="font-size: 0.875rem;">Track your productivity throughout the week</p>
+                </div>
                 <form id="week-selection-form" class="d-flex align-items-center">
                     {{ week_form.hidden_tag() }}
-                    <div class="input-group input-group-sm" style="max-width: 280px;">
-                        {{ week_form.week_start(class="form-control form-control-sm", type="date", id="week-start-picker") }}
-                        <button type="submit" class="btn btn-sm btn-primary">
-                            <i class="fas fa-calendar-week me-1"></i>View Week
+                    <div class="input-group" style="max-width: 280px;">
+                        {{ week_form.week_start(class="form-control", type="date", id="week-start-picker") }}
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-calendar-week me-1"></i>View
                         </button>
                     </div>
                 </form>
             </div>
             <div class="card-body" id="chart-container">
-                <!-- Loading indicator -->
                 <div id="chart-loading" class="d-none">
                     <div class="text-center py-5">
                         <div class="spinner-border text-primary" role="status">
@@ -202,19 +211,19 @@
                     </div>
                 </div>
                 
-                <!-- Chart content -->
                 <div id="chart-content">
                     {% if daily_hours|sum > 0 %}
                         <canvas id="timeTrackingChart" height="100"></canvas>
                     {% else %}
-                        <div class="text-center py-5 text-muted">
-                            <i class="fas fa-chart-line fa-3x mb-3"></i>
-                            <p>No time tracking data available for this week.</p>
-                            <p>
-                                <a href="{{ url_for('projects.batch_time_entries') }}" class="btn btn-sm btn-primary">
-                                    <i class="fas fa-plus me-1"></i>Add Time Entries
-                                </a>
-                            </p>
+                        <div class="empty-state-modern" style="padding: 3rem 1.5rem;">
+                            <div class="empty-icon">
+                                <i class="fas fa-chart-bar"></i>
+                            </div>
+                            <h3>No time data this week</h3>
+                            <p>Start tracking your time to see your productivity insights</p>
+                            <a href="{{ url_for('projects.batch_time_entries') }}" class="quick-action-btn primary">
+                                <i class="fas fa-plus"></i>Add Time Entry
+                            </a>
                         </div>
                     {% endif %}
                 </div>
@@ -226,18 +235,15 @@
 
 {% block scripts %}
 <script>
-    // Chart.js initialization function - used for initial load and AJAX updates
     window.timeTrackingChart = null;
     
     function initializeTimeTrackingChart() {
         const chartEl = document.getElementById('timeTrackingChart');
         if (chartEl) {
-            // Destroy existing chart if it exists
             if (window.timeTrackingChart) {
                 window.timeTrackingChart.destroy();
             }
             
-            // Get chart data from the data attribute or use the initial data
             let chartData = {{ daily_hours|tojson }};
             if (chartEl.dataset.hours) {
                 try {
@@ -247,9 +253,11 @@
                 }
             }
             
-            console.log('Chart data:', chartData);
-            
             const ctx = chartEl.getContext('2d');
+            const gradient = ctx.createLinearGradient(0, 0, 0, 300);
+            gradient.addColorStop(0, 'rgba(0, 102, 255, 0.4)');
+            gradient.addColorStop(1, 'rgba(0, 102, 255, 0.05)');
+            
             window.timeTrackingChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
@@ -257,9 +265,11 @@
                     datasets: [{
                         label: 'Hours Worked',
                         data: chartData,
-                        backgroundColor: 'rgba(13, 110, 253, 0.5)',
-                        borderColor: 'rgb(13, 110, 253)',
-                        borderWidth: 1
+                        backgroundColor: gradient,
+                        borderColor: 'rgb(0, 102, 255)',
+                        borderWidth: 2,
+                        borderRadius: 8,
+                        borderSkipped: false,
                     }]
                 },
                 options: {
@@ -271,14 +281,29 @@
                     scales: {
                         y: {
                             beginAtZero: true,
+                            grid: {
+                                color: 'rgba(0, 0, 0, 0.05)'
+                            },
                             title: {
                                 display: true,
-                                text: 'Hours'
+                                text: 'Hours',
+                                font: { weight: '500' }
+                            }
+                        },
+                        x: {
+                            grid: {
+                                display: false
                             }
                         }
                     },
                     plugins: {
+                        legend: {
+                            display: false
+                        },
                         tooltip: {
+                            backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                            padding: 12,
+                            cornerRadius: 8,
                             callbacks: {
                                 label: function(context) {
                                     return `${context.parsed.y.toFixed(1)} hours`;
@@ -291,17 +316,14 @@
         }
     }
     
-    // Initialize chart on page load
     initializeTimeTrackingChart();
 
-    // Initialize tooltips
     document.addEventListener('DOMContentLoaded', function() {
         var tooltipTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="tooltip"]'));
         tooltipTriggerList.map(function (tooltipTriggerEl) {
             return new bootstrap.Tooltip(tooltipTriggerEl);
         });
         
-        // Set up the week selection form AJAX
         const weekForm = document.getElementById('week-selection-form');
         const weekPicker = document.getElementById('week-start-picker');
         const chartContainer = document.getElementById('chart-container');
@@ -309,26 +331,18 @@
         const chartLoading = document.getElementById('chart-loading');
         const weekDisplayTitle = document.getElementById('week-display-title');
         
-        // Handle automatic week selection change
         weekPicker.addEventListener('change', function() {
             weekForm.dispatchEvent(new Event('submit'));
         });
         
-        // Handle form submission via AJAX
         weekForm.addEventListener('submit', function(event) {
             event.preventDefault();
             
-            // Show loading indicator
             chartContent.style.opacity = '0.3';
             chartLoading.classList.remove('d-none');
             
-            // Get form data
             const formData = new FormData(weekForm);
             
-            // Add debug logging
-            console.log('Sending AJAX request for week data...');
-            
-            // Send AJAX request
             fetch('{{ url_for('projects.dashboard') }}', {
                 method: 'POST',
                 body: formData,
@@ -336,29 +350,17 @@
                     'X-Requested-With': 'XMLHttpRequest'
                 }
             })
-            .then(response => {
-                console.log('Response status:', response.status);
-                return response.json();
-            })
+            .then(response => response.json())
             .then(data => {
-                console.log('Response data:', data);
                 if (data.success) {
-                    // Update week display title
-                    weekDisplayTitle.textContent = 'Time Tracking Overview: ' + data.week_display;
-                    
-                    // Update chart content
+                    weekDisplayTitle.textContent = 'Time Tracking: ' + data.week_display;
                     chartContent.innerHTML = data.html;
-                    
-                    // Reinitialize the chart
                     setTimeout(() => {
                         initializeTimeTrackingChart();
-                    }, 100);  // Small delay to ensure DOM is updated
-                    
-                    // Hide loading indicator
+                    }, 100);
                     chartLoading.classList.add('d-none');
                     chartContent.style.opacity = '1';
                 } else {
-                    console.error('Error response:', data.error || 'Unknown error');
                     chartContent.innerHTML = '<div class="alert alert-danger">Error loading data. Please try again.</div>';
                     chartLoading.classList.add('d-none');
                     chartContent.style.opacity = '1';
