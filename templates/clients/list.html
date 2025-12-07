@@ -59,7 +59,7 @@
             <div class="stat-icon">
                 <i class="fas fa-project-diagram"></i>
             </div>
-            <div class="stat-value">{{ clients|sum(attribute='projects'|length) if clients else 0 }}</div>
+            <div class="stat-value">{% set project_count = namespace(total=0) %}{% for c in clients %}{% set project_count.total = project_count.total + c.projects|length %}{% endfor %}{{ project_count.total }}</div>
             <div class="stat-label">Total Projects</div>
         </div>
     </div>
