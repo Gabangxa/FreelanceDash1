@@ -18,6 +18,65 @@
 {% endblock %}
 
 {% block content %}
+<style>
+.stat-card-filter {
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.stat-card-filter:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-lg);
+}
+
+.stat-card-filter.active {
+    transform: translateY(-4px);
+    box-shadow: 0 0 0 3px var(--color-primary), var(--shadow-lg);
+}
+
+.stat-card-filter.active::after {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 8px solid transparent;
+    border-right: 8px solid transparent;
+    border-top: 8px solid var(--color-primary);
+}
+
+.invoice-item {
+    transition: all 0.3s ease;
+}
+
+.invoice-item.hidden {
+    display: none !important;
+}
+
+.filter-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.375rem 0.75rem;
+    background: var(--color-primary-light);
+    border-radius: 50px;
+    font-size: 0.8125rem;
+    color: var(--color-primary);
+}
+
+.filter-indicator .clear-filter {
+    cursor: pointer;
+    opacity: 0.7;
+    transition: opacity 0.2s;
+}
+
+.filter-indicator .clear-filter:hover {
+    opacity: 1;
+}
+</style>
+
 <!-- Page Header -->
 <div class="page-header-modern">
     <div class="row align-items-center">
@@ -38,10 +97,10 @@
 </div>
 
 {% if invoices %}
-<!-- Stats Row -->
-<div class="row g-4 mb-4">
+<!-- Stats Row (Clickable Filters) -->
+<div class="row g-4 mb-4" id="filter-tiles">
     <div class="col-6 col-lg-3">
-        <div class="stat-card-modern blue">
+        <div class="stat-card-modern blue stat-card-filter active" data-filter="all" role="button" tabindex="0">
             <div class="stat-icon">
                 <i class="fas fa-file-invoice"></i>
             </div>
@@ -50,7 +109,7 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="stat-card-modern green">
+        <div class="stat-card-modern green stat-card-filter" data-filter="paid" role="button" tabindex="0">
             <div class="stat-icon">
                 <i class="fas fa-check-circle"></i>
             </div>
@@ -59,7 +118,7 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="stat-card-modern orange">
+        <div class="stat-card-modern orange stat-card-filter" data-filter="pending" role="button" tabindex="0">
             <div class="stat-icon">
                 <i class="fas fa-clock"></i>
             </div>
@@ -68,7 +127,7 @@
         </div>
     </div>
     <div class="col-6 col-lg-3">
-        <div class="stat-card-modern cyan">
+        <div class="stat-card-modern cyan stat-card-filter" data-filter="draft" role="button" tabindex="0">
             <div class="stat-icon">
                 <i class="fas fa-file-alt"></i>
             </div>
@@ -80,12 +139,18 @@
 
 <div class="card">
     <div class="card-header d-flex justify-content-between align-items-center">
-        <h5 class="mb-0">All Invoices</h5>
-        <span class="badge bg-primary">{{ invoices|length }} total</span>
+        <div class="d-flex align-items-center gap-3">
+            <h5 class="mb-0" id="list-title">All Invoices</h5>
+            <span id="active-filter" class="filter-indicator d-none">
+                <span id="filter-text">Showing: All</span>
+                <i class="fas fa-times-circle clear-filter" id="clear-filter" title="Clear filter"></i>
+            </span>
+        </div>
+        <span class="badge bg-primary" id="visible-count">{{ invoices|length }} total</span>
     </div>
-    <div class="card-body p-0">
+    <div class="card-body p-0" id="invoice-list">
         {% for invoice in invoices %}
-        <div class="list-item-card" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
+        <div class="list-item-card invoice-item" data-status="{{ invoice.status }}" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
             <div class="item-icon" style="background: linear-gradient(135deg, rgba(245, 166, 35, 0.15) 0%, rgba(245, 166, 35, 0.05) 100%);">
                 <i class="fas fa-file-invoice-dollar text-warning"></i>
             </div>
@@ -126,6 +191,16 @@
             </div>
         </div>
         {% endfor %}
+        
+        <!-- Empty state for filtered results -->
+        <div id="no-results" class="text-center py-5 d-none">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h5>No invoices match this filter</h5>
+            <p class="text-muted">Try selecting a different category</p>
+            <button class="quick-action-btn secondary" id="show-all-btn">
+                <i class="fas fa-list"></i>Show All Invoices
+            </button>
+        </div>
     </div>
 </div>
 
@@ -173,4 +248,100 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const filterTiles = document.querySelectorAll('.stat-card-filter');
+    const invoiceItems = document.querySelectorAll('.invoice-item');
+    const listTitle = document.getElementById('list-title');
+    const visibleCount = document.getElementById('visible-count');
+    const activeFilter = document.getElementById('active-filter');
+    const filterText = document.getElementById('filter-text');
+    const clearFilter = document.getElementById('clear-filter');
+    const noResults = document.getElementById('no-results');
+    const showAllBtn = document.getElementById('show-all-btn');
+    
+    const filterLabels = {
+        'all': 'All Invoices',
+        'paid': 'Paid',
+        'pending': 'Pending',
+        'draft': 'Drafts'
+    };
+    
+    function applyFilter(filter) {
+        let visibleItems = 0;
+        
+        invoiceItems.forEach(item => {
+            const status = item.dataset.status;
+            if (filter === 'all' || status === filter) {
+                item.classList.remove('hidden');
+                visibleItems++;
+            } else {
+                item.classList.add('hidden');
+            }
+        });
+        
+        // Update tiles
+        filterTiles.forEach(tile => {
+            if (tile.dataset.filter === filter) {
+                tile.classList.add('active');
+            } else {
+                tile.classList.remove('active');
+            }
+        });
+        
+        // Update header
+        listTitle.textContent = filterLabels[filter] || 'All Invoices';
+        visibleCount.textContent = visibleItems + (visibleItems === 1 ? ' invoice' : ' invoices');
+        
+        // Show/hide filter indicator
+        if (filter !== 'all') {
+            activeFilter.classList.remove('d-none');
+            filterText.textContent = 'Showing: ' + filterLabels[filter];
+        } else {
+            activeFilter.classList.add('d-none');
+        }
+        
+        // Show/hide no results message
+        if (visibleItems === 0) {
+            noResults.classList.remove('d-none');
+        } else {
+            noResults.classList.add('d-none');
+        }
+    }
+    
+    // Click handlers for filter tiles
+    filterTiles.forEach(tile => {
+        tile.addEventListener('click', function() {
+            const filter = this.dataset.filter;
+            applyFilter(filter);
+        });
+        
+        // Keyboard accessibility
+        tile.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const filter = this.dataset.filter;
+                applyFilter(filter);
+            }
+        });
+    });
+    
+    // Clear filter button
+    if (clearFilter) {
+        clearFilter.addEventListener('click', function() {
+            applyFilter('all');
+        });
+    }
+    
+    // Show all button in empty state
+    if (showAllBtn) {
+        showAllBtn.addEventListener('click', function() {
+            applyFilter('all');
+        });
+    }
+});
+</script>
 {% endblock %}
