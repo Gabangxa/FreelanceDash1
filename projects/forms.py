@@ -3,6 +3,10 @@ from wtforms import StringField, TextAreaField, DateTimeField, SelectField, Subm
 from wtforms.validators import DataRequired, Optional, NumberRange, ValidationError
 from datetime import datetime, timedelta
 
+class EmptyForm(FlaskForm):
+    """Empty form for CSRF protection on simple POST actions."""
+    pass
+
 class ProjectForm(FlaskForm):
     name = StringField('Project Name', validators=[DataRequired()])
     description = TextAreaField('Description')

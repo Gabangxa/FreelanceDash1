@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
 from models import Project, Task, TimeEntry, Client, Invoice, UserSettings
-from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm, WeekSelectionForm
+from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm, WeekSelectionForm, EmptyForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
 import calendar
@@ -239,7 +239,8 @@ def view_project(id):
     try:
         # Enhanced query with security check and eager loading
         project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-        return render_template('projects/detail.html', project=project, today=datetime.utcnow().strftime('%Y-%m-%d'))
+        csrf_form = EmptyForm()
+        return render_template('projects/detail.html', project=project, today=datetime.utcnow().strftime('%Y-%m-%d'), csrf_form=csrf_form)
     except SQLAlchemyError as e:
         logger.error(f"Error viewing project {id}: {str(e)}")
         flash('Error loading project details. Please try again.', 'danger')
