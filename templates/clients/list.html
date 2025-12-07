@@ -2,105 +2,167 @@
 
 {% block title %}Clients - Freelancer Suite{% endblock %}
 
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.dashboard') }}" class="text-decoration-none">
+                <i class="fas fa-chart-line me-1"></i>Dashboard
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-users me-1"></i>Clients
+        </li>
+    </ol>
+</nav>
+{% endblock %}
+
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Clients</h2>
-    <a href="{{ url_for('clients.create_client') }}" class="btn btn-primary">
-        <i class="fas fa-plus me-2"></i>New Client
-    </a>
+<!-- Page Header -->
+<div class="page-header-modern">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <span class="section-badge">
+                <i class="fas fa-address-book"></i>
+                Client Management
+            </span>
+            <h1 class="page-title">Your <span class="gradient-text">Clients</span></h1>
+            <p class="page-subtitle">Manage your client relationships and contact information</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                <a href="{{ url_for('projects.list_projects') }}" class="quick-action-btn secondary">
+                    <i class="fas fa-project-diagram"></i>View Projects
+                </a>
+                <a href="{{ url_for('clients.create_client') }}" class="quick-action-btn primary">
+                    <i class="fas fa-plus"></i>New Client
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if clients %}
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern blue">
+            <div class="stat-icon">
+                <i class="fas fa-users"></i>
+            </div>
+            <div class="stat-value">{{ clients|length }}</div>
+            <div class="stat-label">Total Clients</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern green">
+            <div class="stat-icon">
+                <i class="fas fa-project-diagram"></i>
+            </div>
+            <div class="stat-value">{{ clients|sum(attribute='projects'|length) if clients else 0 }}</div>
+            <div class="stat-label">Total Projects</div>
+        </div>
+    </div>
 </div>
 
 <div class="card">
-    <div class="card-body">
-        {% if clients %}
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Client Name</th>
-                        <th>Company</th>
-                        <th>Email</th>
-                        <th>Projects</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for client in clients %}
-                    <tr>
-                        <td>
-                            <a href="{{ url_for('clients.view_client', id=client.id) }}" class="text-decoration-none">
-                                {{ client.name }}
-                            </a>
-                        </td>
-                        <td>{{ client.company or 'N/A' }}</td>
-                        <td>{{ client.email }}</td>
-                        <td>
-                            <a href="{{ url_for('clients.view_client', id=client.id) }}" class="text-decoration-none">
-                                {{ client.projects|length }}
-                            </a>
-                        </td>
-                        <td>
-                            <div class="btn-group">
-                                <a href="{{ url_for('clients.edit_client', id=client.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="Edit">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-danger" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#deleteModal{{ client.id }}"
-                                        title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Delete Confirmation Modals -->
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">All Clients</h5>
+        <span class="badge bg-primary">{{ clients|length }} total</span>
+    </div>
+    <div class="card-body p-0">
         {% for client in clients %}
-        <div class="modal fade" id="deleteModal{{ client.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ client.id }}" aria-hidden="true">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title" id="deleteModalLabel{{ client.id }}">Confirm Delete</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>Are you sure you want to delete client <strong>{{ client.name }}</strong>?</p>
-                        {% if client.projects|length > 0 %}
-                        <div class="alert alert-warning">
-                            This client has {{ client.projects|length }} associated project(s). 
-                            You must remove these projects before deleting this client.
-                        </div>
-                        {% else %}
-                        <p class="text-danger">This action cannot be undone.</p>
-                        {% endif %}
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <form action="{{ url_for('clients.delete_client', id=client.id) }}" method="POST">
-                            <button type="submit" class="btn btn-danger" {% if client.projects|length > 0 %}disabled{% endif %}>
-                                Delete
-                            </button>
-                        </form>
-                    </div>
+        <div class="list-item-card" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
+            <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 168, 112, 0.15) 0%, rgba(0, 168, 112, 0.05) 100%);">
+                <i class="fas fa-user text-success"></i>
+            </div>
+            <div class="item-content">
+                <a href="{{ url_for('clients.view_client', id=client.id) }}" class="item-title text-decoration-none">{{ client.name }}</a>
+                <div class="item-subtitle">
+                    {% if client.company %}
+                        <i class="fas fa-building me-1"></i>{{ client.company }}
+                        <span class="mx-2">|</span>
+                    {% endif %}
+                    <i class="fas fa-envelope me-1"></i>{{ client.email }}
+                </div>
+            </div>
+            <div class="item-actions d-flex align-items-center gap-3">
+                <span class="badge bg-{{ 'primary' if client.projects|length > 0 else 'light text-secondary' }}">
+                    <i class="fas fa-folder me-1"></i>{{ client.projects|length }} project{{ 's' if client.projects|length != 1 else '' }}
+                </span>
+                <div class="btn-group">
+                    <a href="{{ url_for('clients.view_client', id=client.id) }}" 
+                       class="btn btn-sm btn-outline-primary" title="View">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{{ url_for('clients.edit_client', id=client.id) }}" 
+                       class="btn btn-sm btn-outline-secondary" title="Edit">
+                        <i class="fas fa-edit"></i>
+                    </a>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-danger" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#deleteModal{{ client.id }}"
+                            title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
                 </div>
             </div>
         </div>
         {% endfor %}
-
-        {% else %}
-        <div class="text-center py-4">
-            <p class="text-muted mb-3">No clients found</p>
-            <a href="{{ url_for('clients.create_client') }}" class="btn btn-primary">
-                <i class="fas fa-plus me-1"></i>Add Your First Client
-            </a>
-        </div>
-        {% endif %}
     </div>
 </div>
+
+<!-- Delete Confirmation Modals -->
+{% for client in clients %}
+<div class="modal fade" id="deleteModal{{ client.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ client.id }}" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="deleteModalLabel{{ client.id }}">
+                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>Confirm Delete
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Are you sure you want to delete client <strong>{{ client.name }}</strong>?</p>
+                {% if client.projects|length > 0 %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-circle me-2"></i>
+                    This client has {{ client.projects|length }} associated project(s). 
+                    You must remove these projects before deleting this client.
+                </div>
+                {% else %}
+                <p class="text-danger"><i class="fas fa-info-circle me-1"></i>This action cannot be undone.</p>
+                {% endif %}
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <form action="{{ url_for('clients.delete_client', id=client.id) }}" method="POST">
+                    <button type="submit" class="btn btn-danger" {% if client.projects|length > 0 %}disabled{% endif %}>
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state-modern">
+            <div class="empty-icon">
+                <i class="fas fa-user-plus"></i>
+            </div>
+            <h3>No Clients Yet</h3>
+            <p>Add your first client to start managing projects and invoices.</p>
+            <a href="{{ url_for('clients.create_client') }}" class="quick-action-btn primary">
+                <i class="fas fa-plus"></i>Add Your First Client
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

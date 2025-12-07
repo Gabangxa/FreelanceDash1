@@ -1,89 +1,176 @@
 {% extends "base.html" %}
 
-{% block title %}Invoices - WorkVista{% endblock %}
+{% block title %}Invoices - Freelancer Suite{% endblock %}
+
+{% block breadcrumbs %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item">
+            <a href="{{ url_for('projects.dashboard') }}" class="text-decoration-none">
+                <i class="fas fa-chart-line me-1"></i>Dashboard
+            </a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">
+            <i class="fas fa-file-invoice-dollar me-1"></i>Invoices
+        </li>
+    </ol>
+</nav>
+{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Invoices</h2>
-    <a href="{{ url_for('invoices.create_invoice') }}" class="btn btn-primary">
-        <i class="fas fa-plus me-2"></i>New Invoice
-    </a>
-</div>
-
-<div class="card">
-    <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Invoice #</th>
-                        <th>Client</th>
-                        <th>Amount</th>
-                        <th>Due Date</th>
-                        <th>Status</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for invoice in invoices %}
-                    <tr>
-                        <td>{{ invoice.invoice_number }}</td>
-                        <td>{{ invoice.client.name }}</td>
-                        <td>{{ invoice.currency }} {{ "%.2f"|format(invoice.amount) }}</td>
-                        <td>{{ invoice.due_date.strftime('%Y-%m-%d') }}</td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if invoice.status == 'paid' else 'warning' if invoice.status == 'pending' else 'secondary' }}">
-                                {{ invoice.status }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="btn-group">
-                                <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" 
-                                   class="btn btn-sm btn-outline-primary" title="View">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <a href="{{ url_for('invoices.generate_pdf', id=invoice.id) }}" 
-                                   class="btn btn-sm btn-outline-secondary" title="Download PDF">
-                                    <i class="fas fa-file-pdf"></i>
-                                </a>
-                                <button type="button" 
-                                        class="btn btn-sm btn-outline-danger" 
-                                        data-bs-toggle="modal" 
-                                        data-bs-target="#deleteModal{{ invoice.id }}"
-                                        title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+<!-- Page Header -->
+<div class="page-header-modern">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <span class="section-badge">
+                <i class="fas fa-dollar-sign"></i>
+                Billing
+            </span>
+            <h1 class="page-title">Your <span class="gradient-text">Invoices</span></h1>
+            <p class="page-subtitle">Create and manage invoices for your clients</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <a href="{{ url_for('invoices.create_invoice') }}" class="quick-action-btn primary">
+                <i class="fas fa-plus"></i>New Invoice
+            </a>
         </div>
     </div>
 </div>
 
-<!-- Delete Confirmation Modals - Outside the table -->
+{% if invoices %}
+<!-- Stats Row -->
+<div class="row g-4 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern blue">
+            <div class="stat-icon">
+                <i class="fas fa-file-invoice"></i>
+            </div>
+            <div class="stat-value">{{ invoices|length }}</div>
+            <div class="stat-label">Total Invoices</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern green">
+            <div class="stat-icon">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <div class="stat-value">{{ invoices|selectattr('status', 'equalto', 'paid')|list|length }}</div>
+            <div class="stat-label">Paid</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern orange">
+            <div class="stat-icon">
+                <i class="fas fa-clock"></i>
+            </div>
+            <div class="stat-value">{{ invoices|selectattr('status', 'equalto', 'pending')|list|length }}</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card-modern cyan">
+            <div class="stat-icon">
+                <i class="fas fa-file-alt"></i>
+            </div>
+            <div class="stat-value">{{ invoices|selectattr('status', 'equalto', 'draft')|list|length }}</div>
+            <div class="stat-label">Drafts</div>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <h5 class="mb-0">All Invoices</h5>
+        <span class="badge bg-primary">{{ invoices|length }} total</span>
+    </div>
+    <div class="card-body p-0">
+        {% for invoice in invoices %}
+        <div class="list-item-card" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
+            <div class="item-icon" style="background: linear-gradient(135deg, rgba(245, 166, 35, 0.15) 0%, rgba(245, 166, 35, 0.05) 100%);">
+                <i class="fas fa-file-invoice-dollar text-warning"></i>
+            </div>
+            <div class="item-content">
+                <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" class="item-title text-decoration-none">
+                    #{{ invoice.invoice_number }}
+                </a>
+                <div class="item-subtitle">
+                    <i class="fas fa-user me-1"></i>{{ invoice.client.name }}
+                    <span class="mx-2">|</span>
+                    <i class="fas fa-calendar me-1"></i>Due: {{ invoice.due_date.strftime('%b %d, %Y') }}
+                </div>
+            </div>
+            <div class="item-actions d-flex align-items-center gap-3">
+                <span class="fw-bold" style="font-size: 1rem;">
+                    {{ invoice.currency }} {{ "%.2f"|format(invoice.amount) }}
+                </span>
+                <span class="badge bg-{{ 'success' if invoice.status == 'paid' else 'warning' if invoice.status == 'pending' else 'secondary' }}">
+                    {{ invoice.status|title }}
+                </span>
+                <div class="btn-group">
+                    <a href="{{ url_for('invoices.view_invoice', id=invoice.id) }}" 
+                       class="btn btn-sm btn-outline-primary" title="View">
+                        <i class="fas fa-eye"></i>
+                    </a>
+                    <a href="{{ url_for('invoices.generate_pdf', id=invoice.id) }}" 
+                       class="btn btn-sm btn-outline-secondary" title="Download PDF">
+                        <i class="fas fa-file-pdf"></i>
+                    </a>
+                    <button type="button" 
+                            class="btn btn-sm btn-outline-danger" 
+                            data-bs-toggle="modal" 
+                            data-bs-target="#deleteModal{{ invoice.id }}"
+                            title="Delete">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+<!-- Delete Confirmation Modals -->
 {% for invoice in invoices %}
 <div class="modal fade" id="deleteModal{{ invoice.id }}" tabindex="-1" aria-labelledby="deleteModalLabel{{ invoice.id }}" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title" id="deleteModalLabel{{ invoice.id }}">Confirm Delete</h5>
+                <h5 class="modal-title" id="deleteModalLabel{{ invoice.id }}">
+                    <i class="fas fa-exclamation-triangle text-danger me-2"></i>Confirm Delete
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
-                Are you sure you want to delete invoice #{{ invoice.invoice_number }}?
-                This action cannot be undone.
+                <p>Are you sure you want to delete invoice <strong>#{{ invoice.invoice_number }}</strong>?</p>
+                <p class="text-danger"><i class="fas fa-info-circle me-1"></i>This action cannot be undone.</p>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form action="{{ url_for('invoices.delete_invoice', id=invoice.id) }}" method="POST">
-                    <button type="submit" class="btn btn-danger">Delete</button>
+                    <button type="submit" class="btn btn-danger">
+                        <i class="fas fa-trash me-1"></i>Delete
+                    </button>
                 </form>
             </div>
         </div>
     </div>
 </div>
 {% endfor %}
+
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state-modern">
+            <div class="empty-icon">
+                <i class="fas fa-file-invoice-dollar"></i>
+            </div>
+            <h3>No Invoices Yet</h3>
+            <p>Create your first invoice to start billing your clients professionally.</p>
+            <a href="{{ url_for('invoices.create_invoice') }}" class="quick-action-btn primary">
+                <i class="fas fa-plus"></i>Create Your First Invoice
+            </a>
+        </div>
+    </div>
+</div>
+{% endif %}
 {% endblock %}

@@ -18,105 +18,104 @@
 {% endblock %}
 
 {% block content %}
-<div class="d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center mb-4">
-    <div class="mb-3 mb-md-0">
-        <h2 class="mb-1">Projects</h2>
-        <p class="text-muted mb-0">Manage your client projects and track progress</p>
-    </div>
-    <div class="d-flex gap-2">
-        <a href="{{ url_for('clients.list_clients') }}" class="btn btn-outline-secondary btn-sm">
-            <i class="fas fa-users me-1"></i>View Clients
-        </a>
-        <a href="{{ url_for('projects.create_project') }}" class="btn btn-primary">
-            <i class="fas fa-plus me-2"></i>New Project
-        </a>
+<!-- Page Header -->
+<div class="page-header-modern">
+    <div class="row align-items-center">
+        <div class="col-md-8">
+            <span class="section-badge">
+                <i class="fas fa-briefcase"></i>
+                Project Management
+            </span>
+            <h1 class="page-title">Your <span class="gradient-text">Projects</span></h1>
+            <p class="page-subtitle">Manage your client projects and track progress</p>
+        </div>
+        <div class="col-md-4 text-md-end mt-3 mt-md-0">
+            <div class="d-flex flex-wrap gap-2 justify-content-md-end">
+                <a href="{{ url_for('clients.list_clients') }}" class="quick-action-btn secondary">
+                    <i class="fas fa-users"></i>View Clients
+                </a>
+                <a href="{{ url_for('projects.create_project') }}" class="quick-action-btn primary">
+                    <i class="fas fa-plus"></i>New Project
+                </a>
+            </div>
+        </div>
     </div>
 </div>
 
 <!-- Quick Filter Tabs -->
 <div class="mb-4">
-    <ul class="nav nav-pills nav-fill bg-light rounded p-1" id="project-filter-tabs" role="tablist">
+    <ul class="nav nav-pills nav-fill bg-light rounded p-1" id="project-filter-tabs" role="tablist" style="background: var(--bg-secondary) !important;">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all-projects" type="button" role="tab">
                 <i class="fas fa-list me-1"></i>All Projects
+                <span class="badge bg-secondary ms-1">{{ projects|length }}</span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="active-tab" data-bs-toggle="pill" data-bs-target="#active-projects" type="button" role="tab">
                 <i class="fas fa-play-circle me-1"></i>Active
+                <span class="badge bg-success ms-1">{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</span>
             </button>
         </li>
         <li class="nav-item" role="presentation">
             <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-projects" type="button" role="tab">
                 <i class="fas fa-check-circle me-1"></i>Completed
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="recent-tab" data-bs-toggle="pill" data-bs-target="#recent-projects" type="button" role="tab">
-                <i class="fas fa-clock me-1"></i>Recent
+                <span class="badge bg-info ms-1">{{ projects|selectattr('status', 'equalto', 'completed')|list|length }}</span>
             </button>
         </li>
     </ul>
 </div>
 
+{% if projects %}
+<div class="card">
+    <div class="card-body p-0">
+        {% for project in projects %}
+        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card text-decoration-none" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
+            <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.15) 0%, rgba(0, 102, 255, 0.05) 100%);">
+                <i class="fas fa-folder text-primary"></i>
+            </div>
+            <div class="item-content">
+                <div class="item-title">{{ project.name }}</div>
+                <div class="item-subtitle">
+                    <i class="fas fa-user me-1"></i>{{ project.client.name }}
+                    <span class="mx-2">|</span>
+                    <i class="fas fa-calendar me-1"></i>{{ project.start_date.strftime('%b %d, %Y') }}
+                    {% if project.end_date %}
+                        - {{ project.end_date.strftime('%b %d, %Y') }}
+                    {% else %}
+                        - Ongoing
+                    {% endif %}
+                </div>
+            </div>
+            <div class="item-actions d-flex align-items-center gap-3">
+                {% if project.pending_tasks_count > 0 %}
+                <span class="badge bg-warning">
+                    <i class="fas fa-tasks me-1"></i>{{ project.pending_tasks_count }} tasks
+                </span>
+                {% endif %}
+                <span class="badge bg-{{ 'success' if project.status == 'active' else ('info' if project.status == 'completed' else 'secondary') }}">
+                    {{ project.status|title }}
+                </span>
+                <i class="fas fa-chevron-right text-muted"></i>
+            </div>
+        </a>
+        {% endfor %}
+    </div>
+</div>
+{% else %}
 <div class="card">
     <div class="card-body">
-        <div class="table-responsive">
-            <table class="table table-hover">
-                <thead>
-                    <tr>
-                        <th>Project Name</th>
-                        <th>Client</th>
-                        <th>Start Date</th>
-                        <th>End Date</th>
-                        <th>Status</th>
-                        <th>Pending Tasks</th>
-                        <th>Actions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for project in projects %}
-                    <tr>
-                        <td>
-                            <a href="{{ url_for('projects.view_project', id=project.id) }}" class="text-decoration-none">
-                                {{ project.name }}
-                            </a>
-                        </td>
-                        <td>{{ project.client.name }}</td>
-                        <td>{{ project.start_date.strftime('%Y-%m-%d') }}</td>
-                        <td>
-                            {% if project.end_date %}
-                                {{ project.end_date.strftime('%Y-%m-%d') }}
-                            {% else %}
-                                Ongoing
-                            {% endif %}
-                        </td>
-                        <td>
-                            <span class="badge bg-{{ 'success' if project.status == 'active' else 'secondary' }}">
-                                {{ project.status }}
-                            </span>
-                        </td>
-                        <td>
-                            <span class="badge bg-{{ 'warning' if project.pending_tasks_count > 0 else 'light' }} text-{{ 'dark' if project.pending_tasks_count == 0 else 'white' }}">
-                                {{ project.pending_tasks_count|default(0) }}
-                            </span>
-                        </td>
-                        <td>
-                            <div class="btn-group">
-                                <a href="{{ url_for('projects.view_project', id=project.id) }}" 
-                                   class="btn btn-sm btn-outline-primary">
-                                    <i class="fas fa-eye"></i>
-                                </a>
-                                <button type="button" class="btn btn-sm btn-outline-danger">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </div>
-                        </td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="empty-state-modern">
+            <div class="empty-icon">
+                <i class="fas fa-folder-open"></i>
+            </div>
+            <h3>No Projects Yet</h3>
+            <p>Create your first project to start tracking your work and managing tasks.</p>
+            <a href="{{ url_for('projects.create_project') }}" class="quick-action-btn primary">
+                <i class="fas fa-plus"></i>Create Your First Project
+            </a>
         </div>
     </div>
 </div>
+{% endif %}
 {% endblock %}
