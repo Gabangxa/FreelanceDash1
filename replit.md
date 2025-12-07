@@ -114,6 +114,11 @@ Freelancer Suite is a comprehensive SaaS platform built with Flask that provides
 
 ## Changelog
 
+- December 07, 2025. Added project completion feature and deadline alert system
+  - Projects can now be marked as "completed" or reopened with a single click
+  - Configurable deadline alerts (7 days, 3 days, 1 day, or custom interval)
+  - Color-coded urgency indicators on dashboard (red/orange/yellow)
+  - Deadline alert settings accessible from user dropdown menu
 - July 03, 2025. Initial setup
 
 ## User Preferences
