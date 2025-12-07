@@ -253,10 +253,31 @@ class UserSettings(db.Model):
     invoice_color_primary = db.Column(db.String(10), default='#3498db')
     invoice_color_secondary = db.Column(db.String(10), default='#f8f9fa')
     invoice_footer_text = db.Column(db.Text)
+    
+    deadline_alert_enabled = db.Column(db.Boolean, default=True)
+    deadline_alert_7_days = db.Column(db.Boolean, default=True)
+    deadline_alert_3_days = db.Column(db.Boolean, default=True)
+    deadline_alert_1_day = db.Column(db.Boolean, default=True)
+    deadline_alert_custom_days = db.Column(db.Integer, nullable=True)
+    
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     user = db.relationship('User', backref=db.backref('settings', uselist=False, cascade='all, delete-orphan'))
+    
+    def get_active_alert_days(self):
+        """Returns a list of days before deadline when alerts should be shown"""
+        alert_days = []
+        if self.deadline_alert_enabled:
+            if self.deadline_alert_7_days:
+                alert_days.append(7)
+            if self.deadline_alert_3_days:
+                alert_days.append(3)
+            if self.deadline_alert_1_day:
+                alert_days.append(1)
+            if self.deadline_alert_custom_days and self.deadline_alert_custom_days > 0:
+                alert_days.append(self.deadline_alert_custom_days)
+        return sorted(set(alert_days), reverse=True)
     
     def get_logo_data_uri(self):
         """Return the logo as a data URI for embedding in HTML/PDF"""

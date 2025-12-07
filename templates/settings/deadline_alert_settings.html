@@ -1,0 +1,185 @@
+{% extends "base.html" %}
+
+{% block title %}Deadline Alert Settings - Freelancer Suite{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1 class="h3 mb-0">Deadline Alert Settings</h1>
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0">
+                        <li class="breadcrumb-item"><a href="{{ url_for('projects.dashboard') }}">Dashboard</a></li>
+                        <li class="breadcrumb-item active" aria-current="page">Deadline Alerts</li>
+                    </ol>
+                </nav>
+            </div>
+
+            <div class="row">
+                <div class="col-md-8">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">
+                                <i class="fas fa-calendar-alt text-primary me-2"></i>
+                                Project Deadline Alerts
+                            </h5>
+                            <small class="text-muted">Get notified when project deadlines are approaching</small>
+                        </div>
+                        <div class="card-body">
+                            <form method="POST" action="{{ url_for('settings.deadline_alert_settings') }}">
+                                {{ form.hidden_tag() }}
+
+                                <div class="mb-4">
+                                    <div class="form-check form-switch mb-3">
+                                        {{ form.deadline_alert_enabled(class="form-check-input", role="switch") }}
+                                        {{ form.deadline_alert_enabled.label(class="form-check-label fw-semibold") }}
+                                        <div class="form-text">When enabled, you'll see alerts on your dashboard for projects approaching their end date</div>
+                                    </div>
+                                </div>
+
+                                <div id="alert-options">
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-bell me-2"></i>Alert Intervals
+                                    </h6>
+                                    <p class="text-muted small mb-3">Choose when to show deadline alerts:</p>
+                                    
+                                    <div class="ms-2">
+                                        <div class="form-check mb-3">
+                                            {{ form.deadline_alert_7_days(class="form-check-input") }}
+                                            <label class="form-check-label" for="{{ form.deadline_alert_7_days.id }}">
+                                                <span class="badge bg-info me-2">7 days</span>
+                                                One week before deadline
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.deadline_alert_3_days(class="form-check-input") }}
+                                            <label class="form-check-label" for="{{ form.deadline_alert_3_days.id }}">
+                                                <span class="badge bg-warning me-2">3 days</span>
+                                                Three days before deadline
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="form-check mb-3">
+                                            {{ form.deadline_alert_1_day(class="form-check-input") }}
+                                            <label class="form-check-label" for="{{ form.deadline_alert_1_day.id }}">
+                                                <span class="badge bg-danger me-2">1 day</span>
+                                                One day before deadline (urgent)
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <hr class="my-4">
+
+                                    <h6 class="fw-bold mb-3 text-primary">
+                                        <i class="fas fa-sliders-h me-2"></i>Custom Alert
+                                    </h6>
+                                    <p class="text-muted small mb-3">Set an additional custom alert interval:</p>
+                                    
+                                    <div class="row align-items-center">
+                                        <div class="col-auto">
+                                            <div class="input-group" style="max-width: 180px;">
+                                                {{ form.deadline_alert_custom_days(class="form-control", type="number", min="1", max="365", placeholder="e.g. 14") }}
+                                                <span class="input-group-text">days</span>
+                                            </div>
+                                        </div>
+                                        <div class="col">
+                                            <small class="text-muted">Enter a number between 1 and 365. Leave empty to disable custom alert.</small>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <hr class="my-4">
+
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="{{ url_for('projects.dashboard') }}" class="btn btn-outline-secondary">
+                                        <i class="fas fa-arrow-left me-1"></i>Back to Dashboard
+                                    </a>
+                                    <button type="submit" class="btn btn-primary">
+                                        <i class="fas fa-save me-1"></i>Save Settings
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="col-md-4">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-info-circle text-info me-2"></i>
+                                How Deadline Alerts Work
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <p class="small">Deadline alerts help you stay on top of your project timelines. When enabled:</p>
+                            <ul class="small mb-0">
+                                <li class="mb-2">Alerts appear on your dashboard for active projects with end dates</li>
+                                <li class="mb-2">Colors indicate urgency: <span class="text-info">blue</span> for upcoming, <span class="text-warning">orange</span> for soon, <span class="text-danger">red</span> for urgent</li>
+                                <li class="mb-2">Click on an alert to go directly to the project</li>
+                                <li>Completed projects won't trigger alerts</li>
+                            </ul>
+                        </div>
+                    </div>
+                    
+                    <div class="card">
+                        <div class="card-header">
+                            <h6 class="mb-0">
+                                <i class="fas fa-cog text-secondary me-2"></i>
+                                Other Settings
+                            </h6>
+                        </div>
+                        <div class="card-body">
+                            <ul class="list-group list-group-flush">
+                                <li class="list-group-item px-0">
+                                    <a href="{{ url_for('settings.notification_settings') }}" class="text-decoration-none">
+                                        <i class="fas fa-bell me-2"></i>Notification Settings
+                                    </a>
+                                </li>
+                                <li class="list-group-item px-0">
+                                    <a href="{{ url_for('settings.company_settings') }}" class="text-decoration-none">
+                                        <i class="fas fa-building me-2"></i>Company Settings
+                                    </a>
+                                </li>
+                                <li class="list-group-item px-0">
+                                    <a href="{{ url_for('settings.invoice_template') }}" class="text-decoration-none">
+                                        <i class="fas fa-file-invoice me-2"></i>Invoice Template
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const enabledCheckbox = document.getElementById('deadline_alert_enabled');
+    const alertOptions = document.getElementById('alert-options');
+    
+    function toggleOptions() {
+        if (enabledCheckbox && alertOptions) {
+            const isEnabled = enabledCheckbox.checked;
+            alertOptions.style.opacity = isEnabled ? '1' : '0.5';
+            alertOptions.querySelectorAll('input').forEach(input => {
+                if (input !== enabledCheckbox) {
+                    input.disabled = !isEnabled;
+                }
+            });
+        }
+    }
+    
+    if (enabledCheckbox) {
+        enabledCheckbox.addEventListener('change', toggleOptions);
+        toggleOptions();
+    }
+});
+</script>
+{% endblock %}

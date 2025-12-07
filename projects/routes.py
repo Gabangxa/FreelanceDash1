@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from datetime import datetime, timedelta
 from sqlalchemy import func, extract, desc, cast, String
 from app import db, logger
-from models import Project, Task, TimeEntry, Client, Invoice # Added Invoice import
+from models import Project, Task, TimeEntry, Client, Invoice, UserSettings
 from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm, WeekSelectionForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
@@ -79,6 +79,33 @@ def dashboard():
             Invoice.status.in_(['pending', 'draft'])  # Count both pending and draft as they need attention
         ).count()
         
+        # Get deadline alerts for active projects
+        deadline_alerts = []
+        user_settings = UserSettings.query.filter_by(user_id=current_user.id).first()
+        if user_settings and user_settings.deadline_alert_enabled:
+            alert_days = user_settings.get_active_alert_days()
+            active_projects = Project.query.filter_by(
+                user_id=current_user.id, 
+                status='active'
+            ).filter(Project.end_date.isnot(None)).all()
+            
+            for project in active_projects:
+                if project.end_date:
+                    days_until_deadline = (project.end_date.date() - today.date()).days
+                    if days_until_deadline >= 0:
+                        for alert_day in alert_days:
+                            if days_until_deadline <= alert_day:
+                                urgency = 'danger' if days_until_deadline <= 1 else ('warning' if days_until_deadline <= 3 else 'info')
+                                deadline_alerts.append({
+                                    'project': project,
+                                    'days_remaining': days_until_deadline,
+                                    'urgency': urgency
+                                })
+                                break
+        
+        # Sort by urgency (days remaining)
+        deadline_alerts.sort(key=lambda x: x['days_remaining'])
+        
         # Handle AJAX requests for week selection
         if is_ajax:
             return jsonify({
@@ -98,6 +125,7 @@ def dashboard():
                                 weekly_hours=weekly_hours,
                                 daily_hours=daily_hours,
                                 pending_invoices=pending_invoices,
+                                deadline_alerts=deadline_alerts,
                                 today=today.date(),
                                 week_form=week_form,
                                 week_display=week_display)
@@ -128,6 +156,7 @@ def dashboard():
                                 weekly_hours=0, 
                                 daily_hours=[0]*7, 
                                 pending_invoices=0,
+                                deadline_alerts=[],
                                 today=today.date(),
                                 week_form=week_form,
                                 week_display=week_display)
@@ -253,6 +282,29 @@ def edit_project(id):
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
         
+@projects_bp.route('/projects/<int:id>/toggle-complete', methods=['POST'])
+@login_required
+@handle_db_errors
+def toggle_project_complete(id):
+    try:
+        project = Project.query.filter_by(id=id, user_id=current_user.id).first_or_404()
+        
+        if project.status == 'completed':
+            project.status = 'active'
+            flash(f'Project "{project.name}" marked as active', 'success')
+        else:
+            project.status = 'completed'
+            flash(f'Project "{project.name}" marked as complete', 'success')
+        
+        db.session.commit()
+        return redirect(url_for('projects.view_project', id=id))
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.error(f"Error toggling project status {id}: {str(e)}")
+        flash('Error updating project status. Please try again.', 'danger')
+        return redirect(url_for('projects.view_project', id=id))
+
+
 @projects_bp.route('/projects/<int:id>/delete', methods=['POST'])
 @login_required
 @handle_db_errors

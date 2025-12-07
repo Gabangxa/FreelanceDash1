@@ -6,7 +6,7 @@ import logging
 from PIL import Image
 from app import db
 from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem, NotificationSettings
-from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm, NotificationSettingsForm
+from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm, NotificationSettingsForm, DeadlineAlertSettingsForm
 from errors import handle_db_errors
 
 # Get the module logger
@@ -225,6 +225,52 @@ def notification_settings():
             form.quiet_hours_end.data = notification_settings.quiet_hours_end.strftime('%H:%M')
     
     return render_template('notification_settings.html', form=form, settings=notification_settings)
+
+@settings_bp.route('/deadline-alerts', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def deadline_alert_settings():
+    """Manage project deadline alert preferences."""
+    settings = current_user.get_or_create_settings()
+    
+    form = DeadlineAlertSettingsForm()
+    
+    if form.validate_on_submit():
+        try:
+            settings.deadline_alert_enabled = form.deadline_alert_enabled.data
+            settings.deadline_alert_7_days = form.deadline_alert_7_days.data
+            settings.deadline_alert_3_days = form.deadline_alert_3_days.data
+            settings.deadline_alert_1_day = form.deadline_alert_1_day.data
+            
+            custom_days = form.deadline_alert_custom_days.data
+            if custom_days and custom_days.strip():
+                try:
+                    custom_int = int(custom_days.strip())
+                    if 1 <= custom_int <= 365:
+                        settings.deadline_alert_custom_days = custom_int
+                    else:
+                        settings.deadline_alert_custom_days = None
+                except ValueError:
+                    settings.deadline_alert_custom_days = None
+            else:
+                settings.deadline_alert_custom_days = None
+            
+            db.session.commit()
+            flash('Deadline alert settings updated successfully', 'success')
+            return redirect(url_for('settings.deadline_alert_settings'))
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.error(f"Database error updating deadline alert settings: {str(e)}")
+            flash('Error updating deadline alert settings. Please try again.', 'danger')
+    
+    if request.method == 'GET':
+        form.deadline_alert_enabled.data = settings.deadline_alert_enabled if settings.deadline_alert_enabled is not None else True
+        form.deadline_alert_7_days.data = settings.deadline_alert_7_days if settings.deadline_alert_7_days is not None else True
+        form.deadline_alert_3_days.data = settings.deadline_alert_3_days if settings.deadline_alert_3_days is not None else True
+        form.deadline_alert_1_day.data = settings.deadline_alert_1_day if settings.deadline_alert_1_day is not None else True
+        form.deadline_alert_custom_days.data = str(settings.deadline_alert_custom_days) if settings.deadline_alert_custom_days else ''
+    
+    return render_template('deadline_alert_settings.html', form=form, settings=settings)
 
 @settings_bp.route('/export-data', methods=['GET'])
 @login_required

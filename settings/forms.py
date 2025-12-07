@@ -79,6 +79,31 @@ class DeleteAccountForm(FlaskForm):
         if not current_user.check_password(field.data):
             raise ValidationError("Incorrect password. Please try again.")
 
+class DeadlineAlertSettingsForm(FlaskForm):
+    """Form for managing project deadline alert preferences."""
+    
+    deadline_alert_enabled = BooleanField('Enable Deadline Alerts')
+    deadline_alert_7_days = BooleanField('7 days before deadline')
+    deadline_alert_3_days = BooleanField('3 days before deadline')
+    deadline_alert_1_day = BooleanField('1 day before deadline')
+    deadline_alert_custom_days = StringField('Custom alert (days)', validators=[
+        Optional(),
+        Length(max=3, message="Enter a number between 1-365")
+    ])
+    
+    submit = SubmitField('Save Deadline Alert Settings')
+    
+    def validate_deadline_alert_custom_days(self, field):
+        """Validate custom days is a number between 1 and 365."""
+        if field.data and field.data.strip():
+            try:
+                value = int(field.data.strip())
+                if value < 1 or value > 365:
+                    raise ValidationError("Please enter a number between 1 and 365")
+            except ValueError:
+                raise ValidationError("Please enter a valid number")
+
+
 class NotificationSettingsForm(FlaskForm):
     """Form for managing notification preferences."""
     
