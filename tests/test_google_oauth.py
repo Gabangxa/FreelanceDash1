@@ -316,6 +316,89 @@ def test_callback_state_mismatch_aborts(client, db_session, monkeypatch):
     assert resp.status_code == 400
 
 
+def test_callback_happy_path_creates_user_and_logs_in(client, db_session, monkeypatch):
+    """End-to-end happy path: a brand-new Google user hits the
+    callback with valid state, the token exchange and userinfo fetch
+    are mocked, and we verify a User row is created, the session is
+    established (login_user fired), and the response 302s to the
+    safe ``next`` target."""
+    import json as _json
+
+    # --- 1. Stub Google's HTTP endpoints ----------------------------------
+    fake_discovery = {
+        "token_endpoint": "https://oauth2.googleapis.com/token",
+        "userinfo_endpoint": "https://openidconnect.googleapis.com/v1/userinfo",
+    }
+    fake_token = {
+        "access_token": "fake-access-token",
+        "expires_in": 3600,
+        "token_type": "Bearer",
+        "scope": "openid email profile",
+        "id_token": "fake.id.token",
+    }
+    fake_userinfo = {
+        "sub": "google-sub-happy-path",
+        "email": "happy@example.com",
+        "email_verified": True,
+        "given_name": "Happy",
+        "name": "Happy User",
+    }
+
+    class _FakeResp:
+        def __init__(self, payload):
+            self._payload = payload
+        def json(self):
+            return self._payload
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, *args, **kwargs):
+        # Discovery doc fetch comes first; userinfo fetch comes second.
+        if url == ga.GOOGLE_DISCOVERY_URL:
+            return _FakeResp(fake_discovery)
+        if url.startswith(fake_discovery["userinfo_endpoint"]):
+            return _FakeResp(fake_userinfo)
+        raise AssertionError(f"Unexpected GET to {url}")
+
+    def fake_post(url, *args, **kwargs):
+        assert url == fake_discovery["token_endpoint"]
+        return _FakeResp(fake_token)
+
+    monkeypatch.setattr(ga.requests, "get", fake_get)
+    monkeypatch.setattr(ga.requests, "post", fake_post)
+
+    # The oauthlib client also parses the token response body; that path
+    # works on real JSON, so passing through the fake_token JSON above
+    # is sufficient.
+
+    # --- 2. Set up the OAuth state + a safe next target -------------------
+    with client.session_transaction() as s:
+        s[ga.SESSION_STATE_KEY] = "happy-state"
+        s[ga.SESSION_NEXT_KEY] = "/settings/sign-in-methods"
+
+    # --- 3. Hit the callback ---------------------------------------------
+    resp = client.get(
+        "/google_login/callback?state=happy-state&code=fake-auth-code",
+        follow_redirects=False,
+    )
+
+    # --- 4. Assert ---------------------------------------------------------
+    assert resp.status_code == 302
+    assert resp.headers["Location"].endswith("/settings/sign-in-methods")
+
+    # The user should now exist in the DB, linked to the Google sub.
+    new_user = User.query.filter_by(email="happy@example.com").first()
+    assert new_user is not None
+    assert new_user.oauth_provider == "google"
+    assert new_user.oauth_provider_id == "google-sub-happy-path"
+    assert new_user.password_hash is None  # OAuth-only account
+
+    # And the session should reflect the logged-in user (flask_login
+    # stores the user id under ``_user_id``).
+    with client.session_transaction() as s:
+        assert s.get("_user_id") == str(new_user.id)
+
+
 def test_password_login_still_works_after_oauth_changes(client, db_session):
     u = _make_password_user("regression_pw", "regression@example.com")
     resp = client.post(
