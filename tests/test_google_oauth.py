@@ -281,6 +281,31 @@ def test_oauth_only_user_cannot_login_with_password(client, db_session):
     assert "/auth/login" in resp.headers["Location"]
 
 
+def test_google_auth_module_is_importable_standalone():
+    """Regression: ``google_auth`` must be importable on its own,
+    without first importing ``app``. This protects against accidentally
+    re-introducing top-level ``from app import db`` / ``from models
+    import User`` calls -- both would create a circular import because
+    ``app.py`` imports ``google_auth`` at blueprint-registration time.
+
+    We spawn a fresh ``python -c`` so the import happens in a
+    process where ``app`` has never been loaded."""
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "-c", "import google_auth; print(google_auth.__name__)"],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, (
+        f"Standalone import of google_auth failed:\n"
+        f"STDOUT: {result.stdout}\nSTDERR: {result.stderr}"
+    )
+    assert "google_auth" in result.stdout
+
+
 def test_callback_state_mismatch_aborts(client, db_session, monkeypatch):
     """The OAuth callback must reject a mismatched ``state`` parameter
     rather than trust attacker-supplied query args."""

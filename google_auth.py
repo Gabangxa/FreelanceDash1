@@ -46,9 +46,15 @@ from oauthlib.oauth2 import WebApplicationClient
 from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
-from app import db
-from models import User
 from utils.security import is_safe_url
+
+# NOTE: ``from app import db`` and ``from models import User`` are
+# intentionally deferred into the functions that need them. Doing them
+# at module load makes this blueprint un-importable standalone (because
+# ``app.py`` itself imports ``google_auth`` at registration time), and
+# we want ``import google_auth`` to succeed in any order so that:
+#   1) tooling / linters / IDEs that introspect the module don't crash;
+#   2) tests can import this file before the Flask app context exists.
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +123,8 @@ def _generate_unique_username(seed: str | None) -> str:
     short random hex string. The random suffix path is what guarantees
     we never collide on a popular first name like "John".
     """
+    from models import User  # deferred -- see module-level NOTE
+
     base = re.sub(r"[^a-zA-Z0-9_]", "", (seed or "").strip()) or "user"
     # Cap base so the final username stays well under our 64-char limit.
     base = base[:40]
@@ -273,6 +281,7 @@ def callback():
         )
         return redirect(url_for("auth.login"))
     except SQLAlchemyError:
+        from app import db  # deferred -- see module-level NOTE
         db.session.rollback()
         logger.exception("Database error during Google OAuth callback")
         abort(500)
@@ -292,12 +301,15 @@ def callback():
     return redirect(target)
 
 
-def _find_or_create_user(sub: str, email: str, given_name: str) -> User:
+def _find_or_create_user(sub: str, email: str, given_name: str):
     """Three-step lookup: provider id, then email, then create.
 
     Each step is its own commit point so a partial failure can't leave
     the user in a half-linked state.
     """
+    from app import db  # deferred -- see module-level NOTE
+    from models import User  # deferred -- see module-level NOTE
+
     # 1) Already linked to a local account from a prior Google sign-in.
     user = User.query.filter_by(
         oauth_provider=PROVIDER_KEY, oauth_provider_id=sub,
