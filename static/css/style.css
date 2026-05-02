@@ -2535,3 +2535,34 @@ code {
     font-size: 0.95rem;
     line-height: 1;
 }
+
+/* OAuth/auth-page horizontal "or" divider used between the
+ * "Continue with Google" button and the email/password form on
+ * login + register. Uses Bootstrap's CSS variables so it looks
+ * correct in both light and dark themes (no extra dark-mode rules
+ * needed). */
+.auth-divider {
+    display: flex;
+    align-items: center;
+    text-align: center;
+    color: var(--bs-secondary-color, #6c757d);
+    font-size: 0.875rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+.auth-divider::before,
+.auth-divider::after {
+    content: "";
+    flex: 1;
+    border-bottom: 1px solid var(--bs-border-color, #dee2e6);
+}
+.auth-divider-text {
+    padding: 0 0.75rem;
+}
+
+/* Continue-with-Google button: keep Bootstrap's outline-primary
+ * styling but ensure the Google "G" icon stays color-correct in
+ * the hover state too. */
+.google-signin-btn .fab.fa-google {
+    font-size: 1rem;
+}

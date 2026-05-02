@@ -23,4 +23,5 @@ dependencies = [
     "flask-migrate>=4.1.0",
     "pytest>=9.0.3",
     "redis>=5.0.0",
+    "oauthlib>=3.3.1",
 ]

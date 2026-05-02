@@ -24,6 +24,23 @@ class User(UserMixin, db.Model):
     reset_token_expiry = db.Column(db.DateTime, nullable=True)
     magic_link_token_hash = db.Column(db.String(256), nullable=True)
     magic_link_token_expiry = db.Column(db.DateTime, nullable=True)
+    # OAuth provider linkage (Task #17). NULL when the account was created
+    # purely with email/password. ``oauth_provider`` is the provider key
+    # (e.g. ``"google"``); ``oauth_provider_id`` is the provider's stable
+    # subject identifier (Google's ``sub`` claim) -- never the email,
+    # which the user can change inside the provider account.
+    oauth_provider = db.Column(db.String(32), nullable=True)
+    oauth_provider_id = db.Column(db.String(255), nullable=True)
+    __table_args__ = (
+        db.UniqueConstraint(
+            'oauth_provider', 'oauth_provider_id',
+            name='uq_user_oauth_provider_subject',
+        ),
+        db.Index(
+            'ix_user_oauth_provider_subject',
+            'oauth_provider', 'oauth_provider_id',
+        ),
+    )
 
     # Relationships
     projects = db.relationship('Project', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -234,6 +251,27 @@ class User(UserMixin, db.Model):
             return 0
         return False
         
+    def get_sign_in_methods(self):
+        """Return the list of authentication methods linked to this account.
+
+        Used by the account-settings page so the user can see at a glance
+        whether they can sign in with their password, with a magic link
+        (any account with an email can request one), and/or with each
+        configured OAuth provider. Order is stable and intentionally
+        starts with the most-common method.
+        """
+        methods = []
+        if self.password_hash:
+            methods.append('password')
+        # Every account with a verified email can use the magic-link
+        # flow, regardless of whether they currently have an outstanding
+        # token. This is a *capability* list, not a session list.
+        if self.email:
+            methods.append('magic_link')
+        if self.oauth_provider:
+            methods.append(f'oauth:{self.oauth_provider}')
+        return methods
+
     def get_or_create_settings(self):
         """Get the user settings or create default settings if none exist."""
         settings = UserSettings.query.filter_by(user_id=self.id).first()

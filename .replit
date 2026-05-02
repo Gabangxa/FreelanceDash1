@@ -42,3 +42,6 @@ externalPort = 80
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
+
+[agent]
+integrations = ["flask_google_oauth:1.0.0"]

@@ -12,6 +12,16 @@
                     WorkVista
                 </h1>
                 <h4 class="card-title text-center mb-4">Sign In</h4>
+                {% if google_oauth_enabled %}
+                <div class="d-grid mb-3">
+                    <a href="{{ url_for('google_auth.login', next=request.args.get('next', '')) }}" class="btn btn-outline-primary btn-lg google-signin-btn">
+                        <i class="fab fa-google me-2"></i> Continue with Google
+                    </a>
+                </div>
+                <div class="auth-divider my-3" role="separator" aria-label="or">
+                    <span class="auth-divider-text">or</span>
+                </div>
+                {% endif %}
                 <form method="POST" action="{{ url_for('auth.login') }}" novalidate>
                     {{ form.hidden_tag() }}
                     <div class="mb-3">

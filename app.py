@@ -326,6 +326,31 @@ app.register_blueprint(api_bp)
 # Register webhook blueprint
 app.register_blueprint(webhooks_bp)
 
+# Google OAuth blueprint (Task #17). Registered conditionally so the
+# app boots fine in environments without Google OAuth credentials
+# configured (e.g. tests, local dev). The "Continue with Google"
+# button on the login/register pages is hidden when this is not
+# registered (templates check ``google_oauth_enabled``).
+from google_auth import google_auth as google_auth_bp, is_configured as _google_oauth_configured  # noqa: E402
+
+if _google_oauth_configured():
+    app.register_blueprint(google_auth_bp)
+    logger.info("Google OAuth blueprint registered")
+else:
+    logger.info(
+        "Google OAuth blueprint NOT registered (GOOGLE_OAUTH_CLIENT_ID / "
+        "GOOGLE_OAUTH_CLIENT_SECRET not set)"
+    )
+
+
+@app.context_processor
+def inject_google_oauth_flag():
+    """Expose Google-OAuth-enabled flag to all templates so the login,
+    register, and account-settings pages can show or hide the "Continue
+    with Google" affordances without each template having to import
+    ``google_auth`` itself."""
+    return {'google_oauth_enabled': _google_oauth_configured()}
+
 # Initialize Polar.sh integration - Temporarily disabled
 # polar.init_app(app)
 logger.info("Polar.sh integration is temporarily disabled")

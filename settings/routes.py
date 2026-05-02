@@ -14,6 +14,24 @@ logger = logging.getLogger(__name__)
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings', template_folder='../templates/settings')
 
+
+@settings_bp.route('/sign-in-methods')
+@login_required
+def sign_in_methods():
+    """Show the user which authentication methods are linked to their
+    account (password, magic link, Google, etc).
+
+    The page is intentionally read-only for now -- adding/removing
+    OAuth providers is a follow-up. The goal here is to give the user
+    transparency into how their account can be accessed.
+    """
+    methods = current_user.get_sign_in_methods()
+    return render_template(
+        'sign_in_methods.html',
+        methods=methods,
+    )
+
+
 @settings_bp.route('/company', methods=['GET', 'POST'])
 @login_required
 @handle_db_errors
