@@ -128,8 +128,9 @@ def create_invoice():
 
         return render_template('create.html', form=form)
 
-    except Exception as e:
-        logger.error(f"Unexpected error in create_invoice: {str(e)}")
+    except (SQLAlchemyError, ValueError, KeyError) as e:
+        db.session.rollback()
+        logger.exception("Unexpected error in create_invoice")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('invoices.list_invoices'))
 
@@ -224,8 +225,8 @@ def generate_pdf(id):
                 try:
                     logo = ImageReader(BytesIO(settings.invoice_logo))
                     p.drawImage(logo, 50, height - 80, width=100, height=60, mask='auto')
-                except Exception as logo_error:
-                    logger.error(f"Error adding logo to PDF: {str(logo_error)}")
+                except (OSError, ValueError):
+                    logger.exception("Error adding logo to PDF")
             
             # Invoice number in white on dark header
             p.setFillColorRGB(1, 1, 1)  # White
@@ -259,8 +260,8 @@ def generate_pdf(id):
                 try:
                     logo = ImageReader(BytesIO(settings.invoice_logo))
                     p.drawImage(logo, width - 150, height - 70, width=100, height=60, mask='auto')
-                except Exception as logo_error:
-                    logger.error(f"Error adding logo to PDF: {str(logo_error)}")
+                except (OSError, ValueError):
+                    logger.exception("Error adding logo to PDF")
             
             # Double border lines
             p.setStrokeColorRGB(0.2, 0.2, 0.2)
@@ -289,8 +290,8 @@ def generate_pdf(id):
                 try:
                     logo = ImageReader(BytesIO(settings.invoice_logo))
                     p.drawImage(logo, 50, height - 100, width=100, height=80, mask='auto')
-                except Exception as logo_error:
-                    logger.error(f"Error adding logo to PDF: {str(logo_error)}")
+                except (OSError, ValueError):
+                    logger.exception("Error adding logo to PDF")
             
             # Invoice title with creative styling
             p.setFillColorRGB(1, 1, 1)  # White
@@ -324,8 +325,8 @@ def generate_pdf(id):
                 try:
                     logo = ImageReader(BytesIO(settings.invoice_logo))
                     p.drawImage(logo, width - 150, height - 70, width=100, height=60, mask='auto')
-                except Exception as logo_error:
-                    logger.error(f"Error adding logo to PDF: {str(logo_error)}")
+                except (OSError, ValueError):
+                    logger.exception("Error adding logo to PDF")
             
             # Basic info
             p.setFont('Helvetica', 10)
@@ -510,8 +511,8 @@ def generate_pdf(id):
         logger.error(f"Error generating PDF for invoice {id}: {str(e)}")
         flash('Error generating PDF. Please try again.', 'danger')
         return redirect(url_for('invoices.view_invoice', id=id))
-    except Exception as e:
-        logger.error(f"Unexpected error generating PDF: {str(e)}")
+    except (ValueError, OSError, KeyError, TypeError) as e:
+        logger.exception("Unexpected error generating PDF")
         flash('An unexpected error occurred generating the PDF. Please try again.', 'danger')
         return redirect(url_for('invoices.view_invoice', id=id))
 

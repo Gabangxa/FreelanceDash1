@@ -235,8 +235,9 @@ def create_project():
                 flash('Error creating project. Please try again.', 'danger')
 
         return render_template('projects/detail.html', form=form, title='New Project')
-    except Exception as e:
-        logger.error(f"Unexpected error in create_project: {str(e)}")
+    except (SQLAlchemyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception("Unexpected error in create_project")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -286,8 +287,9 @@ def edit_project(id):
                 flash('Error updating project. Please try again.', 'danger')
         
         return render_template('projects/edit.html', form=form, project=project)
-    except Exception as e:
-        logger.error(f"Unexpected error in edit_project {id}: {str(e)}")
+    except (SQLAlchemyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception(f"Unexpected error in edit_project {id}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
         
@@ -335,8 +337,9 @@ def delete_project(id):
         logger.error(f"Error deleting project {id}: {str(e)}")
         flash('Error deleting project. Please try again.', 'danger')
         return redirect(url_for('projects.view_project', id=id))
-    except Exception as e:
-        logger.error(f"Unexpected error in delete_project {id}: {str(e)}")
+    except (KeyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception(f"Unexpected error in delete_project {id}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -396,8 +399,9 @@ def create_task():
             title='New Task',
             project=project_context
         )
-    except Exception as e:
-        logger.error(f"Unexpected error in create_task: {str(e)}")
+    except (SQLAlchemyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception("Unexpected error in create_task")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -472,8 +476,9 @@ def delete_task(id):
             flash('Error deleting task. Please try again.', 'danger')
             
         return redirect(url_for('projects.view_project', id=project_id))
-    except Exception as e:
-        logger.error(f"Unexpected error in delete_task {id}: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception(f"Unexpected error in delete_task {id}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -644,8 +649,9 @@ def create_time_entry():
             flash('Error recording time entry. Please try again.', 'danger')
 
         return redirect(url_for('projects.view_project', id=project.id))
-    except Exception as e:
-        logger.error(f"Unexpected error in create_time_entry: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception("Unexpected error in create_time_entry")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -745,8 +751,9 @@ def edit_time_entry(id):
         
         return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
         
-    except Exception as e:
-        logger.error(f"Error editing time entry {id}: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
+        db.session.rollback()
+        logger.exception(f"Error editing time entry {id}")
         flash('An error occurred while accessing the time entry. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -776,9 +783,9 @@ def delete_time_entry(id):
         
         return redirect(url_for('projects.view_project', id=project_id))
         
-    except Exception as e:
+    except (SQLAlchemyError, ValueError, KeyError) as e:
         db.session.rollback()
-        logger.error(f"Error deleting time entry {id}: {str(e)}")
+        logger.exception(f"Error deleting time entry {id}")
         flash('An error occurred while deleting the time entry. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -933,8 +940,8 @@ def time_entry_statistics():
             weekday_data=weekday_data,
             task_data=task_data
         )
-    except Exception as e:
-        logger.error(f"Error loading time entry statistics: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
+        logger.exception("Error loading time entry statistics")
         flash('An error occurred while loading time entry statistics. Please try again.', 'danger')
         return redirect(url_for('projects.dashboard'))
 
@@ -1138,10 +1145,9 @@ def batch_time_entries():
             projects=projects
         )
                 
-    except Exception as e:
-        import traceback
-        logger.error(f"Error in batch time entries: {str(e)}")
-        logger.error(f"Traceback: {traceback.format_exc()}")
+    except (SQLAlchemyError, ValueError, KeyError, TypeError) as e:
+        db.session.rollback()
+        logger.exception("Error in batch time entries")
         flash('An error occurred while processing time entries. Please try again.', 'danger')
         return redirect(url_for('projects.dashboard'))
 
@@ -1164,6 +1170,6 @@ def get_project_tasks(project_id):
         
         return jsonify(tasks_json)
         
-    except Exception as e:
-        logger.error(f"Error fetching tasks for project {project_id}: {str(e)}")
+    except SQLAlchemyError as e:
+        logger.exception(f"Error fetching tasks for project {project_id}")
         return jsonify([]), 400

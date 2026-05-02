@@ -5,6 +5,7 @@ import logging
 from datetime import datetime
 from flask import Blueprint, render_template, request, jsonify, redirect, url_for, flash
 from flask_login import login_required, current_user
+from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import Notification
 
@@ -77,8 +78,8 @@ def list_notifications():
             current_status=status
         )
         
-    except Exception as e:
-        logger.error(f"Error listing notifications for user {current_user.id}: {str(e)}")
+    except SQLAlchemyError as e:
+        logger.exception(f"Error listing notifications for user {current_user.id}")
         flash('Error loading notifications. Please try again.', 'danger')
         return render_template('notifications/list.html', notifications=None)
 
@@ -102,8 +103,9 @@ def view_notification(notification_id):
         
         return render_template('notifications/detail.html', notification=notification)
         
-    except Exception as e:
-        logger.error(f"Error viewing notification {notification_id} for user {current_user.id}: {str(e)}")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.exception(f"Error viewing notification {notification_id} for user {current_user.id}")
         flash('Error loading notification. Please try again.', 'danger')
         return redirect(url_for('notifications.list_notifications'))
 
@@ -134,8 +136,9 @@ def mark_as_read(notification_id):
         flash('Notification marked as read', 'success')
         return redirect(url_for('notifications.list_notifications'))
         
-    except Exception as e:
-        logger.error(f"Error marking notification {notification_id} as read: {str(e)}")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.exception(f"Error marking notification {notification_id} as read")
         
         if request.is_json or request.headers.get('Content-Type') == 'application/json':
             return jsonify({
@@ -175,8 +178,9 @@ def mark_all_as_read():
         flash(f'Marked {updated_count} notifications as read', 'success')
         return redirect(url_for('notifications.list_notifications'))
         
-    except Exception as e:
-        logger.error(f"Error marking all notifications as read for user {current_user.id}: {str(e)}")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.exception(f"Error marking all notifications as read for user {current_user.id}")
         
         if request.is_json or request.headers.get('Content-Type') == 'application/json':
             return jsonify({
@@ -213,8 +217,9 @@ def delete_notification(notification_id):
         flash('Notification deleted', 'success')
         return redirect(url_for('notifications.list_notifications'))
         
-    except Exception as e:
-        logger.error(f"Error deleting notification {notification_id}: {str(e)}")
+    except SQLAlchemyError as e:
+        db.session.rollback()
+        logger.exception(f"Error deleting notification {notification_id}")
         
         if request.is_json or request.headers.get('Content-Type') == 'application/json':
             return jsonify({
@@ -241,8 +246,8 @@ def get_unread_count():
             'unread_count': unread_count
         })
         
-    except Exception as e:
-        logger.error(f"Error getting unread count for user {current_user.id}: {str(e)}")
+    except SQLAlchemyError as e:
+        logger.exception(f"Error getting unread count for user {current_user.id}")
         return jsonify({
             'success': False,
             'unread_count': 0
@@ -278,8 +283,8 @@ def get_recent_notifications():
             'notifications': notifications_data
         })
         
-    except Exception as e:
-        logger.error(f"Error getting recent notifications for user {current_user.id}: {str(e)}")
+    except SQLAlchemyError as e:
+        logger.exception(f"Error getting recent notifications for user {current_user.id}")
         return jsonify({
             'success': False,
             'notifications': []

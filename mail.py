@@ -21,6 +21,7 @@ pick up rows where ``status='failed'`` and re-attempt, which is the planned
 next step.
 """
 import os
+import smtplib
 import time
 import logging
 from contextlib import contextmanager
@@ -29,6 +30,7 @@ from threading import Thread
 
 from flask import current_app, render_template
 from flask_mail import Mail, Message
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session as SASession
 
 # Initialize mail extension
@@ -131,9 +133,9 @@ def _record_attempt(log_id, status, error=None, increment=True):
             if status == 'sent':
                 log.sent_at = datetime.utcnow()
             session.commit()
-    except Exception as e:
+    except (SQLAlchemyError, OSError) as e:
         # Never let logging failures crash the email worker.
-        logger.error(f"Failed to record email delivery log {log_id}: {e}")
+        logger.exception(f"Failed to record email delivery log {log_id}")
 
 
 def send_email_async(app, msg, log_id):
@@ -141,59 +143,66 @@ def send_email_async(app, msg, log_id):
 
     Always wrapped in ``app.app_context()`` -- without one the Flask-Mail
     send call cannot resolve the configured SMTP settings.
+
+    The outermost ``except Exception`` is a deliberate safety net: this
+    function runs in a daemon thread, and any uncaught exception would
+    silently kill the worker with no log line.
     """
     try:
-        with app.app_context():
-            last_error = None
-            for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
-                try:
-                    logger.info(
-                        f"Email attempt {attempt}/{MAX_SEND_ATTEMPTS} to "
-                        f"{msg.recipients} (log_id={log_id})"
-                    )
-                    mail.send(msg)
-                    logger.info(f"Email successfully sent to {msg.recipients} (log_id={log_id})")
-                    _record_attempt(log_id, 'sent')
-                    return
-                except Exception as e:
-                    last_error = e
-                    logger.warning(
-                        f"Email attempt {attempt} failed for {msg.recipients} "
-                        f"(log_id={log_id}): {e}"
-                    )
-
-                    # Hint at the most common misconfiguration without spamming logs.
-                    err_text = str(e)
-                    if "Username and Password not accepted" in err_text:
-                        logger.error(
-                            "SMTP authentication failed. For Gmail use an App "
-                            "Password (Google account → Security → 2-Step "
-                            "Verification → App passwords)."
-                        )
-                    elif "SMTP AUTH extension not supported" in err_text:
-                        logger.error("SMTP server does not support AUTH; check TLS/SSL settings.")
-
-                    if attempt < MAX_SEND_ATTEMPTS:
-                        # Record this failed attempt so attempts/last_error
-                        # reflect every try, not just the terminal outcome.
-                        _record_attempt(log_id, 'pending', error=e)
-                        backoff = RETRY_BACKOFF_SECONDS[min(attempt - 1, len(RETRY_BACKOFF_SECONDS) - 1)]
-                        time.sleep(backoff)
-
-            # All attempts exhausted.
-            logger.error(
-                f"Email permanently failed after {MAX_SEND_ATTEMPTS} attempts "
-                f"to {msg.recipients} (log_id={log_id}): {last_error}"
-            )
-            _record_attempt(log_id, 'failed', error=last_error)
-    except Exception as e:
-        # This branch only runs if app_context() itself blew up.
-        logger.error(f"Failed to set up app context for email (log_id={log_id}): {e}")
         try:
             with app.app_context():
-                _record_attempt(log_id, 'failed', error=e, increment=False)
-        except Exception:
-            pass
+                last_error = None
+                for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
+                    try:
+                        logger.info(
+                            f"Email attempt {attempt}/{MAX_SEND_ATTEMPTS} to "
+                            f"{msg.recipients} (log_id={log_id})"
+                        )
+                        mail.send(msg)
+                        logger.info(f"Email successfully sent to {msg.recipients} (log_id={log_id})")
+                        _record_attempt(log_id, 'sent')
+                        return
+                    except (smtplib.SMTPException, OSError, ConnectionError) as e:
+                        last_error = e
+                        logger.warning(
+                            f"Email attempt {attempt} failed for {msg.recipients} "
+                            f"(log_id={log_id}): {e}"
+                        )
+
+                        # Hint at the most common misconfiguration without spamming logs.
+                        err_text = str(e)
+                        if "Username and Password not accepted" in err_text:
+                            logger.error(
+                                "SMTP authentication failed. For Gmail use an App "
+                                "Password (Google account → Security → 2-Step "
+                                "Verification → App passwords)."
+                            )
+                        elif "SMTP AUTH extension not supported" in err_text:
+                            logger.error("SMTP server does not support AUTH; check TLS/SSL settings.")
+
+                        if attempt < MAX_SEND_ATTEMPTS:
+                            # Record this failed attempt so attempts/last_error
+                            # reflect every try, not just the terminal outcome.
+                            _record_attempt(log_id, 'pending', error=e)
+                            backoff = RETRY_BACKOFF_SECONDS[min(attempt - 1, len(RETRY_BACKOFF_SECONDS) - 1)]
+                            time.sleep(backoff)
+
+                # All attempts exhausted.
+                logger.error(
+                    f"Email permanently failed after {MAX_SEND_ATTEMPTS} attempts "
+                    f"to {msg.recipients} (log_id={log_id}): {last_error}"
+                )
+                _record_attempt(log_id, 'failed', error=last_error)
+        except RuntimeError as e:
+            # This branch only runs if app_context() itself blew up.
+            logger.exception(f"Failed to set up app context for email (log_id={log_id})")
+            try:
+                with app.app_context():
+                    _record_attempt(log_id, 'failed', error=e, increment=False)
+            except (RuntimeError, SQLAlchemyError, OSError):
+                logger.exception(f"Failed to record final email failure (log_id={log_id})")
+    except Exception:  # noqa: BLE001 - daemon-thread safety net; prevents silent worker death
+        logger.exception(f"Unhandled error in email worker (log_id={log_id})")
 
 
 def _create_delivery_log(recipients, subject):
@@ -216,8 +225,8 @@ def _create_delivery_log(recipients, subject):
             session.add(log)
             session.commit()
             return log.id
-    except Exception as e:
-        logger.error(f"Failed to create EmailDeliveryLog row: {e}")
+    except (SQLAlchemyError, OSError) as e:
+        logger.exception("Failed to create EmailDeliveryLog row")
         return None
 
 
@@ -246,8 +255,8 @@ def send_email(subject, recipients, text_body, html_body=None, sender=None):
         Thread(target=send_email_async, args=(app, msg, log_id), daemon=True).start()
 
         return True
-    except Exception as e:
-        logger.error(f"Error creating email: {str(e)}")
+    except (TypeError, ValueError, RuntimeError, AssertionError) as e:
+        logger.exception("Error creating email")
         return False
 
 

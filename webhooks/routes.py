@@ -6,6 +6,7 @@ import json
 import logging
 from datetime import datetime
 from flask import Blueprint, request, jsonify, current_app, g
+from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import WebhookEvent, Notification, User
 from webhooks.services import WebhookProcessor
@@ -69,24 +70,25 @@ def receive_webhook(source):
         try:
             processor = WebhookProcessor()
             processor.process_webhook(webhook_event.id)
-        except Exception as e:
+        except (SQLAlchemyError, KeyError, ValueError, RuntimeError) as e:
             # Log processing error but don't fail the webhook reception
-            logger.error(f"Error processing webhook {webhook_event.id}: {str(e)}")
+            logger.exception(f"Error processing webhook {webhook_event.id}")
             # Update the webhook event with error information in a separate transaction
             try:
                 webhook_event.error_message = str(e)
                 webhook_event.processed = True
                 webhook_event.processed_at = datetime.utcnow()
                 db.session.commit()
-            except Exception:
+            except SQLAlchemyError:
                 db.session.rollback()
+                logger.exception(f"Failed to record processing error on webhook {webhook_event.id}")
         
         logger.info(f"Successfully processed webhook {webhook_event.id} from {source}")
         return jsonify({'status': 'success', 'webhook_id': webhook_event.id}), 200
         
-    except Exception as e:
-        logger.error(f"Error processing webhook from {source}: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError, OSError) as e:
         db.session.rollback()
+        logger.exception(f"Error processing webhook from {source}")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -119,8 +121,8 @@ def list_webhook_events():
         
         return jsonify({'events': events_data}), 200
         
-    except Exception as e:
-        logger.error(f"Error listing webhook events: {str(e)}")
+    except SQLAlchemyError as e:
+        logger.exception("Error listing webhook events")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -165,8 +167,8 @@ def security_status():
             'timestamp': datetime.utcnow().isoformat()
         }), 200
         
-    except Exception as e:
-        logger.error(f"Error getting security status: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
+        logger.exception("Error getting security status")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -180,8 +182,8 @@ def clear_security_cache():
         logger.info("Webhook security cache cleared by admin")
         return jsonify({'message': 'Security cache cleared successfully'}), 200
         
-    except Exception as e:
-        logger.error(f"Error clearing security cache: {str(e)}")
+    except (SQLAlchemyError, OSError, RuntimeError, ConnectionError) as e:
+        logger.exception("Error clearing security cache")
         return jsonify({'error': 'Internal server error'}), 500
 
 
@@ -213,8 +215,8 @@ def _extract_event_type(source, headers, payload):
         except json.JSONDecodeError:
             return 'unknown'
             
-    except Exception as e:
-        logger.warning(f"Could not extract event type for {source}: {str(e)}")
+    except (KeyError, ValueError, AttributeError) as e:
+        logger.exception(f"Could not extract event type for {source}")
         return 'unknown'
 
 

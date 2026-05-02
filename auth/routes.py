@@ -9,6 +9,7 @@ from errors import handle_db_errors, UserFriendlyError
 from mail import send_welcome_email, send_password_reset_email
 from utils.security import is_safe_url
 import re
+import smtplib
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
 
@@ -84,8 +85,8 @@ def register():
                     logger.info(f"Welcome email sent to {user.email}")
                 else:
                     logger.warning(f"Failed to send welcome email to {user.email}")
-            except Exception as e:
-                logger.error(f"Error sending welcome email: {str(e)}")
+            except (smtplib.SMTPException, OSError, ConnectionError) as e:
+                logger.exception("Error sending welcome email")
 
             logger.info(f"New user registered: {user.username} (ID: {user.id})")
             

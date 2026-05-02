@@ -134,9 +134,9 @@ def create_client():
             # Redirect to the client list
             return redirect(url_for('clients.view_client', id=client.id))
             
-        except Exception as e:
+        except (SQLAlchemyError, ValueError) as e:
             db.session.rollback()
-            logger.error(f"Error creating client: {str(e)}")
+            logger.exception("Error creating client")
             flash('An error occurred while creating the client. Please try again.', 'danger')
     
     # If form validation failed or we had an error
@@ -202,7 +202,8 @@ def delete_client(id):
             flash('Error deleting client. Please try again.', 'danger')
 
         return redirect(url_for('clients.list_clients'))
-    except Exception as e:
-        logger.error(f"Unexpected error in delete_client {id}: {str(e)}")
+    except (SQLAlchemyError, ValueError, KeyError) as e:
+        db.session.rollback()
+        logger.exception(f"Unexpected error in delete_client {id}")
         flash('An unexpected error occurred. Please try again.', 'danger')
         return redirect(url_for('clients.list_clients'))

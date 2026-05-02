@@ -109,8 +109,8 @@ def process_css_files(app):
             
             logger.info(f"Minified {css_file.name}: {original_size:,} bytes → {minified_size:,} bytes ({reduction:.1f}% reduction)")
             
-        except Exception as e:
-            logger.error(f"Error processing {css_file}: {str(e)}")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.exception(f"Error processing {css_file}")
     
     logger.info(f"CSS minification complete. Files saved to {minified_folder}")
 
@@ -151,8 +151,8 @@ def process_js_files(app):
             
             logger.info(f"Minified {js_file.name}: {original_size:,} bytes → {minified_size:,} bytes ({reduction:.1f}% reduction)")
             
-        except Exception as e:
-            logger.error(f"Error processing {js_file}: {str(e)}")
+        except (OSError, UnicodeDecodeError) as e:
+            logger.exception(f"Error processing {js_file}")
     
     logger.info(f"JavaScript minification complete. Files saved to {minified_folder}")
     

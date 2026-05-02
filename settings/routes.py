@@ -88,8 +88,8 @@ def invoice_template():
                     # Store in database
                     settings.invoice_logo = logo_data
                     settings.invoice_logo_mimetype = f'image/{img_format.lower()}'
-                except Exception as e:
-                    logger.error(f"Error processing logo image: {str(e)}")
+                except (OSError, ValueError) as e:
+                    logger.exception("Error processing logo image")
                     flash('Error processing logo image. Please try a different image.', 'warning')
             
             # Check if logo should be removed
@@ -442,8 +442,8 @@ def export_data_json():
         
         return response
         
-    except Exception as e:
-        logger.error(f"Error exporting JSON data: {str(e)}")
+    except (SQLAlchemyError, OSError, ValueError, TypeError) as e:
+        logger.exception("Error exporting JSON data")
         flash('An error occurred while exporting your data. Please try again.', 'danger')
         return redirect(url_for('settings.export_data'))
 
@@ -692,8 +692,8 @@ For support, please contact support@workvista.example.com
         
         return response
         
-    except Exception as e:
-        logger.error(f"Error exporting CSV data: {str(e)}")
+    except (SQLAlchemyError, OSError, ValueError, TypeError) as e:
+        logger.exception("Error exporting CSV data")
         flash('An error occurred while exporting your data. Please try again.', 'danger')
         return redirect(url_for('settings.export_data'))
 

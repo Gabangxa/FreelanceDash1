@@ -13,6 +13,8 @@ from flask import request, jsonify, current_app, g
 from werkzeug.exceptions import RequestEntityTooLarge
 import ipaddress
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from webhooks import ip_ranges
 from webhooks.storage import get_storage
 
@@ -168,8 +170,8 @@ class WebhookSecurity:
                 
         except WebhookSecurityError:
             raise
-        except Exception as e:
-            logger.error(f"Unexpected error verifying webhook signature for {source}: {str(e)}")
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
+            logger.exception(f"Unexpected error verifying webhook signature for {source}")
             raise WebhookSecurityError("Signature verification failed")
     
     @staticmethod
@@ -242,8 +244,8 @@ class WebhookSecurity:
             
         except WebhookSecurityError:
             raise
-        except Exception as e:
-            logger.error(f"Error parsing Stripe signature: {str(e)}")
+        except (KeyError, ValueError, TypeError, AttributeError) as e:
+            logger.exception("Error parsing Stripe signature")
             raise WebhookSecurityError("Invalid Stripe signature format")
     
     @staticmethod
@@ -292,12 +294,12 @@ class WebhookSecurity:
         try:
             storage = get_storage()
             attempt_count = storage.record_failed_attempt(attempt_key, window)
-        except Exception as exc:
+        except (SQLAlchemyError, OSError, ConnectionError, RuntimeError) as exc:
             # Tracking is best-effort security telemetry: a storage outage
             # must never turn a real validation error into a 500.
-            logger.warning(
+            logger.exception(
                 f"Failed to record webhook failed-attempt for {source} from "
-                f"{client_ip}: {exc}"
+                f"{client_ip}"
             )
             return
 
@@ -402,8 +404,8 @@ def require_webhook_security(f):
                 'message': e.message
             }), e.status_code
             
-        except Exception as e:
-            logger.error(f"Unexpected security error for {source}: {str(e)}")
+        except Exception as e:  # noqa: BLE001 - top-level safety net for security decorator
+            logger.exception(f"Unexpected security error for {source}")
             return jsonify({
                 'error': 'Security validation failed',
                 'message': 'Internal security error'

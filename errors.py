@@ -156,8 +156,8 @@ def register_error_handlers(app):
             from flask_login import current_user
             if current_user.is_authenticated:
                 user_id = current_user.id
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - best-effort current_user lookup for logging
+            app.logger.exception("Failed to resolve current_user during 403 handler")
         app.logger.warning(f"403 Forbidden access: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}")
         
         if request.path.startswith('/api/'):
@@ -196,7 +196,7 @@ def register_error_handlers(app):
         return render_template('errors/400.html'), 400
     
     @app.errorhandler(Exception)
-    def handle_exception(error):
+    def handle_exception(error):  # noqa: BLE001 - global error handler
         # Pass through HTTP exceptions
         if isinstance(error, HTTPException):
             return error
@@ -207,13 +207,12 @@ def register_error_handlers(app):
             from flask_login import current_user
             if current_user.is_authenticated:
                 user_id = current_user.id
-        except Exception:
-            pass
+        except Exception:  # noqa: BLE001 - best-effort current_user lookup for logging
+            app.logger.exception("Failed to resolve current_user during global handler")
         
-        app.logger.error(
-            f"Unhandled exception: {error.__class__.__name__}: {str(error)}\n"
-            f"Route: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}\n"
-            f"{traceback.format_exc()}"
+        app.logger.exception(
+            f"Unhandled exception: {error.__class__.__name__}\n"
+            f"Route: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}"
         )
         
         # Return a JSON response for API requests
@@ -246,8 +245,8 @@ def handle_db_errors(f):
                 if current_user.is_authenticated:
                     user_id = current_user.id
                     error_details['user_id'] = user_id
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - best-effort current_user lookup for logging
+                logging.getLogger('database').exception("Failed to resolve current_user in handle_db_errors")
             
             # Get request details if available
             try:
@@ -255,15 +254,14 @@ def handle_db_errors(f):
                 error_details['path'] = request.path
                 error_details['method'] = request.method
                 error_details['remote_addr'] = request.remote_addr
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - best-effort request lookup for logging
+                logging.getLogger('database').exception("Failed to resolve request in handle_db_errors")
             
             # Log with all details
             db_logger = logging.getLogger('database')
-            db_logger.error(
-                f"IntegrityError in {f.__name__}: {str(e)}\n"
-                f"Details: {error_details}\n"
-                f"{traceback.format_exc()}"
+            db_logger.exception(
+                f"IntegrityError in {f.__name__}\n"
+                f"Details: {error_details}"
             )
             
             # Determine user-friendly error message
@@ -299,8 +297,8 @@ def handle_db_errors(f):
                 if current_user.is_authenticated:
                     user_id = current_user.id
                     error_details['user_id'] = user_id
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - best-effort current_user lookup for logging
+                logging.getLogger('database').exception("Failed to resolve current_user in handle_db_errors")
             
             # Get request details if available
             try:
@@ -308,15 +306,14 @@ def handle_db_errors(f):
                 error_details['path'] = request.path
                 error_details['method'] = request.method
                 error_details['remote_addr'] = request.remote_addr
-            except Exception:
-                pass
+            except Exception:  # noqa: BLE001 - best-effort request lookup for logging
+                logging.getLogger('database').exception("Failed to resolve request in handle_db_errors")
             
             # Log with all details
             db_logger = logging.getLogger('database')
-            db_logger.error(
-                f"SQLAlchemyError in {f.__name__}: {str(e)}\n"
-                f"Details: {error_details}\n"
-                f"{traceback.format_exc()}"
+            db_logger.exception(
+                f"SQLAlchemyError in {f.__name__}\n"
+                f"Details: {error_details}"
             )
             
             # Rollback transaction

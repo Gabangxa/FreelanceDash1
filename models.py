@@ -5,6 +5,7 @@ from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import Index
+from sqlalchemy.exc import SQLAlchemyError
 import secrets
 import time
 
@@ -68,11 +69,11 @@ class User(UserMixin, db.Model):
         except (ImportError, ModuleNotFoundError):
             # Polar integration is disabled, return None
             return None
-        except Exception as e:
+        except (SQLAlchemyError, AttributeError) as e:
             # Log any other errors but don't crash the application
             import logging
             logger = logging.getLogger(__name__)
-            logger.warning(f"Error getting subscription: {str(e)}")
+            logger.exception("Error getting subscription")
             return None
         
     def _resolve_features(self):

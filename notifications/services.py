@@ -2,7 +2,9 @@
 Notification delivery service for the Freelancer Suite application.
 """
 import logging
+import smtplib
 from datetime import datetime
+from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import Notification, NotificationSettings, User
 from mail import send_notification_email
@@ -85,8 +87,8 @@ class NotificationDeliveryService:
                             'timestamp': datetime.utcnow().isoformat()
                         }
                         logger.error(f"Failed to queue email notification for {user.email} (notification {notification_id})")
-                except Exception as e:
-                    logger.error(f"Error sending email notification: {str(e)}")
+                except (smtplib.SMTPException, OSError, ConnectionError) as e:
+                    logger.exception("Error sending email notification")
                     results['email'] = {
                         'status': 'error',
                         'error': str(e),
@@ -113,9 +115,9 @@ class NotificationDeliveryService:
             logger.info(f"Notification {notification_id} delivery completed: {results}")
             return results
             
-        except Exception as e:
-            logger.error(f"Error delivering notification {notification_id}: {str(e)}")
+        except SQLAlchemyError as e:
             db.session.rollback()
+            logger.exception(f"Error delivering notification {notification_id}")
             return {'error': str(e)}
     
     @staticmethod
@@ -164,8 +166,8 @@ class NotificationDeliveryService:
                 'results': results
             }
             
-        except Exception as e:
-            logger.error(f"Error delivering notifications for user {user_id}: {str(e)}")
+        except SQLAlchemyError as e:
+            logger.exception(f"Error delivering notifications for user {user_id}")
             return {'error': str(e)}
     
     @staticmethod
@@ -196,8 +198,8 @@ class NotificationDeliveryService:
                 'event_type': n.event_type
             } for n in notifications]
             
-        except Exception as e:
-            logger.error(f"Error getting unread notifications for user {user_id}: {str(e)}")
+        except SQLAlchemyError as e:
+            logger.exception(f"Error getting unread notifications for user {user_id}")
             return []
     
     @staticmethod
@@ -229,7 +231,7 @@ class NotificationDeliveryService:
             logger.info(f"Notification {notification_id} marked as read by user {user_id}")
             return True
             
-        except Exception as e:
-            logger.error(f"Error marking notification {notification_id} as read: {str(e)}")
+        except SQLAlchemyError as e:
             db.session.rollback()
+            logger.exception(f"Error marking notification {notification_id} as read")
             return False

@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
+from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import WebhookEvent, Notification, User, NotificationSettings
 
@@ -65,8 +66,9 @@ class WebhookProcessor:
             logger.info(f"Webhook {webhook_event_id} processed successfully: {success}")
             return success
             
-        except Exception as e:
-            logger.error(f"Error processing webhook {webhook_event_id}: {str(e)}")
+        except (SQLAlchemyError, KeyError, ValueError, TypeError) as e:
+            db.session.rollback()
+            logger.exception(f"Error processing webhook {webhook_event_id}")
             try:
                 webhook_event = WebhookEvent.query.get(webhook_event_id)
                 if webhook_event:
@@ -74,8 +76,9 @@ class WebhookProcessor:
                     webhook_event.processed = True
                     webhook_event.processed_at = datetime.utcnow()
                     db.session.commit()
-            except Exception:
+            except SQLAlchemyError:
                 db.session.rollback()
+                logger.exception(f"Failed to record processor error on webhook {webhook_event_id}")
             return False
     
     def _process_github_webhook(self, webhook_event: WebhookEvent, payload: Dict[Any, Any]) -> bool:
@@ -113,8 +116,9 @@ class WebhookProcessor:
             
             return True
             
-        except Exception as e:
-            logger.error(f"Error processing GitHub webhook: {str(e)}")
+        except (KeyError, ValueError, AttributeError, SQLAlchemyError) as e:
+            db.session.rollback()
+            logger.exception("Error processing GitHub webhook")
             return False
     
     def _process_stripe_webhook(self, webhook_event: WebhookEvent, payload: Dict[Any, Any]) -> bool:
@@ -149,8 +153,9 @@ class WebhookProcessor:
             
             return True
             
-        except Exception as e:
-            logger.error(f"Error processing Stripe webhook: {str(e)}")
+        except (KeyError, ValueError, AttributeError, SQLAlchemyError) as e:
+            db.session.rollback()
+            logger.exception("Error processing Stripe webhook")
             return False
     
     def _process_custom_webhook(self, webhook_event: WebhookEvent, payload: Dict[Any, Any]) -> bool:
@@ -192,8 +197,9 @@ class WebhookProcessor:
             
             return True
             
-        except Exception as e:
-            logger.error(f"Error processing custom webhook: {str(e)}")
+        except (KeyError, ValueError, AttributeError, SQLAlchemyError) as e:
+            db.session.rollback()
+            logger.exception("Error processing custom webhook")
             return False
     
     def _process_generic_webhook(self, webhook_event: WebhookEvent, payload: Dict[Any, Any]) -> bool:
@@ -212,8 +218,9 @@ class WebhookProcessor:
             
             return True
             
-        except Exception as e:
-            logger.error(f"Error processing generic webhook: {str(e)}")
+        except (KeyError, ValueError, AttributeError, SQLAlchemyError) as e:
+            db.session.rollback()
+            logger.exception("Error processing generic webhook")
             return False
     
     def _create_user_notification(self, user_id: int, title: str, message: str, 
@@ -253,8 +260,9 @@ class WebhookProcessor:
             logger.info(f"Created notification {notification.id} for user {user_id}. Delivery: {delivery_result}")
             return True
             
-        except Exception as e:
-            logger.error(f"Error creating user notification: {str(e)}")
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.exception("Error creating user notification")
             return False
     
     def _create_system_notification(self, title: str, message: str, webhook_event: WebhookEvent,
@@ -302,6 +310,7 @@ class WebhookProcessor:
             logger.info(f"Created {notifications_created} system notifications, delivered {delivered_count}")
             return True
             
-        except Exception as e:
-            logger.error(f"Error creating system notifications: {str(e)}")
+        except SQLAlchemyError as e:
+            db.session.rollback()
+            logger.exception("Error creating system notifications")
             return False

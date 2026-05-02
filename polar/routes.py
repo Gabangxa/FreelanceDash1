@@ -8,6 +8,7 @@ from flask import (
     url_for, current_app, session, jsonify
 )
 from flask_login import login_required, current_user
+from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from errors import handle_db_errors, UserFriendlyError
 from models import User
@@ -368,9 +369,9 @@ def process_subscription_created(event_data):
         db.session.commit()
         
         logger.info(f"Processed subscription.created webhook for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error processing subscription.created webhook: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
         db.session.rollback()
+        logger.exception("Error processing subscription.created webhook")
         raise
 
 def process_subscription_updated(event_data):
@@ -431,9 +432,9 @@ def process_subscription_updated(event_data):
         db.session.commit()
         
         logger.info(f"Processed subscription.updated webhook for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error processing subscription.updated webhook: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
         db.session.rollback()
+        logger.exception("Error processing subscription.updated webhook")
         raise
 
 def process_subscription_cancelled(event_data):
@@ -478,9 +479,9 @@ def process_subscription_cancelled(event_data):
         db.session.commit()
         
         logger.info(f"Processed subscription.cancelled webhook for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error processing subscription.cancelled webhook: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
         db.session.rollback()
+        logger.exception("Error processing subscription.cancelled webhook")
         raise
 
 def process_subscription_payment_failed(event_data):
@@ -524,9 +525,9 @@ def process_subscription_payment_failed(event_data):
         db.session.commit()
         
         logger.info(f"Processed subscription.payment_failed webhook for user {user_id}")
-    except Exception as e:
-        logger.error(f"Error processing subscription.payment_failed webhook: {str(e)}")
+    except (SQLAlchemyError, KeyError, ValueError) as e:
         db.session.rollback()
+        logger.exception("Error processing subscription.payment_failed webhook")
         raise
 
 

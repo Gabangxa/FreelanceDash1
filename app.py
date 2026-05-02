@@ -352,10 +352,8 @@ with app.app_context():
     else:
         try:
             _get_webhook_storage()
-        except Exception as _exc:  # pragma: no cover - DB init shouldn't fail here
-            logger.error(
-                "Webhook DB-fallback storage backend init failed: %s", _exc,
-            )
+        except Exception as _exc:  # noqa: BLE001 - top-level safety net for storage init  # pragma: no cover - DB init shouldn't fail here
+            logger.exception("Webhook DB-fallback storage backend init failed")
 
     if (
         os.environ.get("FLASK_ENV", "").lower() != "test"
@@ -372,10 +370,10 @@ with app.app_context():
                 "ok" if _gh else "fallback",
                 "ok" if _stripe else "fallback",
             )
-        except Exception as _exc:
-            logger.warning(
-                "Webhook IP allowlist initial refresh raised: %s "
-                "(static fallback ranges remain in effect)", _exc,
+        except Exception as _exc:  # noqa: BLE001 - top-level safety net for IP refresh
+            logger.exception(
+                "Webhook IP allowlist initial refresh raised "
+                "(static fallback ranges remain in effect)"
             )
 
 # For testing/debugging purposes only

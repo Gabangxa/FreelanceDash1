@@ -208,8 +208,8 @@ class PolarAPI:
             response = self._make_request("post", "checkout/session", json=data)
             logger.info(f"Successfully created checkout session: {response.get('id')}")
             return response
-        except Exception as e:
-            logger.error(f"Failed to create checkout session: {str(e)}")
+        except (PolarAPIError, requests.RequestException, ValueError, KeyError) as e:
+            logger.exception("Failed to create checkout session")
             raise PolarAPIError(f"Unable to create checkout session: {str(e)}")
     
     def get_payment_methods(self, user_id):
@@ -239,8 +239,8 @@ class PolarAPI:
         try:
             # Call the Polar.sh API to get session details
             return self._make_request("get", f"checkout/session/{session_id}")
-        except Exception as e:
-            logger.error(f"Error getting checkout session: {str(e)}")
+        except (PolarAPIError, requests.RequestException, ValueError, KeyError) as e:
+            logger.exception("Error getting checkout session")
             raise PolarAPIError(f"Unable to retrieve checkout session information: {str(e)}")
 
 
@@ -293,7 +293,8 @@ def is_polar_api_configured():
         # Check if the POLAR_API_KEY exists in environment
         api_key = os.environ.get("POLAR_API_KEY")
         return bool(api_key)
-    except Exception:
+    except OSError:
+        logger.exception("Error checking Polar API configuration")
         return False
 
 def get_webhook_url():
@@ -313,7 +314,7 @@ def get_webhook_url():
         # Generate the webhook URL using url_for
         webhook_url = url_for('subscriptions.webhook', _external=True)
         return webhook_url
-    except Exception as e:
-        logger.error(f"Error generating Polar webhook URL: {str(e)}")
+    except RuntimeError as e:
+        logger.exception("Error generating Polar webhook URL")
         # Fallback to a placeholder - this should be replaced with actual URL
         return "https://yourapp.replit.app/subscriptions/webhook"
