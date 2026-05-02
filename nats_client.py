@@ -58,6 +58,12 @@ _state: str = "disabled"  # disabled | connecting | connected | error
 _last_error: Optional[str] = None
 _last_event_at: Optional[datetime] = None
 _url: Optional[str] = None
+# Set true by ``_ensure_app_events_stream`` on successful stream
+# creation. Drives whether ``publish()`` uses ``js.publish`` (persisted,
+# subscribers get redelivery) or falls back to ``nc.publish`` (core
+# NATS, fire-and-forget). False by default so the no-op stub keeps its
+# semantics when NATS_URL is unset.
+_jetstream_publish_enabled: bool = False
 
 # How long sync callers wait for an async publish to land before they give
 # up and log. Kept short so a wedged NATS connection can't pile up
@@ -129,7 +135,12 @@ def _ensure_loop() -> Optional[asyncio.AbstractEventLoop]:
 async def _connect(url: str, creds_path: Optional[str]) -> tuple[Any, Any]:
     """Open a NATS connection and JetStream context. Imported lazily so
     the module is importable even when ``nats-py`` isn't installed (no-op
-    mode)."""
+    mode).
+
+    Also ensures the ``APP_EVENTS`` JetStream stream exists so
+    ``publish()`` calls have somewhere persistent to land. Stream
+    creation failure is non-fatal: we log and fall back to core NATS
+    publish (Phase 0 behaviour, no subscriber redelivery)."""
     import nats  # noqa: WPS433 - lazy import is intentional
     from nats.errors import NoServersError  # noqa: F401 - imported for type clarity
 
@@ -145,7 +156,50 @@ async def _connect(url: str, creds_path: Optional[str]) -> tuple[Any, Any]:
 
     nc = await nats.connect(**connect_kwargs)
     js = nc.jetstream()
+    await _ensure_app_events_stream(js)
     return nc, js
+
+
+async def _ensure_app_events_stream(js: Any) -> None:
+    """Create / update the ``APP_EVENTS`` stream so JetStream publish
+    has a persistent place to land. Worker subscribers bind to the
+    same stream. Idempotent: matching config is a no-op.
+
+    Failure here is logged but doesn't abort startup -- the publish
+    path will fall back to core NATS (no persistence, no subscriber
+    redelivery, but otherwise functional)."""
+    global _jetstream_publish_enabled
+    from nats.js.api import RetentionPolicy, StorageType, StreamConfig
+
+    cfg = StreamConfig(
+        name="APP_EVENTS",
+        subjects=["app.>"],
+        retention=RetentionPolicy.LIMITS,
+        storage=StorageType.FILE,
+        max_age=7 * 24 * 60 * 60,
+        max_msgs=10_000_000,
+        max_bytes=1024 * 1024 * 1024,
+        num_replicas=1,
+    )
+    try:
+        await js.add_stream(config=cfg)
+        _jetstream_publish_enabled = True
+        logger.info("APP_EVENTS JetStream stream ensured (subjects=app.>)")
+        return
+    except Exception:
+        # Likely already exists with a different config; try update.
+        try:
+            await js.update_stream(config=cfg)
+            _jetstream_publish_enabled = True
+            logger.info("APP_EVENTS JetStream stream updated to current config")
+            return
+        except Exception:
+            _jetstream_publish_enabled = False
+            logger.exception(
+                "Could not ensure APP_EVENTS stream. publish() will use core "
+                "NATS (no persistence). Subscribers will not get redelivery. "
+                "Check JetStream is enabled on the server and account quota."
+            )
 
 
 def init() -> None:
@@ -227,7 +281,7 @@ def reset_for_tests() -> None:
     """Hard reset of all module state. Used by tests so one test's
     connection / mocks don't bleed into the next."""
     global _nc, _js, _state, _last_error, _last_event_at, _url
-    global _loop, _loop_thread
+    global _loop, _loop_thread, _jetstream_publish_enabled
     with _lock:
         if _loop is not None and _loop.is_running():
             _loop.call_soon_threadsafe(_loop.stop)
@@ -241,6 +295,7 @@ def reset_for_tests() -> None:
         _last_error = None
         _last_event_at = None
         _url = None
+        _jetstream_publish_enabled = False
     _loop_ready.clear()
 
 
@@ -256,8 +311,37 @@ def record_publish_success() -> None:
 
 
 async def _publish_async(subject: str, payload: bytes) -> None:
+    global _jetstream_publish_enabled
+
     if _nc is None:
         raise RuntimeError("NATS client not connected")
+    # Prefer JetStream when the APP_EVENTS stream was successfully
+    # ensured at startup: messages survive worker restarts and
+    # subscribers get at-least-once delivery. If JS publish fails at
+    # runtime (broker degraded, stream evicted, network blip), we
+    # MUST NOT silently fall back to core publish -- the subscriber's
+    # JetStream durable consumer never sees core messages, so any
+    # caller relying on the cutover (web tier with the subscriber
+    # flag on) would silently drop the notification. Instead we
+    # downgrade _jetstream_publish_enabled so subsequent calls take
+    # the inline-fallback path, and re-raise so this caller's
+    # publish() returns False and they can fall back inline too.
+    if _jetstream_publish_enabled and _js is not None:
+        try:
+            await _js.publish(subject, payload)
+            return
+        except Exception:
+            _jetstream_publish_enabled = False
+            logger.warning(
+                "JetStream publish failed for subject=%s; downgrading bus "
+                "to core-only until next restart. Cutover-aware callers "
+                "will fall back to inline delivery.", subject,
+            )
+            raise
+    # JS was never healthy (Phase 0-style publish, no subscriber to
+    # confuse). Core publish is fine -- the cutover interlock in the
+    # caller already forced inline delivery for any cutover-sensitive
+    # path before we got here.
     await _nc.publish(subject, payload)
 
 

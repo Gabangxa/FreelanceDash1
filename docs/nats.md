@@ -139,13 +139,159 @@ Storage backend reads/writes against an unreachable NATS server fail
 fast and abort boot (same fail-fast policy as Redis); only the
 fire-and-log publisher is best-effort.
 
-## Out of scope (Phase 1 territory)
+## Phase 1: subscriber on a Reserved VM
 
-* Long-lived subscriber processes (need a Reserved VM, not autoscale)
-* Replacing the email-sending daemon with a NATS worker
-* PDF generation queue
+Phase 1 ships the first long-lived NATS consumer: the
+`NotificationDeliverySubscriber` in `subscribers/notifications.py`. It
+takes notification delivery off the request path so a slow SMTP server
+can't slow down a webhook ingest.
+
+### Architecture
+
+```
+┌─────────────────────────┐                ┌─────────────────────────┐
+│  Web tier (Autoscale)   │                │  Worker (Reserved VM)   │
+│  gunicorn workers       │                │  python worker.py       │
+│  - publish events       │   JetStream    │  - subscribe(app.*)     │
+│  - skip inline delivery │ ─────────────► │  - deliver_notification │
+│    when flag is on      │                │  - ack / nak            │
+└─────────────────────────┘                └─────────────────────────┘
+              │                                       ▲
+              ▼                                       │
+        ┌──────────────────────────────────────────────┐
+        │  NATS server (Synadia Cloud free tier)       │
+        │  Stream: APP_EVENTS  (subjects: app.>)       │
+        │  Durable: notification-delivery              │
+        └──────────────────────────────────────────────┘
+```
+
+**Why two processes.** The web tier runs on Autoscale, which scales to
+zero between requests — that kills any long-lived TCP connection. The
+subscriber needs to be running 24/7 to consume messages, so it lives on
+a Reserved VM (always-on, flat monthly rate). See the discussion in
+the project changelog for cost trade-offs.
+
+**Persistence.** Phase 1 upgrades `nats_client.publish` from core NATS
+to JetStream-persisted publish. Messages survive subscriber downtime
+and get at-least-once redelivery. The web tier auto-creates the
+`APP_EVENTS` stream at startup; the worker also ensures it. If
+JetStream is unavailable for any reason, publish falls back to core
+NATS so the web tier keeps working.
+
+### Provisioning the Reserved VM
+
+In the Replit workspace:
+
+1. Open the deployments panel and create a new **Reserved VM**
+   deployment (not Autoscale). Choose the smallest size — the worker
+   is mostly idle.
+2. Set the **run command** to `python worker.py`.
+3. Set these **secrets** on the VM (must match the web tier exactly):
+   * `NATS_URL` — the same server the web tier connects to
+   * `NATS_CREDS_PATH` — for Synadia, point to the uploaded `.creds` file
+   * `DATABASE_URL` — same Postgres URL as the web tier
+   * `FLASK_SECRET_KEY` — same value as the web tier (the worker
+     imports the Flask app to get an app context for SQLAlchemy)
+4. **Don't set** `NATS_SUBSCRIBER_DELIVERS_NOTIFICATIONS` yet. Leave it
+   unset on both web and worker for the soak period.
+
+### Safety interlocks built into the code
+
+Two failure modes during cutover are caught automatically; one is not
+and needs operator monitoring:
+
+| Failure mode                          | What happens                                                                                                       |
+|---------------------------------------|--------------------------------------------------------------------------------------------------------------------|
+| Web flag on, stream couldn't be created at startup | Web tier sees `_jetstream_publish_enabled=False` and falls back to inline delivery. **No notifications lost.** |
+| Web flag on, JS publish fails mid-runtime (single message) | `nats_client.publish` re-raises (does NOT silently core-publish), `events.publish` returns False, caller in `webhooks/services.py` sees `published_ok=False` and inline-delivers THIS notification. Subsequent publishes also bypass JS until the next restart. **No notifications lost.** |
+| Web flag on, worker process not running | **Not caught in code.** Web publishes to JetStream, the message persists, but nothing consumes it. Notifications are delayed (not lost — they deliver when the worker comes back). Set up an alert on the JetStream consumer's `num_pending` to catch this within minutes. |
+| Worker flag on, web flag off          | Worker delivers from the bus AND web delivers inline → **double delivery**. The published `notification.created` event drives the worker; the inline call drives the web tier. Avoid by always flipping web first, then worker, or by using deploy automation that flips both atomically. |
+| System broadcast (`_create_system_notification`) during JS outage | Per-message `published_ok` is **not** captured in the broadcast loop, so a broadcast during a runtime JS outage may miss the worker for those specific users. Accepted trade-off for now — system broadcasts are operationally rarer than webhook-driven notifications. Tracked separately. |
+
+### Cutover sequence (zero-downtime, reversible)
+
+1. **Day 0 — soak.** Worker is running, flag is unset. Watch the
+   worker logs:
+   ```
+   notification.delivery: flag off, ack-and-skipping notification_id=42
+   ```
+   Every webhook-triggered notification should produce one of these
+   lines on the worker. If you don't see them, the bus isn't wired up
+   correctly — fix that before flipping the flag.
+
+2. **Day N — flip.** Set `NATS_SUBSCRIBER_DELIVERS_NOTIFICATIONS=true`
+   in **both** the Autoscale deployment AND the Reserved VM. Restart
+   both. From this point:
+   * Web tier writes the row + publishes the event + returns.
+   * Worker consumes the event + delivers + acks.
+   * No double-deliveries (web tier no longer calls
+     `deliver_notification` inline).
+
+3. **Rollback at any time.** Unset the flag on both sides and restart.
+   Inline delivery resumes immediately. The subscriber goes back to
+   ack-and-discard. No data loss — every notification row is in
+   Postgres regardless of the delivery path.
+
+### Retry semantics (what acks vs. what naks)
+
+The subscriber distinguishes permanent vs. transient failures so
+JetStream retries the right things and doesn't loop forever on the
+wrong things:
+
+| `deliver_notification` returns                        | Subscriber action     | Why                                                            |
+|-------------------------------------------------------|-----------------------|----------------------------------------------------------------|
+| `{"email": {"status": "success"}, ...}` (no errors)   | ack                   | Delivered.                                                     |
+| `{"error": "Notification not found"}`                 | ack (warn-log)        | Row deleted between publish and consume; retry won't help.     |
+| `{"error": "User not found"}`                         | ack (warn-log)        | User deleted; retry won't help.                                |
+| `{"error": "<anything else>"}`                        | **nak → retry**       | Unknown failure mode; safer to retry than silently swallow.    |
+| `{"email": {"status": "error", ...}}`                 | **nak → retry**       | SMTP / mail-queue blip caught by the service; transient.       |
+| `{"email": {"status": "failed"}}`                     | **nak → retry**       | Sender returned False; transient.                              |
+| Handler raises `Exception`                            | **nak → retry**       | DB outage, OOM, etc.                                           |
+| Envelope has no `payload.notification_id`             | ack (error-log)       | Publisher bug; retrying won't fix bad data.                    |
+| Envelope is malformed JSON                            | term (error-log)      | Same — never retry, JetStream drops immediately.               |
+
+After `max_deliver=5` failed attempts JetStream stops redelivering. To
+catch poison messages, watch the consumer's "max-deliver-reached"
+counter (`nats consumer info APP_EVENTS notification-delivery`).
+
+### Idempotency contract
+
+JetStream is at-least-once. The same `notification.created` envelope
+can land twice if:
+
+* The worker crashes between the SMTP send and the ack.
+* `ack_wait_seconds` (60s) elapses before the worker acks.
+* The operator restarts the worker mid-message.
+* Any nak above causes a redelivery.
+
+`NotificationDeliveryService.deliver_notification` is the choke point.
+It must remain idempotent — re-running it for the same
+`notification_id` should not double-send the email. The current
+implementation relies on the email queue's per-recipient dedupe window;
+if that ever changes, add an explicit dedupe check (e.g. an
+`EmailDeliveryLog` lookup) at the top of the subscriber's `handle()`.
+
+### Adding a new subscriber
+
+1. Create a new module under `subscribers/` with a class that extends
+   `Subscriber` (see `subscribers/notifications.py` for the template).
+2. Append it to `REGISTRY` in `subscribers/__init__.py`.
+3. Restart the worker. The new subscriber is bound at startup; no
+   web-tier change needed.
+
+If two workers should share the load on the same subject, set
+`Subscriber.queue_group = "some-name"` and run multiple worker
+instances. JetStream load-balances messages between them.
+
+## Still out of scope (later phases)
+
+* PDF generation queue (would replace the inline `generate_pdf` call
+  in `invoices/routes.py`)
 * Migrating Polar webhook handling to publish events
-* Inter-service auth (NKey / JWT) — added when the first subscriber ships
+* Inter-service auth beyond the Synadia `.creds` file (NKey / JWT
+  per-subscriber when we have more than one trust boundary)
+* A web UI for the worker's consumer state (today: `nats consumer info
+  APP_EVENTS notification-delivery` from a shell on the VM)
 
 ## Critical constraints
 

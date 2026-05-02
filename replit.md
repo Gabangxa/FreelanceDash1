@@ -1,5 +1,37 @@
 # Freelancer Suite - Replit Configuration
 
+## 2026-05-02 — NATS Phase 1 (subscriber + Reserved VM)
+
+Shipped the first long-lived NATS consumer to take notification
+delivery off the web request path.
+
+* New `subscribers/` package + `worker.py` entry point. Worker runs
+  on a Reserved VM (separate from the Autoscale web tier so its
+  long-lived TCP connection survives between requests).
+* `nats_client.publish` upgraded to JetStream-persisted publish
+  (auto-creates `APP_EVENTS` stream covering `app.>`); falls back to
+  core NATS only when JetStream was never healthy at startup.
+* Cutover via `NATS_SUBSCRIBER_DELIVERS_NOTIFICATIONS` flag, read by
+  both web (skip inline `deliver_notification`) and worker (only
+  deliver when set). Default unset = no behavior change.
+* Three-layer safety against silent message loss:
+  - Startup interlock: web tier ignores the flag if JetStream
+    couldn't be ensured at boot → inline delivery.
+  - Runtime interlock: per-message JS publish failure flips the
+    flag off and the caller falls back to inline delivery for
+    THAT specific notification.
+  - Per-call interlock: web tier checks `events.publish()`'s
+    return value, not just the flag, before deciding to hand off.
+* Retry semantics: permanent failures (notification/user gone) ack;
+  transient (SMTP outage caught as `{"status": "error"}`, unknown
+  errors, exceptions) nak → JetStream retries up to `max_deliver=5`.
+* `worker.py` passes explicit `ConsumerConfig` to `js.subscribe` so
+  per-class `ack_wait` / `max_deliver` actually apply (otherwise
+  JetStream defaults to infinite redelivery on poison messages).
+* docs/nats.md: Reserved VM provisioning, cutover/rollback sequence,
+  safety-interlock + retry-semantics tables, monitoring guidance.
+* 213 tests pass (was 207). New: `tests/test_subscribers.py`.
+
 ## Overview
 
 Freelancer Suite is a comprehensive SaaS platform built with Flask that provides end-to-end project management and business solutions for freelancers. The application offers client management, project tracking, time management, invoicing, and subscription services through a clean, responsive web interface.
