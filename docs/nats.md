@@ -74,20 +74,23 @@ Phase 0.
 
 ### Invariant: every `Notification` row publishes `notification.created`
 
-The only places that construct `Notification()` rows in this codebase
-are `webhooks/services.py::_create_user_notification` (line ~244) and
-`webhooks/services.py::_create_system_notification` (line ~300). Both
-publish `notification.created` after the row commits. **If you add a
-new code path that writes a `Notification` row, you must publish the
-event from that site too** -- there is no central hook today, and a
-missing publish silently breaks any future subscriber that assumes
-DB-row-and-bus-event are 1:1.
+`notification.created` is published automatically for every committed
+`Notification` row by SQLAlchemy session listeners registered in
+`models.py` (an `after_insert` mapper listener captures the row data
+at flush time; an `after_commit` session listener publishes; an
+`after_rollback` session listener clears the queue). **There is no
+manual publish call site -- any code path that does
+`db.session.add(Notification(...))` followed by a commit gets the
+publish for free**, so future callers (cron jobs, background tasks,
+new features) can't accidentally break the DB-row-and-bus-event 1:1
+invariant.
 
-When the planned notification-delivery worker ships in Phase 1 we
-should refactor creation behind a single helper (e.g. a SQLAlchemy
-`after_insert` listener on `Notification`, or a `notifications.create()`
-factory function) so this invariant becomes mechanical instead of
-documentational. Tracked separately.
+The per-row publish result (the bool returned by `events.publish`) is
+left on `db.session.info["_published_notif"]`, keyed by
+`notification.id`. The webhook service uses this to decide between
+handing delivery off to the bus subscriber and falling back to inline
+delivery when the publish failed. New callers that don't care about
+cutover semantics can ignore this -- the publish happens regardless.
 
 ## Running NATS locally for dev
 

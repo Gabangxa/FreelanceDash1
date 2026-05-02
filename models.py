@@ -1,13 +1,16 @@
 import warnings
+import logging
 from datetime import datetime, timedelta
 from typing import Optional
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
-from sqlalchemy import Index
+from sqlalchemy import Index, event
 from sqlalchemy.exc import SQLAlchemyError
 import secrets
 import time
+
+_models_logger = logging.getLogger(__name__)
 
 @login_manager.user_loader
 def load_user(id):
@@ -584,6 +587,109 @@ class Notification(db.Model):
         Index('idx_notification_user_type', 'user_id', 'notification_type'),
         Index('idx_notification_priority', 'priority', 'created_at'),
     )
+
+
+# ---------------------------------------------------------------------------
+# Notification -> bus invariant
+# ---------------------------------------------------------------------------
+# Every committed Notification row publishes exactly one
+# ``notification.created`` event on the bus. This used to be enforced by
+# two manual ``events.publish`` call sites in ``webhooks/services.py``
+# plus a comment in ``docs/nats.md``; any future code path that wrote a
+# Notification row would silently break the invariant. Centralising it
+# behind SQLAlchemy session events makes the guarantee mechanical:
+# anyone who does ``db.session.add(Notification(...))`` followed by a
+# commit gets the publish for free.
+#
+# We use ``after_insert`` (mapper-level) to capture the row data at
+# flush time -- ``target.id`` is populated by then -- and stash a
+# lightweight dict on ``session.info``. The actual publish happens in
+# the ``after_commit`` session listener so we never publish a row that
+# the transaction will roll back. ``after_rollback`` clears the stash.
+#
+# Publish results are exposed back to callers via
+# ``session.info["_published_notif"]`` (a dict keyed by notification id
+# mapping to the bool returned by ``events.publish``). The webhook
+# service uses this to decide between the bus-driven delivery path and
+# the inline fallback during cutover.
+
+_PENDING_KEY = "_pending_notif_publish"
+_RESULT_KEY = "_published_notif"
+
+
+@event.listens_for(Notification, "after_insert")
+def _notification_after_insert(mapper, connection, target):
+    """Capture just-inserted Notification rows so the after_commit
+    listener can publish them to the bus. Capturing a dict snapshot
+    (not the ORM object) avoids attribute-refresh queries against an
+    expired/closed session post-commit."""
+    try:
+        session = db.session
+        pending = session.info.setdefault(_PENDING_KEY, [])
+        pending.append({
+            "notification_id": target.id,
+            "user_id": target.user_id,
+            "notification_type": target.notification_type,
+            "priority": target.priority,
+            "webhook_event_id": target.webhook_event_id,
+        })
+    except Exception:  # noqa: BLE001 - never let bookkeeping break the insert
+        _models_logger.exception(
+            "notification.after_insert: failed to enqueue publish for "
+            "notification id=%s; the bus event will be dropped",
+            getattr(target, "id", None),
+        )
+
+
+@event.listens_for(db.session, "after_commit")
+def _notification_after_commit(session):
+    """Publish ``notification.created`` for every Notification row that
+    just committed. Failures inside ``events.publish`` are swallowed
+    (it never raises by contract); the per-id boolean result is
+    recorded on ``session.info`` so the cutover-aware caller can
+    decide whether to inline-deliver as a fallback."""
+    pending = session.info.pop(_PENDING_KEY, None)
+    if not pending:
+        return
+    results = session.info.setdefault(_RESULT_KEY, {})
+    try:
+        import events as _events
+    except Exception:  # noqa: BLE001 - unavailable events module is non-fatal
+        _models_logger.exception(
+            "notification.after_commit: events module import failed; "
+            "dropping %d notification.created publish(es)",
+            len(pending),
+        )
+        return
+    for item in pending:
+        notif_id = item["notification_id"]
+        try:
+            ok = _events.publish(
+                "notification.created",
+                user_id=item["user_id"],
+                payload={
+                    "notification_id": notif_id,
+                    "notification_type": item["notification_type"],
+                    "priority": item["priority"],
+                    "webhook_event_id": item["webhook_event_id"],
+                },
+            )
+        except Exception:  # noqa: BLE001 - publish() shouldn't raise, but be safe
+            _models_logger.exception(
+                "notification.after_commit: publish raised for "
+                "notification_id=%s (treating as failed publish)",
+                notif_id,
+            )
+            ok = False
+        results[notif_id] = bool(ok)
+
+
+@event.listens_for(db.session, "after_rollback")
+def _notification_after_rollback(session):
+    """A rolled-back transaction never wrote the Notification rows, so
+    we MUST drop the pending publishes -- otherwise the next commit on
+    this session would publish events for rows that don't exist."""
+    session.info.pop(_PENDING_KEY, None)
 
 
 class NotificationSettings(db.Model):

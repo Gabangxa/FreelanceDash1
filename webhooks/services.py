@@ -223,12 +223,14 @@ class WebhookProcessor:
             logger.exception("Error processing generic webhook")
             return False
     
-    # NOTE: This and ``_create_system_notification`` are the only two
-    # places in the codebase that construct ``Notification`` rows
-    # (verified by ripgrep). Both publish ``notification.created`` on
-    # the bus after commit. If you add a third creation site, publish
-    # the same event there too -- see ``docs/nats.md`` for the
-    # invariant. There is no central hook today.
+    # NOTE: ``notification.created`` is published automatically by the
+    # SQLAlchemy after_commit listener registered in ``models.py`` for
+    # every committed ``Notification`` row, so we no longer call
+    # ``events.publish`` from here. We DO still consult the per-id
+    # publish result that the listener leaves on ``session.info`` to
+    # decide between handing delivery off to the bus subscriber and
+    # falling back to inline delivery -- see the cutover logic below.
+    # See ``docs/nats.md`` for the full invariant.
     @staticmethod
     def _subscriber_owns_delivery() -> bool:
         """Phase 1 cutover flag. When true AND the bus is healthy, the
@@ -292,25 +294,16 @@ class WebhookProcessor:
             db.session.add(notification)
             db.session.commit()
 
-            # Bus event: publish so the delivery subscriber can pick
-            # it up. No PII -- only IDs and metadata. See docs/nats.md
-            # for the contract. We use the publish RESULT (not just the
-            # cutover flag) to decide whether to hand delivery off:
-            # publish() returns False if JetStream-persisted publish
-            # failed at runtime, in which case the worker won't see
-            # this message and we MUST deliver inline as a fallback.
-            import events as _events
-            published_ok = _events.publish(
-                "notification.created",
-                user_id=user_id,
-                payload={
-                    "notification_id": notification.id,
-                    "notification_type": notification_type,
-                    "priority": priority,
-                    "source": "webhook",
-                    "webhook_event_id": webhook_event.id,
-                },
-            )
+            # The after_commit listener in models.py just published
+            # ``notification.created`` for this row and stashed the
+            # per-id success bool on ``session.info``. Look it up so we
+            # can fall back to inline delivery when the publish failed
+            # (publish returns False if JetStream-persisted publish was
+            # unavailable at runtime, in which case the worker won't
+            # see this message).
+            published_ok = db.session.info.get(
+                "_published_notif", {}
+            ).get(notification.id, False)
 
             # Cutover decision: subscriber owns delivery only when
             # (a) the operator has flipped the flag, (b) the bus is
@@ -373,26 +366,11 @@ class WebhookProcessor:
             from notifications.services import NotificationDeliveryService
             delivered_count = 0
             
-            # Get the notifications we just created for delivery
+            # Get the notifications we just created for delivery.
+            # ``notification.created`` was already published per-row by
+            # the after_commit listener in models.py -- no manual
+            # publish loop needed here.
             recent_notifications = Notification.query.filter_by(webhook_event_id=webhook_event.id).all()
-
-            # Bus event per created notification. Publish before delivery
-            # so the bus state mirrors the DB state even if delivery
-            # fails. Failures inside events.publish are swallowed and
-            # logged -- never propagate to the request.
-            import events as _events
-            for notification in recent_notifications:
-                _events.publish(
-                    "notification.created",
-                    user_id=notification.user_id,
-                    payload={
-                        "notification_id": notification.id,
-                        "notification_type": notification.notification_type,
-                        "priority": notification.priority,
-                        "source": "webhook-system",
-                        "webhook_event_id": webhook_event.id,
-                    },
-                )
 
             # System-broadcast cutover. We can't capture per-message
             # publish() results here because the publishes happened
