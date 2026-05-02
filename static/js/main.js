@@ -205,49 +205,44 @@ function dismissFlash(element) {
 }
 
 // Theme Mode Toggle (Dark/Light mode)
+// The actual theme is applied by an inline pre-paint script in <head> to
+// avoid FOIT. This module wires up every [data-theme-toggle] element on the
+// page (there can be multiple on signed-out pages) and keeps them in sync.
 function initThemeMode() {
-    // Check for saved theme preference or use system preference
-    const savedTheme = localStorage.getItem('theme');
-    const themeToggle = document.getElementById('theme-toggle');
-    const prefersDarkMode = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    
-    // Apply the theme based on saved preference or system preference
-    if (savedTheme === 'dark' || (!savedTheme && prefersDarkMode)) {
-        document.documentElement.setAttribute('data-bs-theme', 'dark');
-        if (themeToggle) {
-            themeToggle.checked = true;
+    const currentTheme = document.documentElement.getAttribute('data-bs-theme') || 'light';
+    syncThemeUI(currentTheme);
+
+    document.querySelectorAll('[data-theme-toggle]').forEach(function (el) {
+        if (el.tagName === 'INPUT' && el.type === 'checkbox') {
+            el.checked = (currentTheme === 'dark');
+            el.addEventListener('change', function () {
+                applyTheme(el.checked ? 'dark' : 'light');
+            });
+        } else {
+            el.addEventListener('click', function (e) {
+                e.preventDefault();
+                const next = document.documentElement.getAttribute('data-bs-theme') === 'dark'
+                    ? 'light' : 'dark';
+                applyTheme(next);
+            });
         }
-        updateThemeIcons('dark');
-    } else {
-        document.documentElement.setAttribute('data-bs-theme', 'light');
-        if (themeToggle) {
-            themeToggle.checked = false;
-        }
-        updateThemeIcons('light');
-    }
-    
-    // Attach event listener to theme toggle switch
-    if (themeToggle) {
-        themeToggle.addEventListener('change', toggleTheme);
-    }
+    });
 }
 
-function toggleTheme(event) {
-    const theme = event.target.checked ? 'dark' : 'light';
+function applyTheme(theme) {
     document.documentElement.setAttribute('data-bs-theme', theme);
-    localStorage.setItem('theme', theme);
-    updateThemeIcons(theme);
+    try { localStorage.setItem('theme', theme); } catch (e) { /* storage unavailable */ }
+    syncThemeUI(theme);
 }
 
-function updateThemeIcons(theme) {
-    const darkIcon = document.getElementById('dark-icon');
-    const lightIcon = document.getElementById('light-icon');
-    
-    if (theme === 'dark') {
-        if (darkIcon) darkIcon.classList.remove('cs-hidden');
-        if (lightIcon) lightIcon.classList.add('cs-hidden');
-    } else {
-        if (darkIcon) darkIcon.classList.add('cs-hidden');
-        if (lightIcon) lightIcon.classList.remove('cs-hidden');
-    }
+function syncThemeUI(theme) {
+    document.querySelectorAll('input[data-theme-toggle][type="checkbox"]').forEach(function (cb) {
+        cb.checked = (theme === 'dark');
+    });
+    document.querySelectorAll('.theme-icon-sun').forEach(function (el) {
+        el.classList.toggle('cs-hidden', theme === 'dark');
+    });
+    document.querySelectorAll('.theme-icon-moon').forEach(function (el) {
+        el.classList.toggle('cs-hidden', theme !== 'dark');
+    });
 }

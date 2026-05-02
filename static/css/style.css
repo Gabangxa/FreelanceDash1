@@ -2409,3 +2409,129 @@ code {
     .lp-root .lp-fade-in-delayed { animation: none; }
     .lp-root .lp-cta-primary:hover { transform: none; }
 }
+
+/* ==========================================================================
+   Signed-out theme toggle (floating, used on auth/legal/FAQ pages).
+   Renders as a small circular icon button in the top-right of the viewport.
+   ========================================================================== */
+.signed-out-theme-toggle {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1040;
+    width: 40px;
+    height: 40px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border-radius: 50%;
+    border: 1px solid var(--border-default);
+    background: var(--bg-elevated);
+    color: var(--text-primary);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                color 0.15s ease, transform 0.15s ease;
+}
+
+.signed-out-theme-toggle:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-strong);
+    transform: scale(1.05);
+}
+
+.signed-out-theme-toggle:focus-visible {
+    outline: 2px solid var(--color-primary);
+    outline-offset: 2px;
+}
+
+.signed-out-theme-toggle i {
+    font-size: 1rem;
+    line-height: 1;
+}
+
+/* ==========================================================================
+   Landing page — dark mode token overrides.
+   Mirrors the structure of the light tokens defined earlier on .lp-root,
+   so every component re-themes automatically.
+   ========================================================================== */
+[data-bs-theme="dark"] .lp-root {
+    --lp-bg: #0A0F1A;
+    --lp-bg-alt: #0F1524;
+    --lp-text: #F9FAFB;
+    --lp-text-muted: #B0B7C3;
+    --lp-text-muted-soft: #8B93A1;
+    --lp-border: rgba(255, 255, 255, 0.10);
+    --lp-border-soft: rgba(255, 255, 255, 0.06);
+    --lp-border-strong: rgba(255, 255, 255, 0.16);
+}
+
+/* The fixed nav uses an inline rgba() background that doesn't read tokens, so
+   override it explicitly for dark mode to keep the frosted-glass effect. */
+[data-bs-theme="dark"] .lp-root .lp-nav {
+    background: rgba(10, 15, 26, 0.72);
+}
+
+/* Selection color in dark mode. */
+[data-bs-theme="dark"] .lp-root ::selection {
+    background: rgba(255, 255, 255, 0.18);
+}
+
+/* The primary CTA button is hard-coded to a dark fill in light mode (Apple
+   black-on-white). Invert it for dark mode so it stays high-contrast. */
+[data-bs-theme="dark"] .lp-root .lp-cta-primary {
+    background: var(--lp-text);
+    color: var(--lp-bg);
+}
+[data-bs-theme="dark"] .lp-root .lp-cta-primary:hover {
+    background: #ffffff;
+}
+
+/* The "Open App" pill in the nav also uses a hard-coded dark fill. */
+[data-bs-theme="dark"] .lp-root .lp-nav-cta {
+    background: var(--lp-text);
+    color: var(--lp-bg);
+}
+[data-bs-theme="dark"] .lp-root .lp-nav-cta:hover {
+    background: #ffffff;
+}
+
+/* Mockup window — keep the chrome readable on the darker canvas. */
+[data-bs-theme="dark"] .lp-root .lp-mockup-window {
+    background: var(--lp-bg-alt);
+    border-color: var(--lp-border-strong);
+}
+[data-bs-theme="dark"] .lp-root .lp-mockup-fade {
+    background: linear-gradient(to bottom, transparent, var(--lp-bg-alt));
+}
+
+/* Landing-page theme toggle — sits inside .lp-nav next to "Open App". */
+.lp-root .lp-theme-toggle {
+    width: 38px;
+    height: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    margin-right: 4px;
+    border-radius: 50%;
+    border: 1px solid var(--lp-border);
+    background: transparent;
+    color: var(--lp-text);
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease,
+                color 0.15s ease;
+}
+.lp-root .lp-theme-toggle:hover {
+    background: var(--lp-bg-alt);
+    border-color: var(--lp-border-strong);
+}
+.lp-root .lp-theme-toggle:focus-visible {
+    outline: 2px solid var(--lp-text);
+    outline-offset: 2px;
+}
+.lp-root .lp-theme-toggle i {
+    font-size: 0.95rem;
+    line-height: 1;
+}

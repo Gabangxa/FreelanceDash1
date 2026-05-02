@@ -19,6 +19,10 @@
             </div>
 
             <div class="lp-nav-cta-wrap">
+                <button type="button" class="lp-theme-toggle" data-theme-toggle aria-label="Toggle dark mode" title="Toggle dark mode">
+                    <i class="fas fa-sun theme-icon-sun"></i>
+                    <i class="fas fa-moon cs-hidden theme-icon-moon"></i>
+                </button>
                 {% if current_user.is_authenticated %}
                 <a href="{{ url_for('projects.dashboard') }}" class="lp-nav-cta">
                     Open App
