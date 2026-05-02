@@ -1,5 +1,5 @@
 """
-Asset bundling and minification for the WorkVista application.
+Asset bundling and minification for the Freelance application.
 """
 import os
 import re

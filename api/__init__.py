@@ -1,5 +1,5 @@
 """
-API module for WorkVista.
+API module for Freelance.
 
 This module provides RESTful API endpoints for programmatic access to the application.
 """

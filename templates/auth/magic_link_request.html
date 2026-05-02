@@ -1,44 +1,40 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Email me a sign-in link{% endblock %}
+{% block title %}Email me a sign-in link — Freelance.{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
+{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Email me a sign-in link</h4>
-                </div>
-                <div class="card-body">
-                    <p class="card-text mb-4">
-                        Enter your email address and we'll send you a one-click link to sign in. The link is valid for 15 minutes and can only be used once.
-                    </p>
-                    <form method="post" action="{{ url_for('auth.magic_link_request') }}">
-                        {{ form.hidden_tag() }}
-                        <div class="mb-3">
-                            {{ form.email.label(class="form-label") }}
-                            {% if form.email.errors %}
-                                {{ form.email(class="form-control is-invalid") }}
-                                <div class="invalid-feedback">
-                                    {% for error in form.email.errors %}
-                                        {{ error }}
-                                    {% endfor %}
-                                </div>
-                            {% else %}
-                                {{ form.email(class="form-control") }}
-                            {% endif %}
-                        </div>
-                        <div class="d-grid gap-2">
-                            {{ form.submit(class="btn btn-primary") }}
-                        </div>
-                    </form>
-                </div>
-                <div class="card-footer text-center">
-                    <a href="{{ url_for('auth.login') }}" class="text-decoration-none">Back to sign in with password</a>
-                </div>
+<div class="lp-auth">
+    <a href="{{ url_for('index') }}" class="lp-auth-brand">Freelance.</a>
+
+    <div class="lp-auth-card">
+        <h1 class="lp-auth-title">Email me a sign-in link</h1>
+        <p class="lp-auth-sub">
+            We'll send a one-click link, valid for 15 minutes.
+        </p>
+
+        <form method="post" action="{{ url_for('auth.magic_link_request') }}" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="lp-field">
+                {{ form.email.label(class="lp-field-label") }}
+                {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), autocomplete="email") }}
+                {% for error in form.email.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
-        </div>
+
+            <div class="lp-stack lp-stack--spaced">
+                <button type="submit" class="lp-btn lp-btn-primary">Send link</button>
+            </div>
+        </form>
+
+        <p class="lp-switch">
+            <a href="{{ url_for('auth.login') }}" class="lp-link">Back to sign in with password</a>
+        </p>
     </div>
 </div>
 {% endblock %}

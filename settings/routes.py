@@ -452,7 +452,7 @@ def export_data_json():
         
         # Generate timestamp for filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"workvista_export_{timestamp}.json"
+        filename = f"freelance_export_{timestamp}.json"
         
         # Convert to JSON with pretty formatting. ``default=_json_default``
         # handles Decimal columns (Invoice.amount, InvoiceItem.{quantity,
@@ -684,7 +684,7 @@ def export_data_csv():
             zf.writestr('settings.csv', settings_output.getvalue())
             
             # ----- README file -----
-            readme_content = f"""WorkVista Data Export
+            readme_content = f"""Freelance Data Export
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 User: {current_user.username}
 
@@ -697,7 +697,7 @@ This ZIP archive contains the following CSV files:
 - invoice_items.csv: Line items for all your invoices
 - settings.csv: Your account settings and preferences
 
-For support, please contact support@workvista.example.com
+For support, please contact support@freelance.example.com
 """
             zf.writestr('README.txt', readme_content)
         
@@ -706,7 +706,7 @@ For support, please contact support@workvista.example.com
         
         # Generate timestamp for filename
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f"workvista_export_{timestamp}.zip"
+        filename = f"freelance_export_{timestamp}.zip"
         
         # Create response
         from flask import send_file

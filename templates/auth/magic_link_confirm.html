@@ -1,48 +1,53 @@
-{% extends 'base.html' %}
+{% extends "base.html" %}
 
-{% block title %}Confirm sign in{% endblock %}
+{% block title %}Confirm sign in — Freelance.{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
+{% endblock %}
 
 {% block content %}
-<div class="container py-5">
-    <div class="row justify-content-center">
-        <div class="col-md-6">
-            <div class="card shadow">
-                <div class="card-header bg-primary text-white">
-                    <h4 class="mb-0">Confirm sign in</h4>
+<div class="lp-auth">
+    <a href="{{ url_for('index') }}" class="lp-auth-brand">Freelance.</a>
+
+    <div class="lp-auth-card">
+        {% if valid %}
+            <h1 class="lp-auth-title">Confirm sign in</h1>
+            <p class="lp-auth-sub">Click the button below to finish signing in.</p>
+
+            <form method="post" action="{{ request.path }}" novalidate>
+                {{ form.hidden_tag() }}
+                {% if next_page %}
+                    <input type="hidden" name="next" value="{{ next_page }}">
+                {% endif %}
+
+                <div class="lp-stack lp-stack--spaced">
+                    <button type="submit" class="lp-btn lp-btn-primary">
+                        <i class="fas fa-sign-in-alt" aria-hidden="true"></i>
+                        Sign me in
+                    </button>
                 </div>
-                <div class="card-body text-center">
-                    {% if valid %}
-                        <p class="card-text mb-4">
-                            Click the button below to finish signing in to your account.
-                        </p>
-                        <form method="post" action="{{ request.path }}">
-                            {{ form.hidden_tag() }}
-                            {% if next_page %}
-                                <input type="hidden" name="next" value="{{ next_page }}">
-                            {% endif %}
-                            <div class="d-grid">
-                                <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-sign-in-alt me-1"></i> Sign me in
-                                </button>
-                            </div>
-                        </form>
-                        <p class="text-muted small mt-3 mb-0">
-                            This link can only be used once and expires shortly.
-                        </p>
-                    {% else %}
-                        <p class="card-text mb-4">
-                            That sign-in link is invalid, has already been used, or has expired.
-                        </p>
-                        <a href="{{ url_for('auth.magic_link_request') }}" class="btn btn-primary">
-                            Request a new sign-in link
-                        </a>
-                    {% endif %}
-                </div>
-                <div class="card-footer text-center">
-                    <a href="{{ url_for('auth.login') }}" class="text-decoration-none">Back to sign in with password</a>
-                </div>
+            </form>
+
+            <p class="lp-switch">
+                This link can only be used once and expires shortly.
+            </p>
+        {% else %}
+            <h1 class="lp-auth-title">Link no longer valid</h1>
+            <p class="lp-auth-sub">
+                That sign-in link is invalid, has already been used, or has expired.
+            </p>
+
+            <div class="lp-stack lp-stack--spaced">
+                <a href="{{ url_for('auth.magic_link_request') }}" class="lp-btn lp-btn-primary">
+                    Request a new sign-in link
+                </a>
             </div>
-        </div>
+
+            <p class="lp-switch">
+                <a href="{{ url_for('auth.login') }}" class="lp-link">Back to sign in with password</a>
+            </p>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

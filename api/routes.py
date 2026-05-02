@@ -1,5 +1,5 @@
 """
-API routes for WorkVista.
+API routes for Freelance.
 """
 from flask import jsonify, request, g, current_app
 from flask_login import login_required, current_user
@@ -50,7 +50,7 @@ def api_status():
     return api_response(data={
         'status': 'operational',
         'version': '1.0.0',
-        'app_name': 'WorkVista',
+        'app_name': 'Freelance',
         'timestamp': datetime.utcnow().isoformat()
     })
 
