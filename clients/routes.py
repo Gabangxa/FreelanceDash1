@@ -77,45 +77,27 @@ def create_client():
             db.session.add(client)
             db.session.flush()  # Get client ID without committing
             
-            # Process optional project from simple form
+            # Process optional project from nested sub-form. Inner-form
+            # field access goes through indexing because ``name`` and
+            # ``description`` collide with FormField's own attributes.
             projects_created = 0
-            
-            # Check if a project should be included
-            include_project = request.form.get('include_project') == 'on'
-            project_name = request.form.get('project_name', '').strip()
-            
-            if include_project and project_name:
-                # Get project details from form
-                project_description = request.form.get('project_description', '').strip()
-                
-                # Handle dates
-                try:
-                    project_start_date = datetime.strptime(
-                        request.form.get('project_start_date', ''), 
-                        '%Y-%m-%d'
-                    ) if request.form.get('project_start_date') else datetime.now()
-                except ValueError:
-                    project_start_date = datetime.now()
-                
-                try:
-                    project_end_date = datetime.strptime(
-                        request.form.get('project_end_date', ''), 
-                        '%Y-%m-%d'
-                    ) if request.form.get('project_end_date') else None
-                except ValueError:
-                    project_end_date = None
-                
-                # Create the project
+            project_subform = form.project
+            if project_subform['include'].data:
+                project_name_value = (project_subform['name'].data or '').strip()
+                project_description_value = (project_subform['description'].data or '').strip()
+
+                # Create the project. Validation guarantees name/start_date
+                # are present when ``include`` is checked.
                 project = Project(
-                    name=project_name,
-                    description=project_description or None,
-                    start_date=project_start_date,
-                    end_date=project_end_date,
+                    name=project_name_value,
+                    description=project_description_value or None,
+                    start_date=project_subform['start_date'].data,
+                    end_date=project_subform['end_date'].data,
                     client_id=client.id,
                     user_id=current_user.id,
                     status='active'
                 )
-                
+
                 db.session.add(project)
                 projects_created = 1
             
