@@ -134,6 +134,54 @@ go through Alembic so production deployments don't silently drop data.
 
 ## Changelog
 
+- May 02, 2026. Landing page redesign — Jony-Ive-inspired minimalist
+  ("Freelance.") brand:
+  - Replaced `templates/index.html` (was 965-line Bootstrap landing) with
+    a clean Apple-style page following the uploaded `freelance-dash` UI
+    design and using its copy verbatim ("Focus on the work. We'll handle
+    the rest.", "A frictionless environment for independent
+    professionals…", "Exceptional by design.", three pillars Intuitive
+    view / Zero friction / Absolute privacy, "Start building" CTA, "Open
+    App" nav, "Designed with intent." footer).
+  - All styles live under a `.lp-root` scope in `static/css/style.css`
+    (~340 new lines) so they cannot leak into the authenticated app.
+    Inter Variable is loaded from `cdn.jsdelivr.net` via `@fontsource-
+    variable/inter` (CSP-allowed origin).
+  - The landing escapes the base.html `.container` with a full-bleed
+    `position:relative; left:50%; margin-left:-50vw` wrapper so the
+    section bands (off-white hero / white features / white footer) span
+    the full viewport, with `overflow-x:hidden` to suppress sidescroll.
+  - Auth-aware CTAs preserved: unauth → register / login, auth →
+    dashboard. Brand label kept as "Freelance." per the uploaded design;
+    rest of the app continues to brand as Freelancer Suite / WorkVista.
+  - Two CSS gotchas solved during implementation, documented inline:
+    1. `.lp-root a { color: inherit }` (specificity 0,1,1) was beating
+       `.lp-cta-primary` (0,1,0) and rendering the "Start building"
+       button text invisible — fixed by removing the color half of the
+       reset; every link class now sets its own color explicitly.
+    2. The project's regex CSS minifier in `asset_bundler.py` strips
+       whitespace around `:` and would mangle `.lp-root :where(a)` into
+       `.lp-root:where(a)` (descendant → element-with-pseudo). Avoided
+       `:where()` for landing styles for that reason.
+  - Post-review hardening (architect feedback):
+    - **Real CSS isolation**: every landing selector is now prefixed with
+      `.lp-root ` (59 rules), so the section truly cannot leak into the
+      authenticated app even if class names collide later.
+    - **Scrollbar-safe full-bleed**: replaced `width:100vw + left:50% +
+      margin-left:-50vw` with `margin-inline: calc(50% - 50vw)` (no
+      `width`); the element auto-fills the viewport without forcing an
+      extra scrollbar-width column of horizontal overflow.
+    - **WCAG AA contrast**: split the muted token in two —
+      `--lp-text-muted` (`#6e6e73`, 4.66:1 on white) for body text
+      (feature descriptions, footer); `--lp-text-muted-soft` (`#86868b`,
+      Apple's gray, AA only for large text) for the hero h1 second line
+      and the 24px subtitle.
+    - **Removed dead nav links**: `Stories` (`#testimonials`) and
+      `Pricing` (`#pricing`) had no destination sections — kept only
+      `Features` to avoid misleading clicks. Slight deviation from the
+      uploaded design's nav copy, in service of UX integrity.
+
+
 - May 02, 2026. Centralized duration conversions (`utils/duration.py`):
   - All minutes ↔ hours / minutes ↔ timedelta math now routes through one
     module. The same conversion was previously scattered across

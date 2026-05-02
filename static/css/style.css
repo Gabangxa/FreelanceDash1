@@ -2029,18 +2029,17 @@ code {
     --lp-bg: #fbfbfd;
     --lp-bg-alt: #ffffff;
     --lp-text: #1d1d1f;
-    --lp-text-muted: #86868b;
+    --lp-text-muted: #6e6e73;       /* AA-compliant on white for body text (4.66:1) */
+    --lp-text-muted-soft: #86868b;  /* Apple gray; AA only for large text (>=18pt or 14pt bold) */
     --lp-border: rgba(0, 0, 0, 0.08);
     --lp-border-soft: rgba(0, 0, 0, 0.05);
     --lp-border-strong: rgba(0, 0, 0, 0.10);
 
-    /* Escape the bootstrap .container > main padding to get full-bleed bands. */
-    position: relative;
-    left: 50%;
-    right: 50%;
-    width: 100vw;
-    margin-left: -50vw;
-    margin-right: -50vw;
+    /* Escape the bootstrap .container > main padding to get full-bleed bands.
+       Using margin-inline: calc(50% - 50vw) (without width:100vw) so the
+       element's own width auto-fills the viewport without forcing an extra
+       column the size of the vertical scrollbar. */
+    margin-inline: calc(50% - 50vw);
     margin-top: -1.5rem;
     margin-bottom: -1.5rem;
 
@@ -2061,7 +2060,7 @@ code {
 
 /* Anchor reset for the landing page. We only reset text-decoration here:
    color is set explicitly by each link class (.lp-brand, .lp-nav-cta,
-   .lp-cta-primary, .lp-nav-links a). This avoids a specificity conflict
+   .lp-root .lp-cta-primary, .lp-nav-links a). This avoids a specificity conflict
    where a `color: inherit` reset on `.lp-root a` (0,1,1) would beat the
    per-class color rules (0,1,0). It also sidesteps a quirk in the project
    CSS minifier that collapses whitespace around `:` and would mangle
@@ -2069,7 +2068,7 @@ code {
 .lp-root a { text-decoration: none; }
 
 /* Top navigation -------------------------------------------------------- */
-.lp-nav {
+.lp-root .lp-nav {
     position: fixed;
     top: 0;
     left: 0;
@@ -2082,7 +2081,7 @@ code {
     border-bottom: 1px solid var(--lp-border-soft);
 }
 
-.lp-nav-inner {
+.lp-root .lp-nav-inner {
     max-width: 1200px;
     margin: 0 auto;
     display: flex;
@@ -2091,14 +2090,14 @@ code {
     gap: 24px;
 }
 
-.lp-brand {
+.lp-root .lp-brand {
     font-weight: 600;
     font-size: 20px;
     letter-spacing: -0.02em;
     color: var(--lp-text);
 }
 
-.lp-nav-links {
+.lp-root .lp-nav-links {
     display: none;
     align-items: center;
     gap: 32px;
@@ -2106,17 +2105,17 @@ code {
     font-weight: 500;
 }
 @media (min-width: 768px) {
-    .lp-nav-links { display: flex; }
+    .lp-root .lp-nav-links { display: flex; }
 }
-.lp-nav-links a {
+.lp-root .lp-nav-links a {
     color: var(--lp-text);
     transition: opacity 0.2s ease;
 }
-.lp-nav-links a:hover { opacity: 0.6; }
+.lp-root .lp-nav-links a:hover { opacity: 0.6; }
 
-.lp-nav-cta-wrap { display: flex; }
+.lp-root .lp-nav-cta-wrap { display: flex; }
 
-.lp-nav-cta {
+.lp-root .lp-nav-cta {
     display: inline-flex;
     align-items: center;
     gap: 4px;
@@ -2125,12 +2124,12 @@ code {
     font-weight: 500;
     transition: opacity 0.2s ease;
 }
-.lp-nav-cta:hover { opacity: 0.6; color: var(--lp-text); }
+.lp-root .lp-nav-cta:hover { opacity: 0.6; color: var(--lp-text); }
 
-.lp-icon-sm { width: 16px; height: 16px; }
+.lp-root .lp-icon-sm { width: 16px; height: 16px; }
 
 /* Hero ------------------------------------------------------------------ */
-.lp-hero {
+.lp-root .lp-hero {
     padding: 192px 24px 128px;
     display: flex;
     flex-direction: column;
@@ -2138,16 +2137,16 @@ code {
     text-align: center;
 }
 @media (min-width: 768px) {
-    .lp-hero { padding: 192px 48px 128px; }
+    .lp-root .lp-hero { padding: 192px 48px 128px; }
 }
 
-.lp-hero-content {
+.lp-root .lp-hero-content {
     max-width: 896px;
     margin: 0 auto;
     width: 100%;
 }
 
-.lp-h1 {
+.lp-root .lp-h1 {
     font-size: clamp(48px, 9vw, 88px);
     line-height: 1.05;
     letter-spacing: -0.04em;
@@ -2156,25 +2155,25 @@ code {
     text-wrap: balance;
     color: var(--lp-text);
 }
-.lp-h1-muted { color: var(--lp-text-muted); }
+.lp-root .lp-h1-muted { color: var(--lp-text-muted-soft); }
 
-.lp-sub {
+.lp-root .lp-sub {
     font-size: clamp(18px, 2.4vw, 24px);
     line-height: 1.35;
     letter-spacing: -0.01em;
-    color: var(--lp-text-muted);
+    color: var(--lp-text-muted-soft);
     max-width: 640px;
     margin: 0 auto 64px;
     font-weight: 400;
 }
 
-.lp-hero-cta-row {
+.lp-root .lp-hero-cta-row {
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-.lp-cta-primary {
+.lp-root .lp-cta-primary {
     display: inline-flex;
     align-items: center;
     gap: 8px;
@@ -2188,7 +2187,7 @@ code {
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
     transition: background 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
 }
-.lp-cta-primary:hover {
+.lp-root .lp-cta-primary:hover {
     background: #000000;
     color: #ffffff;
     transform: translateY(-1px);
@@ -2196,13 +2195,13 @@ code {
 }
 
 /* Hero wireframe mockup ------------------------------------------------- */
-.lp-mockup-wrap {
+.lp-root .lp-mockup-wrap {
     margin-top: 128px;
     width: 100%;
     max-width: 1024px;
 }
 
-.lp-mockup-window {
+.lp-root .lp-mockup-window {
     width: 100%;
     height: 400px;
     background: #ffffff;
@@ -2215,89 +2214,89 @@ code {
     overflow: hidden;
 }
 @media (min-width: 768px) {
-    .lp-mockup-window { padding: 32px; }
+    .lp-root .lp-mockup-window { padding: 32px; }
 }
 
-.lp-mockup-dots {
+.lp-root .lp-mockup-dots {
     display: flex;
     gap: 8px;
     align-items: center;
     margin-bottom: 40px;
     padding: 0 8px;
 }
-.lp-dot {
+.lp-root .lp-dot {
     width: 12px;
     height: 12px;
     border-radius: 50%;
     display: inline-block;
 }
-.lp-dot-red    { background: #f87171; }
-.lp-dot-amber  { background: #fbbf24; }
-.lp-dot-green  { background: #4ade80; }
+.lp-root .lp-dot-red    { background: #f87171; }
+.lp-root .lp-dot-amber  { background: #fbbf24; }
+.lp-root .lp-dot-green  { background: #4ade80; }
 
-.lp-mockup-body {
+.lp-root .lp-mockup-body {
     display: flex;
     gap: 48px;
     padding: 0 8px;
 }
 
-.lp-mockup-sidebar {
+.lp-root .lp-mockup-sidebar {
     width: 192px;
     display: none;
     flex-direction: column;
     gap: 24px;
 }
 @media (min-width: 768px) {
-    .lp-mockup-sidebar { display: flex; }
+    .lp-root .lp-mockup-sidebar { display: flex; }
 }
-.lp-line {
+.lp-root .lp-line {
     height: 12px;
     background: rgba(0, 0, 0, 0.05);
     border-radius: 9999px;
 }
-.lp-line-w100 { width: 100%; }
-.lp-line-w75  { width: 75%; }
-.lp-line-w83  { width: 83%; }
+.lp-root .lp-line-w100 { width: 100%; }
+.lp-root .lp-line-w75  { width: 75%; }
+.lp-root .lp-line-w83  { width: 83%; }
 
-.lp-mockup-main {
+.lp-root .lp-mockup-main {
     flex: 1;
     display: flex;
     flex-direction: column;
     gap: 40px;
 }
-.lp-mockup-title {
+.lp-root .lp-mockup-title {
     width: 33%;
     height: 40px;
     background: rgba(0, 0, 0, 0.10);
     border-radius: 2px;
     margin-bottom: 16px;
 }
-.lp-mockup-stats {
+.lp-root .lp-mockup-stats {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 32px;
 }
-.lp-mockup-stat {
+.lp-root .lp-mockup-stat {
     height: 64px;
     border-top: 1px solid var(--lp-border-strong);
     padding-top: 16px;
 }
-.lp-mockup-stat-bar {
+.lp-root .lp-mockup-stat-bar {
     height: 32px;
     background: rgba(0, 0, 0, 0.05);
     border-radius: 2px;
 }
-.lp-stat-w50 { width: 50%; }
-.lp-stat-w67 { width: 67%; }
+.lp-root .lp-stat-w50 { width: 50%; }
+.lp-root .lp-stat-w67 { width: 67%; }
 
-.lp-mockup-chart {
+.lp-root .lp-mockup-chart {
     height: 192px;
     margin-top: 16px;
     border-top: 1px solid var(--lp-border-strong);
     background: linear-gradient(to top, rgba(0, 0, 0, 0.05), transparent);
 }
 
-.lp-mockup-fade {
+.lp-root .lp-mockup-fade {
     position: absolute;
     left: 0;
     right: 0;
@@ -2308,21 +2307,21 @@ code {
 }
 
 /* Features section ------------------------------------------------------ */
-.lp-features {
+.lp-root .lp-features {
     padding: 160px 24px 128px;
     background: var(--lp-bg-alt);
     border-top: 1px solid var(--lp-border-soft);
 }
 @media (min-width: 768px) {
-    .lp-features { padding: 160px 48px 128px; }
+    .lp-root .lp-features { padding: 160px 48px 128px; }
 }
 
-.lp-features-inner {
+.lp-root .lp-features-inner {
     max-width: 1024px;
     margin: 0 auto;
 }
 
-.lp-h2 {
+.lp-root .lp-h2 {
     font-size: clamp(32px, 5vw, 48px);
     line-height: 1.1;
     letter-spacing: -0.025em;
@@ -2331,31 +2330,31 @@ code {
     color: var(--lp-text);
 }
 
-.lp-feature-grid {
+.lp-root .lp-feature-grid {
     display: grid;
     grid-template-columns: 1fr;
     gap: 64px;
 }
 @media (min-width: 768px) {
-    .lp-feature-grid {
+    .lp-root .lp-feature-grid {
         grid-template-columns: repeat(3, 1fr);
         column-gap: 64px;
     }
 }
 
-.lp-feature {
+.lp-root .lp-feature {
     display: flex;
     flex-direction: column;
     border-top: 1px solid var(--lp-border-strong);
     padding-top: 24px;
 }
-.lp-feature-icon {
+.lp-root .lp-feature-icon {
     width: 32px;
     height: 32px;
     color: var(--lp-text);
     margin-bottom: 24px;
 }
-.lp-feature-title {
+.lp-root .lp-feature-title {
     font-size: 22px;
     line-height: 1.2;
     letter-spacing: -0.02em;
@@ -2363,7 +2362,7 @@ code {
     margin: 0 0 12px;
     color: var(--lp-text);
 }
-.lp-feature-text {
+.lp-root .lp-feature-text {
     font-size: 16px;
     line-height: 1.6;
     color: var(--lp-text-muted);
@@ -2371,7 +2370,7 @@ code {
 }
 
 /* Brand footer (separate from the legal footer in base.html) ----------- */
-.lp-brandfoot {
+.lp-root .lp-brandfoot {
     padding: 48px 24px;
     background: var(--lp-bg-alt);
     border-top: 1px solid var(--lp-border-soft);
@@ -2382,12 +2381,12 @@ code {
     gap: 16px;
 }
 @media (min-width: 768px) {
-    .lp-brandfoot { padding: 48px; flex-direction: row; gap: 0; }
+    .lp-root .lp-brandfoot { padding: 48px; flex-direction: row; gap: 0; }
 }
-.lp-brandfoot .lp-brand {
+.lp-root .lp-brandfoot .lp-brand {
     font-size: 18px;
 }
-.lp-brandfoot-text {
+.lp-root .lp-brandfoot-text {
     color: var(--lp-text-muted);
     font-size: 14px;
     margin: 0;
@@ -2398,15 +2397,15 @@ code {
     from { opacity: 0; transform: translateY(24px); }
     to   { opacity: 1; transform: translateY(0); }
 }
-.lp-fade-in {
+.lp-root .lp-fade-in {
     animation: lpFadeUp 0.8s cubic-bezier(0.23, 1, 0.32, 1) both;
 }
-.lp-fade-in-delayed {
+.lp-root .lp-fade-in-delayed {
     animation-delay: 0.3s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-    .lp-fade-in,
-    .lp-fade-in-delayed { animation: none; }
-    .lp-cta-primary:hover { transform: none; }
+    .lp-root .lp-fade-in,
+    .lp-root .lp-fade-in-delayed { animation: none; }
+    .lp-root .lp-cta-primary:hover { transform: none; }
 }
