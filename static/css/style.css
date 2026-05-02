@@ -2059,9 +2059,14 @@ code {
 
 .lp-root ::selection { background: rgba(0, 0, 0, 0.10); }
 
-/* Use :where() so the anchor reset contributes zero specificity, allowing
-   per-element color rules (e.g. .lp-cta-primary) to win without !important. */
-.lp-root :where(a) { color: inherit; text-decoration: none; }
+/* Anchor reset for the landing page. We only reset text-decoration here:
+   color is set explicitly by each link class (.lp-brand, .lp-nav-cta,
+   .lp-cta-primary, .lp-nav-links a). This avoids a specificity conflict
+   where a `color: inherit` reset on `.lp-root a` (0,1,1) would beat the
+   per-class color rules (0,1,0). It also sidesteps a quirk in the project
+   CSS minifier that collapses whitespace around `:` and would mangle
+   selectors like `.lp-root :where(a)` into `.lp-root:where(a)`. */
+.lp-root a { text-decoration: none; }
 
 /* Top navigation -------------------------------------------------------- */
 .lp-nav {
