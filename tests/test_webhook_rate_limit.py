@@ -24,6 +24,8 @@ from webhooks.storage import (
     get_storage,
     reset_storage_for_tests,
     set_storage_for_tests,
+    start_background_sweeper,
+    stop_background_sweeper,
 )
 
 
@@ -440,3 +442,304 @@ def test_get_storage_uses_db_when_redis_url_unset(monkeypatch):
         assert backend.name == "database"
     finally:
         storage_mod.reset_storage_for_tests()
+
+
+# ---------------------------------------------------------------------------
+# prune_expired(): the global sweep that bounds the tables under a long
+# tail of one-shot source IPs (the inline per-key prune in _incr only
+# fires when the same key is hit again).
+# ---------------------------------------------------------------------------
+def test_prune_expired_drops_stale_rate_limit_rows_for_one_shot_keys(app):
+    """Drive-by IPs that hit the webhook endpoint once and never come
+    back must be reaped by the global sweep, not left in the table
+    forever."""
+    from datetime import datetime, timedelta
+
+    storage = get_storage()
+    with app.app_context():
+        # Seed 50 distinct keys, each with a row from "two hours ago".
+        # Without the global sweep these would never be pruned because
+        # no future incr() call ever uses the same key again.
+        old_ts = datetime.utcnow() - timedelta(seconds=7200)
+        for i in range(50):
+            db.session.add(
+                WebhookRateLimitEvent(
+                    rate_key=f"github:10.0.0.{i}", created_at=old_ts
+                )
+            )
+        # Plus a few rows that are still inside the 1h window: those
+        # must NOT be pruned.
+        fresh_ts = datetime.utcnow() - timedelta(seconds=60)
+        for i in range(5):
+            db.session.add(
+                WebhookRateLimitEvent(
+                    rate_key=f"github:fresh.{i}", created_at=fresh_ts
+                )
+            )
+        db.session.commit()
+        assert db.session.query(WebhookRateLimitEvent).count() == 55
+
+        deleted = storage.prune_expired(
+            rate_limit_window_seconds=3600,
+            failed_attempt_window_seconds=3600,
+        )
+        assert deleted["rate_limit"] == 50
+        # Only the fresh rows remain.
+        remaining = db.session.query(WebhookRateLimitEvent).count()
+        assert remaining == 5
+
+
+def test_prune_expired_drops_stale_failed_attempts(app):
+    from datetime import datetime, timedelta
+
+    storage = get_storage()
+    with app.app_context():
+        old_ts = datetime.utcnow() - timedelta(seconds=7200)
+        for i in range(20):
+            db.session.add(
+                WebhookFailedAttempt(
+                    attempt_key=f"stripe:11.0.0.{i}", created_at=old_ts
+                )
+            )
+        db.session.add(
+            WebhookFailedAttempt(
+                attempt_key="stripe:active",
+                created_at=datetime.utcnow(),
+            )
+        )
+        db.session.commit()
+
+        deleted = storage.prune_expired(
+            rate_limit_window_seconds=3600,
+            failed_attempt_window_seconds=3600,
+        )
+        assert deleted["failed_attempt"] == 20
+        assert db.session.query(WebhookFailedAttempt).count() == 1
+
+
+def test_prune_expired_drops_expired_cache_entries(app):
+    from datetime import datetime, timedelta
+
+    storage = get_storage()
+    with app.app_context():
+        # Expired entry.
+        expired = WebhookCacheEntry()
+        expired.cache_key = "stale-key"
+        expired.value = "old-value"
+        expired.expires_at = datetime.utcnow() - timedelta(seconds=10)
+        db.session.add(expired)
+        # Fresh entry.
+        fresh = WebhookCacheEntry()
+        fresh.cache_key = "fresh-key"
+        fresh.value = "new-value"
+        fresh.expires_at = datetime.utcnow() + timedelta(seconds=600)
+        db.session.add(fresh)
+        db.session.commit()
+
+        deleted = storage.prune_expired()
+        assert deleted["cache"] == 1
+        # Fresh entry survives; stale entry is gone.
+        remaining_keys = {
+            row.cache_key
+            for row in db.session.query(WebhookCacheEntry).all()
+        }
+        assert remaining_keys == {"fresh-key"}
+
+
+def test_prune_expired_is_safe_when_tables_empty(app):
+    storage = get_storage()
+    with app.app_context():
+        deleted = storage.prune_expired()
+        assert deleted == {
+            "rate_limit": 0,
+            "failed_attempt": 0,
+            "cache": 0,
+        }
+
+
+def test_table_count_stays_bounded_under_one_shot_ip_load(app, monkeypatch):
+    """End-to-end version of the task's stated invariant: a synthetic
+    flood of distinct one-shot source IPs must NOT leave the table
+    growing without bound. The opportunistic sweep in ``_incr`` (every
+    Nth call) is what bounds it -- this test forces a small N so the
+    sweep fires inside the test and does its job."""
+    from datetime import datetime, timedelta
+
+    # Crank the opportunistic-sweep cadence way down so we don't have to
+    # generate hundreds of requests inside the test.
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEP_EVERY", "10")
+    reset_storage_for_tests()
+    set_storage_for_tests(DBWebhookStorage())
+    storage = get_storage()
+
+    with app.app_context():
+        # Pre-seed 200 stale rows from "drive-by" IPs that will never be
+        # hit again. The inline per-key prune cannot reach these.
+        old_ts = datetime.utcnow() - timedelta(seconds=7200)
+        for i in range(200):
+            db.session.add(
+                WebhookRateLimitEvent(
+                    rate_key=f"github:driveby.{i}", created_at=old_ts
+                )
+            )
+        db.session.commit()
+        assert db.session.query(WebhookRateLimitEvent).count() == 200
+
+        # Now drive enough live traffic to trigger at least one
+        # opportunistic sweep (every 10 incr calls per the env above).
+        for i in range(15):
+            storage.incr_with_window(f"github:live.{i}", 60)
+
+        # All 200 stale rows must be gone, and only the 15 live ones
+        # should remain. The table is bounded.
+        remaining = db.session.query(WebhookRateLimitEvent).count()
+        assert remaining == 15, (
+            f"Expected stale drive-by rows to be reaped by the "
+            f"opportunistic sweep, but {remaining} rows remain"
+        )
+
+
+def test_opportunistic_sweep_does_not_fire_too_often(app, monkeypatch):
+    """The opportunistic sweep must NOT run on every _incr call -- that
+    would tank throughput on a busy webhook endpoint. It should only
+    fire every Nth call as configured."""
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEP_EVERY", "100")
+    reset_storage_for_tests()
+    set_storage_for_tests(DBWebhookStorage())
+    storage = get_storage()
+
+    sweep_calls = {"n": 0}
+    real_prune = storage.prune_expired
+
+    def _counting_prune(*args, **kwargs):
+        sweep_calls["n"] += 1
+        return real_prune(*args, **kwargs)
+
+    with app.app_context():
+        with patch.object(storage, "prune_expired", side_effect=_counting_prune):
+            for i in range(50):
+                storage.incr_with_window(f"k{i}", 60)
+        # 50 incr calls with sweep-every=100 -> zero opportunistic sweeps.
+        assert sweep_calls["n"] == 0
+
+
+def test_opportunistic_sweep_failure_does_not_break_incr(app, monkeypatch, caplog):
+    """If the sweep raises, the caller's increment must still succeed
+    (and return the correct count) -- the sweep is best-effort."""
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEP_EVERY", "1")
+    reset_storage_for_tests()
+    set_storage_for_tests(DBWebhookStorage())
+    storage = get_storage()
+
+    with app.app_context():
+        with patch.object(
+            storage,
+            "prune_expired",
+            side_effect=RuntimeError("simulated sweep failure"),
+        ):
+            # First incr triggers a sweep (sweep-every=1) which raises.
+            # The incr itself must still return 1, not raise.
+            count = storage.incr_with_window("github:1.2.3.4", 60)
+            assert count == 1
+            # The row is in the table.
+            assert (
+                db.session.query(WebhookRateLimitEvent)
+                .filter_by(rate_key="github:1.2.3.4")
+                .count()
+                == 1
+            )
+
+
+# ---------------------------------------------------------------------------
+# Background sweeper thread
+# ---------------------------------------------------------------------------
+def test_start_background_sweeper_skipped_under_test_env(app, monkeypatch):
+    """The sweeper must not spawn a thread when FLASK_ENV=test --
+    otherwise the test suite would race a live sweeper against fixtures
+    that wipe / re-seed the tables."""
+    monkeypatch.setenv("FLASK_ENV", "test")
+    thread = start_background_sweeper(app, interval_seconds=1)
+    try:
+        assert thread is None
+    finally:
+        stop_background_sweeper()
+
+
+def test_start_background_sweeper_skipped_when_disabled_env(app, monkeypatch):
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEPER_ENABLED", "0")
+    thread = start_background_sweeper(app, interval_seconds=1)
+    try:
+        assert thread is None
+    finally:
+        stop_background_sweeper()
+
+
+def test_background_sweeper_runs_prune_expired_periodically(app, monkeypatch):
+    """When the sweeper IS allowed to run, it must periodically call
+    prune_expired() inside an app_context, which deletes drive-by rows
+    that no longer have any matching incr() traffic to clean them up."""
+    import time as _time
+    from datetime import datetime, timedelta
+
+    # Allow the sweeper to actually start under the test runner.
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEPER_ENABLED", "1")
+
+    with app.app_context():
+        old_ts = datetime.utcnow() - timedelta(seconds=7200)
+        for i in range(10):
+            db.session.add(
+                WebhookRateLimitEvent(
+                    rate_key=f"github:cold.{i}", created_at=old_ts
+                )
+            )
+        db.session.commit()
+        assert db.session.query(WebhookRateLimitEvent).count() == 10
+
+    # Use a sub-second interval so the test doesn't have to sleep long.
+    thread = start_background_sweeper(
+        app,
+        interval_seconds=1,
+        rate_limit_window_seconds=3600,
+        failed_attempt_window_seconds=3600,
+    )
+    try:
+        assert thread is not None
+        assert thread.is_alive()
+
+        # Wait for at least one sweep iteration. The first sweep fires
+        # after the first interval (the loop sleeps before the first
+        # tick to avoid a fast-restart hammer). 3 seconds is plenty
+        # of slack for the 1s interval.
+        deadline = _time.monotonic() + 5.0
+        while _time.monotonic() < deadline:
+            with app.app_context():
+                if db.session.query(WebhookRateLimitEvent).count() == 0:
+                    break
+            _time.sleep(0.1)
+
+        with app.app_context():
+            remaining = db.session.query(WebhookRateLimitEvent).count()
+        assert remaining == 0, (
+            f"Background sweeper should have reaped all 10 stale rows, "
+            f"but {remaining} remain after waiting"
+        )
+    finally:
+        stop_background_sweeper()
+
+
+def test_background_sweeper_is_idempotent(app, monkeypatch):
+    """Calling start_background_sweeper twice must not spawn two
+    threads -- gunicorn workers each start the app once but blueprints
+    can re-import storage."""
+    monkeypatch.delenv("FLASK_ENV", raising=False)
+    monkeypatch.setenv("WEBHOOK_STORAGE_SWEEPER_ENABLED", "1")
+
+    first = start_background_sweeper(app, interval_seconds=60)
+    try:
+        second = start_background_sweeper(app, interval_seconds=60)
+        assert first is not None
+        assert second is None  # already running
+    finally:
+        stop_background_sweeper()

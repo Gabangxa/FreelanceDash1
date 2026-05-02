@@ -26,11 +26,22 @@ import json
 import logging
 import os
 import secrets
+import threading
 import time
 from datetime import datetime, timedelta
 from typing import Optional
 
 logger = logging.getLogger(__name__)
+
+
+# Default windows used by the background sweeper / opportunistic prune
+# when the caller doesn't supply explicit values. Mirrors
+# ``WebhookSecurity.RATE_LIMITS`` (max window) and
+# ``WebhookSecurity.FAILED_ATTEMPT_WINDOW_SECONDS``. Hard-coded here so
+# the storage layer doesn't have to import the security module (which
+# would be a circular import).
+DEFAULT_RATE_LIMIT_WINDOW_SECONDS = 3600
+DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS = 3600
 
 
 class WebhookStorageBackend(abc.ABC):
@@ -81,6 +92,22 @@ class WebhookStorageBackend(abc.ABC):
     def total_failed_attempts(self, window_seconds: int) -> int:
         """Return the total number of failed attempts across all keys
         within the trailing window. Used by the admin status endpoint."""
+
+    @abc.abstractmethod
+    def prune_expired(
+        self,
+        rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+        failed_attempt_window_seconds: int = DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+    ) -> dict:
+        """Sweep all rate-limit / failed-attempt / cache state and remove
+        anything whose lifetime has elapsed.
+
+        This is the global cleanup the per-key inline prune in ``incr``
+        cannot do: a "drive-by" key that never repeats (e.g. one-shot
+        botnet IPs) leaves rows behind forever otherwise.
+
+        Returns a dict with deletion counts for observability:
+        ``{"rate_limit": N, "failed_attempt": M, "cache": K}``."""
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +196,38 @@ class RedisWebhookStorage(WebhookStorageBackend):
             total += int(self._redis.zcard(full_key))
         return total
 
+    def prune_expired(
+        self,
+        rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+        failed_attempt_window_seconds: int = DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+    ) -> dict:
+        """Best-effort sweep across all live ZSETs.
+
+        Redis already TTLs each key past its window (see ``_zset_incr``),
+        so cold keys disappear on their own and there is nothing to do
+        for the cache (``setex`` carries the TTL). We still scan and run
+        ``ZREMRANGEBYSCORE`` so this method is callable for parity with
+        the DB backend (and so a long-lived ZSET that keeps getting
+        re-bumped also drops its stale members proactively)."""
+        now = time.time()
+        rl_cutoff = now - rate_limit_window_seconds
+        fa_cutoff = now - failed_attempt_window_seconds
+        rl_removed = 0
+        fa_removed = 0
+        for full_key in self._redis.scan_iter(match=self._RL_PREFIX + "*"):
+            rl_removed += int(
+                self._redis.zremrangebyscore(full_key, 0, rl_cutoff)
+            )
+        for full_key in self._redis.scan_iter(match=self._FA_PREFIX + "*"):
+            fa_removed += int(
+                self._redis.zremrangebyscore(full_key, 0, fa_cutoff)
+            )
+        return {
+            "rate_limit": rl_removed,
+            "failed_attempt": fa_removed,
+            "cache": 0,
+        }
+
 
 # ---------------------------------------------------------------------------
 # DB implementation
@@ -191,6 +250,27 @@ class DBWebhookStorage(WebhookStorageBackend):
     """
 
     name = "database"
+
+    # Opportunistic sweep: every Nth ``_incr`` call we also do a global
+    # prune of all expired rows (not just the ones for this key). This
+    # bounds the table under high traffic without needing a background
+    # thread to be alive. Tunable via ``WEBHOOK_STORAGE_SWEEP_EVERY``
+    # (default 256) so test code / heavy traffic can crank it up or down.
+    _DEFAULT_SWEEP_EVERY = 256
+
+    def __init__(self) -> None:
+        self._incr_counter = 0
+        try:
+            self._sweep_every = int(
+                os.environ.get(
+                    "WEBHOOK_STORAGE_SWEEP_EVERY",
+                    self._DEFAULT_SWEEP_EVERY,
+                )
+            )
+        except (TypeError, ValueError):
+            self._sweep_every = self._DEFAULT_SWEEP_EVERY
+        if self._sweep_every < 1:
+            self._sweep_every = self._DEFAULT_SWEEP_EVERY
 
     def _now(self) -> datetime:
         return datetime.utcnow()
@@ -216,10 +296,27 @@ class DBWebhookStorage(WebhookStorageBackend):
                 getattr(model, key_attr) == key,
                 model.created_at >= cutoff,
             ).count()
-            return int(count)
         except Exception:
             db.session.rollback()
             raise
+
+        # Opportunistic global sweep. Done after the commit above so a
+        # failure in the sweep can't roll back the caller's increment.
+        # Any error is swallowed and logged -- this is best-effort
+        # housekeeping, never load-bearing.
+        self._incr_counter += 1
+        if self._incr_counter % self._sweep_every == 0:
+            try:
+                self.prune_expired(
+                    rate_limit_window_seconds=window_seconds,
+                    failed_attempt_window_seconds=DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+                )
+            except Exception:  # noqa: BLE001 - opportunistic, never fatal
+                logger.exception(
+                    "Opportunistic prune_expired sweep failed (continuing)"
+                )
+
+        return int(count)
 
     def _count(self, model, key_attr: str, key: str, window_seconds: int) -> int:
         from app import db
@@ -314,6 +411,64 @@ class DBWebhookStorage(WebhookStorageBackend):
             .count()
         )
 
+    def prune_expired(
+        self,
+        rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+        failed_attempt_window_seconds: int = DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+    ) -> dict:
+        """Delete expired rows across the three webhook-storage tables.
+
+        * ``webhook_rate_limit_event``: rows with ``created_at`` older
+          than ``rate_limit_window_seconds`` ago.
+        * ``webhook_failed_attempt``: rows with ``created_at`` older than
+          ``failed_attempt_window_seconds`` ago.
+        * ``webhook_cache_entry``: rows whose ``expires_at`` has passed.
+
+        Unlike the per-key inline prune in ``_incr``, this does NOT
+        require the same key to be hit again -- it sweeps across every
+        key, which is exactly what bounds the table when the inbound
+        traffic is a long tail of one-shot source IPs.
+        """
+        from app import db
+        from models import (
+            WebhookCacheEntry,
+            WebhookFailedAttempt,
+            WebhookRateLimitEvent,
+        )
+
+        now = self._now()
+        rl_cutoff = now - timedelta(seconds=rate_limit_window_seconds)
+        fa_cutoff = now - timedelta(seconds=failed_attempt_window_seconds)
+        try:
+            rl_deleted = (
+                db.session.query(WebhookRateLimitEvent)
+                .filter(WebhookRateLimitEvent.created_at < rl_cutoff)
+                .delete(synchronize_session=False)
+            )
+            fa_deleted = (
+                db.session.query(WebhookFailedAttempt)
+                .filter(WebhookFailedAttempt.created_at < fa_cutoff)
+                .delete(synchronize_session=False)
+            )
+            cache_deleted = (
+                db.session.query(WebhookCacheEntry)
+                .filter(
+                    WebhookCacheEntry.expires_at.isnot(None),
+                    WebhookCacheEntry.expires_at < now,
+                )
+                .delete(synchronize_session=False)
+            )
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+            raise
+
+        return {
+            "rate_limit": int(rl_deleted or 0),
+            "failed_attempt": int(fa_deleted or 0),
+            "cache": int(cache_deleted or 0),
+        }
+
 
 # ---------------------------------------------------------------------------
 # Singleton accessor
@@ -376,3 +531,116 @@ def set_storage_for_tests(backend: WebhookStorageBackend) -> None:
     global _storage, _logged_choice
     _storage = backend
     _logged_choice = True
+
+
+# ---------------------------------------------------------------------------
+# Background sweeper
+# ---------------------------------------------------------------------------
+# A long-tail of one-shot source IPs is the worst case for the inline
+# per-key prune in ``_incr``: rows for keys that never repeat sit in the
+# table forever. The opportunistic sweep in ``_incr`` covers high-traffic
+# apps; this background thread covers low-traffic apps where ``_incr``
+# may not be called often enough to trigger the opportunistic sweep
+# within the configured window. Together they bound the tables.
+_sweeper_thread: Optional[threading.Thread] = None
+_sweeper_stop: Optional[threading.Event] = None
+
+
+def start_background_sweeper(
+    app,
+    storage: Optional[WebhookStorageBackend] = None,
+    interval_seconds: int = 600,
+    rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+    failed_attempt_window_seconds: int = DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+) -> Optional[threading.Thread]:
+    """Start a daemon thread that periodically calls ``prune_expired``.
+
+    Idempotent: a second call is a no-op if a sweeper is already running.
+    Returns the thread (or ``None`` if disabled / already running).
+
+    Disable knobs (any of these short-circuits and returns ``None``):
+      * ``WEBHOOK_STORAGE_SWEEPER_ENABLED`` set to ``0`` / ``false`` /
+        ``no`` -- explicit opt-out (e.g. when running cron externally).
+      * ``FLASK_ENV=test`` -- never start the thread under the test
+        suite; tests drive ``prune_expired`` directly so they don't have
+        to coordinate with a live thread.
+    """
+    global _sweeper_thread, _sweeper_stop
+
+    if _sweeper_thread is not None and _sweeper_thread.is_alive():
+        return None
+
+    if os.environ.get("FLASK_ENV", "").lower() == "test":
+        return None
+    if os.environ.get("WEBHOOK_STORAGE_SWEEPER_ENABLED", "1").lower() in (
+        "0",
+        "false",
+        "no",
+    ):
+        logger.info(
+            "Webhook storage background sweeper disabled via "
+            "WEBHOOK_STORAGE_SWEEPER_ENABLED"
+        )
+        return None
+
+    backend = storage if storage is not None else get_storage()
+
+    stop = threading.Event()
+
+    def _run() -> None:
+        # Sleep first so a fast-restart loop doesn't hammer the DB; the
+        # opportunistic per-incr sweep still runs immediately for
+        # high-traffic processes.
+        while not stop.wait(interval_seconds):
+            try:
+                with app.app_context():
+                    deleted = backend.prune_expired(
+                        rate_limit_window_seconds=rate_limit_window_seconds,
+                        failed_attempt_window_seconds=failed_attempt_window_seconds,
+                    )
+                    if any(deleted.values()):
+                        logger.info(
+                            "Webhook storage sweep removed %s",
+                            deleted,
+                        )
+                    else:
+                        logger.debug(
+                            "Webhook storage sweep removed nothing"
+                        )
+            except Exception:  # noqa: BLE001 - sweeper must never die
+                logger.exception(
+                    "Webhook storage background sweep raised; "
+                    "thread will retry on next interval"
+                )
+
+    thread = threading.Thread(
+        target=_run,
+        name="webhook-storage-sweeper",
+        daemon=True,
+    )
+    thread.start()
+    _sweeper_thread = thread
+    _sweeper_stop = stop
+    logger.info(
+        "Webhook storage background sweeper started "
+        "(interval=%ss, rl_window=%ss, fa_window=%ss)",
+        interval_seconds,
+        rate_limit_window_seconds,
+        failed_attempt_window_seconds,
+    )
+    return thread
+
+
+def stop_background_sweeper(timeout: float = 5.0) -> None:
+    """Signal the background sweeper to exit and join it.
+
+    Used by tests / graceful shutdown. Safe to call when no sweeper is
+    running.
+    """
+    global _sweeper_thread, _sweeper_stop
+    if _sweeper_stop is not None:
+        _sweeper_stop.set()
+    if _sweeper_thread is not None:
+        _sweeper_thread.join(timeout=timeout)
+    _sweeper_thread = None
+    _sweeper_stop = None

@@ -358,7 +358,10 @@ with app.app_context():
     # consistency. The DB fallback path is only acceptable when REDIS_URL
     # is absent, in which case we still log any unexpected error but
     # don't abort boot.
-    from webhooks.storage import get_storage as _get_webhook_storage
+    from webhooks.storage import (
+        get_storage as _get_webhook_storage,
+        start_background_sweeper as _start_webhook_sweeper,
+    )
     if os.environ.get("REDIS_URL"):
         # Let the RuntimeError raised by get_storage() propagate and
         # abort startup. gunicorn will refuse to boot the worker, which
@@ -369,6 +372,35 @@ with app.app_context():
             _get_webhook_storage()
         except Exception as _exc:  # noqa: BLE001 - top-level safety net for storage init  # pragma: no cover - DB init shouldn't fail here
             logger.exception("Webhook DB-fallback storage backend init failed")
+
+    # Kick off the periodic prune_expired() sweeper. This bounds the
+    # webhook_rate_limit_event / webhook_failed_attempt / webhook_cache_entry
+    # tables when the inbound traffic is dominated by one-shot source
+    # IPs (which never re-trigger the inline per-key prune in _incr).
+    # The sweeper itself short-circuits under FLASK_ENV=test or when
+    # WEBHOOK_STORAGE_SWEEPER_ENABLED is falsy, so this call is safe in
+    # all environments.
+    try:
+        _sweep_interval = int(
+            os.environ.get("WEBHOOK_STORAGE_SWEEP_INTERVAL_SECONDS", "600")
+        )
+    except (TypeError, ValueError):
+        _sweep_interval = 600
+    # Clamp to a sane minimum so a misconfigured 0 / negative value
+    # can't turn the sweeper into a busy loop that hammers the DB.
+    _MIN_SWEEP_INTERVAL = 30
+    if _sweep_interval < _MIN_SWEEP_INTERVAL:
+        logger.warning(
+            "WEBHOOK_STORAGE_SWEEP_INTERVAL_SECONDS=%s is below the "
+            "minimum of %ss; clamping to avoid busy-looping the sweeper.",
+            _sweep_interval,
+            _MIN_SWEEP_INTERVAL,
+        )
+        _sweep_interval = _MIN_SWEEP_INTERVAL
+    try:
+        _start_webhook_sweeper(app, interval_seconds=_sweep_interval)
+    except Exception:  # noqa: BLE001 - top-level safety net for sweeper start  # pragma: no cover - thread start shouldn't fail here
+        logger.exception("Webhook storage background sweeper failed to start")
 
     if (
         os.environ.get("FLASK_ENV", "").lower() != "test"
