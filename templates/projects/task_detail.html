@@ -137,12 +137,16 @@
                             <tr>
                                 <td>{{ entry.start_time.strftime('%Y-%m-%d') }}</td>
                                 <td>
-                                    {% if entry.duration %}
-                                        {% set hours = (entry.duration // 60)|int %}
-                                        {% set minutes = entry.duration % 60 %}
-                                        {% if hours > 0 %}{{ hours }}h{% endif %} {{ minutes }}m
-                                    {% else %}
+                                    {# Use an em-dash for missing data
+                                       (NULL duration), but defer to the
+                                       centralized formatter for any real
+                                       value -- including 0, which renders
+                                       as "0m" for consistency with the
+                                       rest of the UI. #}
+                                    {% if entry.duration is none %}
                                         —
+                                    {% else %}
+                                        {{ entry.duration|format_duration }}
                                     {% endif %}
                                 </td>
                                 <td>

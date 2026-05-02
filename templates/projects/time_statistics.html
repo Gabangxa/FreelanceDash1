@@ -102,7 +102,7 @@
                 <div class="card-body text-center">
                     <h5 class="card-title">Avg. Daily Hours</h5>
                     {% if daily_labels|length > 0 %}
-                        {% set avg_daily = (total_duration / 60.0) / daily_labels|length %}
+                        {% set avg_daily = (total_duration|minutes_to_hours) / daily_labels|length %}
                         <h2 class="display-4 mt-3 mb-0">{{ "%.1f"|format(avg_daily) }}</h2>
                     {% else %}
                         <h2 class="display-4 mt-3 mb-0">0.0</h2>
@@ -266,11 +266,7 @@
                                     -
                                 {% endif %}
                             </td>
-                            <td>
-                                {% set hours = entry.duration // 60 %}
-                                {% set mins = entry.duration % 60 %}
-                                {{ hours }}h {{ mins }}m
-                            </td>
+                            <td>{{ entry.duration|format_duration }}</td>
                             <td>
                                 {% if entry.billable %}
                                     <span class="badge bg-success">Billable</span>

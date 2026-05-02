@@ -189,6 +189,16 @@ def inject_common_variables():
         'csp_nonce': getattr(g, 'csp_nonce', '')
     }
 
+
+# Register duration helpers as Jinja filters so templates can write
+# `{{ entry.duration|format_duration }}` instead of duplicating
+# `{% set hours = entry.duration // 60 %}` math (which is easy to typo).
+from utils.duration import format_duration as _format_duration  # noqa: E402
+from utils.duration import minutes_to_hours as _minutes_to_hours  # noqa: E402
+
+app.add_template_filter(_format_duration, name='format_duration')
+app.add_template_filter(_minutes_to_hours, name='minutes_to_hours')
+
 @app.after_request
 def add_security_headers_and_log_timing(response):
     # Add comprehensive security headers

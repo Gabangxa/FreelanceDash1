@@ -8,6 +8,12 @@ from models import Project, Task, TimeEntry, Client, Invoice, UserSettings
 from projects.forms import ProjectForm, TaskForm, TimeEntryForm, BatchTimeEntryForm, TimeEntryFilterForm, BatchHoursEntryForm, SingleEntryForm, WeekSelectionForm, EmptyForm
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from errors import handle_db_errors, UserFriendlyError
+from utils.duration import (
+    format_duration,
+    hours_to_minutes,
+    minutes_to_hours,
+    timedelta_to_minutes,
+)
 import calendar
 
 projects_bp = Blueprint('projects', __name__)
@@ -62,13 +68,15 @@ def dashboard():
             TimeEntry.start_time <= end_of_week
         ).all()
 
-        weekly_hours = sum(entry.duration for entry in weekly_time_entries) / 60.0
+        weekly_hours = minutes_to_hours(
+            sum(entry.duration or 0 for entry in weekly_time_entries)
+        )
 
         # Get daily hours for chart
-        daily_hours = [0] * 7
+        daily_hours = [0.0] * 7
         for entry in weekly_time_entries:
             day_index = entry.start_time.weekday()
-            daily_hours[day_index] += entry.duration / 60.0
+            daily_hours[day_index] += minutes_to_hours(entry.duration)
 
         # Count pending invoices - Using a more efficient query and including both pending and draft invoices
         # This ensures the dashboard "Pending Invoices" tile matches what users see on the invoices page
@@ -416,13 +424,15 @@ def view_task(id):
         # Get time entries for this task
         time_entries = TimeEntry.query.filter_by(task_id=id).order_by(TimeEntry.start_time.desc()).all()
         
-        # Calculate total time spent on the task
+        # Calculate total time spent on the task. Route through the
+        # centralized helper so this can never drift from the dashboard
+        # / admin / time-statistics calculations.
         total_minutes = sum(entry.duration or 0 for entry in time_entries)
-        total_hours = round(total_minutes / 60, 2)
-        
+        total_hours = round(minutes_to_hours(total_minutes), 2)
+
         # Calculate billable time
         billable_minutes = sum(entry.duration or 0 for entry in time_entries if entry.billable)
-        billable_hours = round(billable_minutes / 60, 2)
+        billable_hours = round(minutes_to_hours(billable_minutes), 2)
         
         return render_template(
             'projects/task_detail.html', 
@@ -577,15 +587,16 @@ def create_time_entry():
                 else:
                     end_time = datetime.strptime(end_time_str, '%Y-%m-%d')
                     
-                # Calculate duration in minutes
+                # Validate ordering BEFORE asking the duration helper to
+                # convert -- timedelta_to_minutes refuses negative deltas
+                # so we surface the user-friendly error here instead.
                 time_diff = end_time - start_time
                 if time_diff.total_seconds() <= 0:
                     proj_logger.warning(f"End time ({end_time}) is before start time ({start_time})")
                     flash('End time must be after start time', 'danger')
                     return redirect(url_for('projects.view_project', id=project.id))
-                
-                # Calculate duration in minutes
-                duration = int(time_diff.total_seconds() / 60)
+
+                duration = timedelta_to_minutes(time_diff)
                 proj_logger.info(f"Calculated duration: {duration} minutes from {start_time} to {end_time}")
                 
             except ValueError as e:
@@ -690,7 +701,7 @@ def edit_time_entry(id):
                         return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
                     
                     time_diff = form.end_time.data - form.start_time.data
-                    duration = int(time_diff.total_seconds() / 60)
+                    duration = timedelta_to_minutes(time_diff)
                 else:
                     # Keep the existing duration if only one of the times is updated
                     duration = time_entry.duration
@@ -871,7 +882,7 @@ def time_entry_statistics():
             date_key = entry.start_time.strftime('%Y-%m-%d')
             if date_key not in daily_data:
                 daily_data[date_key] = 0
-            daily_data[date_key] += entry.duration / 60.0  # Convert to hours
+            daily_data[date_key] += minutes_to_hours(entry.duration)
         
         # Sort by date
         daily_labels = sorted(daily_data.keys())
@@ -881,7 +892,7 @@ def time_entry_statistics():
         weekday_data = [0] * 7
         for entry in time_entries:
             weekday = entry.start_time.weekday()
-            weekday_data[weekday] += entry.duration / 60.0  # Convert to hours
+            weekday_data[weekday] += minutes_to_hours(entry.duration)
             
         weekday_labels = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
         
@@ -895,16 +906,11 @@ def time_entry_statistics():
                         task_data[task_name] = 0
                     task_data[task_name] += entry.duration
         
-        # Format duration for display
-        def format_duration(minutes):
-            hours = minutes // 60
-            mins = minutes % 60
-            return f"{hours}h {mins}m"
-        
+        # Format duration for display via the centralized helper so the
+        # rendering matches what the Jinja `format_duration` filter
+        # produces elsewhere in the UI.
         total_formatted = format_duration(total_duration)
         billable_formatted = format_duration(billable_duration)
-        
-        # Format non-billable duration
         non_billable_formatted = format_duration(non_billable_duration)
         
         return render_template(
@@ -1008,7 +1014,7 @@ def batch_time_entries():
                             continue
                             
                         # Convert hours to minutes for the duration
-                        duration_minutes = int(hours * 60)
+                        duration_minutes = hours_to_minutes(hours)
                         
                         # Set start time to the selected date at 9 AM
                         start_time = datetime.combine(entry_date.date(), datetime.min.time().replace(hour=9))

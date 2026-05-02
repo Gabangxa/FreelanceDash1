@@ -128,6 +128,28 @@ go through Alembic so production deployments don't silently drop data.
 
 ## Changelog
 
+- May 02, 2026. Centralized duration conversions (`utils/duration.py`):
+  - All minutes ↔ hours / minutes ↔ timedelta math now routes through one
+    module. The same conversion was previously scattered across
+    `admin/routes.py`, `projects/routes.py` (~10 spots, including a
+    nested `def format_duration`), and inline `{% set hours = ... // 60 %}`
+    in two templates — exactly the duplication that let the C2 `/3600`
+    bug under-report admin hours by 60× for as long as it did.
+  - Public API: `minutes_to_hours`, `hours_to_minutes`, `timedelta_to_minutes`
+    (raises on negative deltas so corrupt time entries fail loud),
+    `split_minutes`, `format_duration`. All tolerate `None` and treat
+    negative values as zero.
+  - `format_duration` and `minutes_to_hours` are registered as Jinja
+    filters in `app.py`, so templates can write
+    `{{ entry.duration|format_duration }}` instead of duplicating the
+    division.
+  - `templates/projects/time_statistics.html` and `task_detail.html`
+    migrated to the filter; `projects/routes.py` and `admin/routes.py`
+    migrated to the helpers.
+  - 35 new tests in `tests/test_duration.py` cover every helper
+    (including None / negative / garbage input), the round-trip
+    `hours → minutes → hours` invariant, and verify the Jinja filters
+    are wired up. Suite is now 71 passing.
 - May 02, 2026. Feature gating split into `has_feature` + `get_feature_limit`:
   - New `polar/features.py` is the single source of truth for the feature
     schema (`FEATURE_SCHEMA` + per-tier overrides). `Subscription.get_features`
