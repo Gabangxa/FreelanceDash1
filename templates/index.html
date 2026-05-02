@@ -1,965 +1,142 @@
 {% extends "base.html" %}
 
-{% block title %}Freelancer Suite - The Modern Way to Run Your Freelance Business{% endblock %}
+{% block title %}Freelance — Focus on the work. We'll handle the rest.{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
+{% endblock %}
 
 {% block content %}
-<style nonce="{{ csp_nonce }}">
-/* Landing Page Specific Styles */
-.landing-hero {
-    min-height: 90vh;
-    display: flex;
-    align-items: center;
-    position: relative;
-    overflow: hidden;
-    background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 50%, #f1f5f9 100%);
-}
-
-[data-bs-theme="dark"] .landing-hero {
-    background: linear-gradient(135deg, #0a0f1a 0%, #111827 50%, #0f172a 100%);
-}
-
-.hero-bg-shapes {
-    position: absolute;
-    inset: 0;
-    overflow: hidden;
-    pointer-events: none;
-}
-
-.hero-shape {
-    position: absolute;
-    border-radius: 50%;
-    filter: blur(80px);
-    opacity: 0.5;
-    animation: float 20s ease-in-out infinite;
-}
-
-.hero-shape-1 {
-    width: 600px;
-    height: 600px;
-    background: linear-gradient(135deg, rgba(0, 102, 255, 0.15) 0%, rgba(0, 184, 217, 0.1) 100%);
-    top: -200px;
-    right: -100px;
-    animation-delay: 0s;
-}
-
-.hero-shape-2 {
-    width: 400px;
-    height: 400px;
-    background: linear-gradient(135deg, rgba(0, 168, 112, 0.1) 0%, rgba(0, 102, 255, 0.08) 100%);
-    bottom: -100px;
-    left: -100px;
-    animation-delay: -5s;
-}
-
-.hero-shape-3 {
-    width: 300px;
-    height: 300px;
-    background: linear-gradient(135deg, rgba(245, 166, 35, 0.08) 0%, rgba(229, 57, 53, 0.05) 100%);
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    animation-delay: -10s;
-}
-
-@keyframes float {
-    0%, 100% { transform: translate(0, 0) scale(1); }
-    25% { transform: translate(30px, -30px) scale(1.05); }
-    50% { transform: translate(-20px, 20px) scale(0.95); }
-    75% { transform: translate(20px, 10px) scale(1.02); }
-}
-
-.hero-content {
-    position: relative;
-    z-index: 10;
-}
-
-.hero-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: rgba(0, 102, 255, 0.1);
-    border: 1px solid rgba(0, 102, 255, 0.2);
-    border-radius: 50px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    color: var(--color-primary);
-    margin-bottom: 1.5rem;
-    animation: fadeInDown 0.6s ease-out;
-}
-
-.hero-badge i {
-    font-size: 0.75rem;
-}
-
-@keyframes fadeInDown {
-    from { opacity: 0; transform: translateY(-20px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-
-.hero-title {
-    font-size: clamp(2.5rem, 6vw, 4rem);
-    font-weight: 800;
-    line-height: 1.1;
-    letter-spacing: -0.03em;
-    margin-bottom: 1.5rem;
-    animation: fadeInUp 0.6s ease-out 0.1s backwards;
-}
-
-.hero-title .gradient-text {
-    background: linear-gradient(135deg, var(--color-primary) 0%, #00B8D9 50%, #00A870 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-}
-
-.hero-subtitle {
-    font-size: 1.25rem;
-    line-height: 1.7;
-    color: var(--text-secondary);
-    max-width: 540px;
-    margin-bottom: 2rem;
-    animation: fadeInUp 0.6s ease-out 0.2s backwards;
-}
-
-.hero-cta {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-    margin-bottom: 3rem;
-    animation: fadeInUp 0.6s ease-out 0.3s backwards;
-}
-
-.btn-hero-primary {
-    padding: 1rem 2rem;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--color-primary) 0%, #0052CC 100%);
-    border: none;
-    color: white;
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    transition: all 0.3s ease;
-    box-shadow: 0 4px 20px rgba(0, 102, 255, 0.3);
-}
-
-.btn-hero-primary:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 30px rgba(0, 102, 255, 0.4);
-    color: white;
-}
-
-.btn-hero-primary i {
-    transition: transform 0.3s ease;
-}
-
-.btn-hero-primary:hover i {
-    transform: translateX(4px);
-}
-
-.btn-hero-secondary {
-    padding: 1rem 2rem;
-    font-size: 1rem;
-    font-weight: 600;
-    border-radius: 12px;
-    background: var(--bg-primary);
-    border: 1px solid var(--border-default);
-    color: var(--text-primary);
-    display: inline-flex;
-    align-items: center;
-    gap: 0.75rem;
-    transition: all 0.3s ease;
-}
-
-.btn-hero-secondary:hover {
-    background: var(--bg-tertiary);
-    border-color: var(--border-strong);
-    transform: translateY(-2px);
-    color: var(--text-primary);
-}
-
-.hero-stats {
-    display: flex;
-    gap: 3rem;
-    animation: fadeInUp 0.6s ease-out 0.4s backwards;
-}
-
-.hero-stat {
-    text-align: left;
-}
-
-.hero-stat-value {
-    font-size: 2rem;
-    font-weight: 700;
-    color: var(--text-primary);
-    line-height: 1;
-    margin-bottom: 0.25rem;
-}
-
-.hero-stat-label {
-    font-size: 0.875rem;
-    color: var(--text-tertiary);
-}
-
-.hero-visual {
-    position: relative;
-    animation: fadeInRight 0.8s ease-out 0.3s backwards;
-}
-
-@keyframes fadeInRight {
-    from { opacity: 0; transform: translateX(40px); }
-    to { opacity: 1; transform: translateX(0); }
-}
-
-.hero-mockup {
-    position: relative;
-    padding: 1rem;
-}
-
-.mockup-window {
-    background: var(--bg-primary);
-    border-radius: 16px;
-    border: 1px solid var(--border-light);
-    box-shadow: 0 25px 80px -12px rgba(0, 0, 0, 0.15);
-    overflow: hidden;
-}
-
-.mockup-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-light);
-}
-
-.mockup-dot {
-    width: 12px;
-    height: 12px;
-    border-radius: 50%;
-}
-
-.mockup-dot-red { background: #FF5F56; }
-.mockup-dot-yellow { background: #FFBD2E; }
-.mockup-dot-green { background: #27CA40; }
-
-.mockup-content {
-    padding: 1.5rem;
-    min-height: 300px;
-}
-
-.mockup-card {
-    background: var(--bg-secondary);
-    border-radius: 12px;
-    padding: 1rem;
-    margin-bottom: 1rem;
-    border: 1px solid var(--border-light);
-}
-
-.mockup-card-header {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    margin-bottom: 0.75rem;
-}
-
-.mockup-avatar {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: linear-gradient(135deg, var(--color-primary) 0%, #00B8D9 100%);
-}
-
-.mockup-text {
-    flex: 1;
-}
-
-.mockup-text-line {
-    height: 8px;
-    border-radius: 4px;
-    background: var(--bg-tertiary);
-    margin-bottom: 0.5rem;
-}
-
-.mockup-text-line:last-child {
-    width: 60%;
-    margin-bottom: 0;
-}
-
-.mockup-progress {
-    height: 6px;
-    border-radius: 3px;
-    background: var(--bg-tertiary);
-    overflow: hidden;
-}
-
-.mockup-progress-bar {
-    height: 100%;
-    width: 75%;
-    background: linear-gradient(90deg, var(--color-primary) 0%, #00B8D9 100%);
-    border-radius: 3px;
-}
-
-.floating-card {
-    position: absolute;
-    background: var(--bg-primary);
-    border-radius: 12px;
-    padding: 1rem;
-    box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.15);
-    border: 1px solid var(--border-light);
-    animation: floatCard 6s ease-in-out infinite;
-}
-
-.floating-card-1 {
-    top: 20%;
-    right: -30px;
-    animation-delay: 0s;
-}
-
-.floating-card-2 {
-    bottom: 20%;
-    left: -40px;
-    animation-delay: -3s;
-}
-
-@keyframes floatCard {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-}
-
-.floating-icon {
-    width: 40px;
-    height: 40px;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-bottom: 0.5rem;
-}
-
-.floating-icon.blue { background: rgba(0, 102, 255, 0.1); color: var(--color-primary); }
-.floating-icon.green { background: rgba(0, 168, 112, 0.1); color: var(--color-success); }
-
-.floating-value {
-    font-size: 1.25rem;
-    font-weight: 700;
-    color: var(--text-primary);
-}
-
-.floating-label {
-    font-size: 0.75rem;
-    color: var(--text-tertiary);
-}
-
-/* Features Section */
-.features-section {
-    padding: 6rem 0;
-    position: relative;
-}
-
-.section-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.5rem 1rem;
-    background: var(--color-primary-light);
-    border-radius: 50px;
-    font-size: 0.75rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: var(--color-primary);
-    margin-bottom: 1rem;
-}
-
-.section-title {
-    font-size: clamp(2rem, 4vw, 3rem);
-    font-weight: 700;
-    letter-spacing: -0.02em;
-    margin-bottom: 1rem;
-}
-
-.section-subtitle {
-    font-size: 1.125rem;
-    color: var(--text-secondary);
-    max-width: 600px;
-    margin: 0 auto 3rem;
-}
-
-.feature-card {
-    background: var(--bg-primary);
-    border: 1px solid var(--border-light);
-    border-radius: 20px;
-    padding: 2rem;
-    height: 100%;
-    transition: all 0.4s ease;
-    position: relative;
-    overflow: hidden;
-}
-
-.feature-card::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    height: 3px;
-    background: linear-gradient(90deg, var(--color-primary) 0%, #00B8D9 100%);
-    transform: scaleX(0);
-    transition: transform 0.4s ease;
-}
-
-.feature-card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.1);
-    border-color: var(--color-primary);
-}
-
-.feature-card:hover::before {
-    transform: scaleX(1);
-}
-
-.feature-icon {
-    width: 64px;
-    height: 64px;
-    border-radius: 16px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.5rem;
-    margin-bottom: 1.5rem;
-    transition: all 0.4s ease;
-}
-
-.feature-icon.blue {
-    background: linear-gradient(135deg, rgba(0, 102, 255, 0.1) 0%, rgba(0, 102, 255, 0.05) 100%);
-    color: var(--color-primary);
-}
-
-.feature-icon.green {
-    background: linear-gradient(135deg, rgba(0, 168, 112, 0.1) 0%, rgba(0, 168, 112, 0.05) 100%);
-    color: var(--color-success);
-}
-
-.feature-icon.orange {
-    background: linear-gradient(135deg, rgba(245, 166, 35, 0.1) 0%, rgba(245, 166, 35, 0.05) 100%);
-    color: var(--color-warning);
-}
-
-.feature-icon.cyan {
-    background: linear-gradient(135deg, rgba(0, 184, 217, 0.1) 0%, rgba(0, 184, 217, 0.05) 100%);
-    color: var(--color-info);
-}
-
-.feature-card:hover .feature-icon {
-    transform: scale(1.1) rotate(-5deg);
-}
-
-.feature-title {
-    font-size: 1.25rem;
-    font-weight: 600;
-    margin-bottom: 0.75rem;
-    color: var(--text-primary);
-}
-
-.feature-description {
-    color: var(--text-secondary);
-    line-height: 1.7;
-    margin-bottom: 0;
-}
-
-/* Stats Section */
-.stats-section {
-    padding: 5rem 0;
-    background: linear-gradient(135deg, var(--color-primary) 0%, #0052CC 100%);
-    position: relative;
-    overflow: hidden;
-}
-
-.stats-section::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23ffffff' fill-opacity='0.05'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
-}
-
-.stat-item {
-    text-align: center;
-    position: relative;
-    z-index: 1;
-}
-
-.stat-number {
-    font-size: clamp(2.5rem, 5vw, 4rem);
-    font-weight: 800;
-    color: white;
-    line-height: 1;
-    margin-bottom: 0.5rem;
-}
-
-.stat-label {
-    font-size: 1rem;
-    color: rgba(255, 255, 255, 0.8);
-    font-weight: 500;
-}
-
-/* Benefits Section */
-.benefits-section {
-    padding: 6rem 0;
-}
-
-.benefit-row {
-    display: flex;
-    align-items: center;
-    gap: 4rem;
-    margin-bottom: 5rem;
-}
-
-.benefit-row:nth-child(even) {
-    flex-direction: row-reverse;
-}
-
-.benefit-content {
-    flex: 1;
-}
-
-.benefit-visual {
-    flex: 1;
-    position: relative;
-}
-
-.benefit-number {
-    font-size: 6rem;
-    font-weight: 800;
-    color: var(--color-primary);
-    opacity: 0.1;
-    line-height: 1;
-    margin-bottom: -2rem;
-}
-
-.benefit-title {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
-}
-
-.benefit-description {
-    font-size: 1.125rem;
-    color: var(--text-secondary);
-    line-height: 1.8;
-    margin-bottom: 1.5rem;
-}
-
-.benefit-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-}
-
-.benefit-list li {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    padding: 0.5rem 0;
-    color: var(--text-secondary);
-}
-
-.benefit-list li i {
-    color: var(--color-success);
-    font-size: 1rem;
-}
-
-.benefit-image {
-    background: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
-    border-radius: 24px;
-    padding: 2rem;
-    border: 1px solid var(--border-light);
-    box-shadow: 0 20px 60px -20px rgba(0, 0, 0, 0.1);
-}
-
-/* CTA Section */
-.cta-section {
-    padding: 6rem 0;
-    text-align: center;
-    position: relative;
-    overflow: hidden;
-}
-
-.cta-container {
-    background: linear-gradient(135deg, var(--bg-primary) 0%, var(--color-primary-subtle) 100%);
-    border: 1px solid var(--border-light);
-    border-radius: 32px;
-    padding: 4rem;
-    position: relative;
-    overflow: hidden;
-}
-
-.cta-container::before {
-    content: '';
-    position: absolute;
-    top: -50%;
-    right: -25%;
-    width: 50%;
-    height: 200%;
-    background: radial-gradient(circle, rgba(0, 102, 255, 0.05) 0%, transparent 70%);
-    pointer-events: none;
-}
-
-.cta-title {
-    font-size: clamp(2rem, 4vw, 2.5rem);
-    font-weight: 700;
-    margin-bottom: 1rem;
-    position: relative;
-}
-
-.cta-subtitle {
-    font-size: 1.125rem;
-    color: var(--text-secondary);
-    max-width: 500px;
-    margin: 0 auto 2rem;
-    position: relative;
-}
-
-.cta-buttons {
-    display: flex;
-    justify-content: center;
-    gap: 1rem;
-    flex-wrap: wrap;
-    position: relative;
-}
-
-/* Responsive */
-@media (max-width: 991px) {
-    .hero-visual {
-        margin-top: 3rem;
-    }
-    
-    .floating-card {
-        display: none;
-    }
-    
-    .hero-stats {
-        gap: 2rem;
-    }
-    
-    .benefit-row,
-    .benefit-row:nth-child(even) {
-        flex-direction: column;
-        gap: 2rem;
-    }
-}
-
-@media (max-width: 768px) {
-    .hero-stats {
-        flex-wrap: wrap;
-        gap: 1.5rem;
-    }
-    
-    .hero-stat {
-        flex: 1;
-        min-width: 100px;
-    }
-    
-    .cta-container {
-        padding: 2.5rem 1.5rem;
-    }
-}
-</style>
-
-<!-- Hero Section -->
-<section class="landing-hero">
-    <div class="hero-bg-shapes">
-        <div class="hero-shape hero-shape-1"></div>
-        <div class="hero-shape hero-shape-2"></div>
-        <div class="hero-shape hero-shape-3"></div>
-    </div>
-    
-    <div class="container">
-        <div class="row align-items-center">
-            <div class="col-lg-6 hero-content">
-                <div class="hero-badge">
-                    <i class="fas fa-bolt"></i>
-                    <span>The #1 Platform for Freelancers</span>
-                </div>
-                
-                <h1 class="hero-title">
-                    Run Your Freelance Business 
-                    <span class="gradient-text">Like a Pro</span>
-                </h1>
-                
-                <p class="hero-subtitle">
-                    One powerful platform to manage projects, track time, send invoices, and grow your freelance career. No spreadsheets. No chaos. Just results.
-                </p>
-                
-                {% if not current_user.is_authenticated %}
-                <div class="hero-cta">
-                    <a href="{{ url_for('auth.register') }}" class="btn-hero-primary">
-                        Start Free Today
-                        <i class="fas fa-arrow-right"></i>
-                    </a>
-                    <a href="{{ url_for('auth.login') }}" class="btn-hero-secondary">
-                        <i class="fas fa-play-circle"></i>
-                        Sign In
-                    </a>
-                </div>
+<div class="lp-root">
+
+    <!-- Top navigation -->
+    <nav class="lp-nav" aria-label="Primary">
+        <div class="lp-nav-inner">
+            <a href="{{ url_for('index') }}" class="lp-brand">Freelance.</a>
+
+            <div class="lp-nav-links">
+                <a href="#features">Features</a>
+                <a href="#testimonials">Stories</a>
+                <a href="#pricing">Pricing</a>
+            </div>
+
+            <div class="lp-nav-cta-wrap">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('projects.dashboard') }}" class="lp-nav-cta">
+                    Open App
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="lp-icon-sm" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                    </svg>
+                </a>
                 {% else %}
-                <div class="hero-cta">
-                    <a href="{{ url_for('projects.dashboard') }}" class="btn-hero-primary">
-                        Go to Dashboard
-                        <i class="fas fa-arrow-right"></i>
-                    </a>
-                </div>
+                <a href="{{ url_for('auth.login') }}" class="lp-nav-cta">
+                    Open App
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="lp-icon-sm" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3" />
+                    </svg>
+                </a>
                 {% endif %}
-                
-                <div class="hero-stats">
-                    <div class="hero-stat">
-                        <div class="hero-stat-value">10K+</div>
-                        <div class="hero-stat-label">Active Users</div>
-                    </div>
-                    <div class="hero-stat">
-                        <div class="hero-stat-value">$2M+</div>
-                        <div class="hero-stat-label">Invoiced</div>
-                    </div>
-                    <div class="hero-stat">
-                        <div class="hero-stat-value">50K+</div>
-                        <div class="hero-stat-label">Projects</div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="col-lg-6 hero-visual">
-                <div class="hero-mockup">
-                    <div class="mockup-window">
-                        <div class="mockup-header">
-                            <div class="mockup-dot mockup-dot-red"></div>
-                            <div class="mockup-dot mockup-dot-yellow"></div>
-                            <div class="mockup-dot mockup-dot-green"></div>
-                        </div>
-                        <div class="mockup-content">
-                            <div class="mockup-card">
-                                <div class="mockup-card-header">
-                                    <div class="mockup-avatar"></div>
-                                    <div class="mockup-text">
-                                        <div class="mockup-text-line mockup-text-line-w70"></div>
-                                        <div class="mockup-text-line mockup-text-line-w40"></div>
-                                    </div>
-                                </div>
-                                <div class="mockup-progress">
-                                    <div class="mockup-progress-bar"></div>
-                                </div>
-                            </div>
-                            <div class="mockup-card">
-                                <div class="mockup-card-header">
-                                    <div class="mockup-avatar mockup-avatar-task"></div>
-                                    <div class="mockup-text">
-                                        <div class="mockup-text-line mockup-text-line-w85"></div>
-                                        <div class="mockup-text-line mockup-text-line-w55"></div>
-                                    </div>
-                                </div>
-                                <div class="mockup-progress">
-                                    <div class="mockup-progress-bar mockup-progress-bar-w45"></div>
-                                </div>
-                            </div>
-                            <div class="mockup-card">
-                                <div class="mockup-card-header">
-                                    <div class="mockup-avatar mockup-avatar-invoice"></div>
-                                    <div class="mockup-text">
-                                        <div class="mockup-text-line mockup-text-line-w60"></div>
-                                        <div class="mockup-text-line mockup-text-line-w35"></div>
-                                    </div>
-                                </div>
-                                <div class="mockup-progress">
-                                    <div class="mockup-progress-bar mockup-progress-bar-w90"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    
-                    <div class="floating-card floating-card-1">
-                        <div class="floating-icon blue">
-                            <i class="fas fa-clock"></i>
-                        </div>
-                        <div class="floating-value">8.5h</div>
-                        <div class="floating-label">Today</div>
-                    </div>
-                    
-                    <div class="floating-card floating-card-2">
-                        <div class="floating-icon green">
-                            <i class="fas fa-dollar-sign"></i>
-                        </div>
-                        <div class="floating-value">$4,850</div>
-                        <div class="floating-label">This Month</div>
-                    </div>
-                </div>
             </div>
         </div>
-    </div>
-</section>
+    </nav>
 
-<!-- Features Section -->
-<section class="features-section">
-    <div class="container">
-        <div class="text-center">
-            <span class="section-badge">
-                <i class="fas fa-star"></i>
-                Features
-            </span>
-            <h2 class="section-title">Everything You Need to Thrive</h2>
-            <p class="section-subtitle">Powerful tools designed specifically for freelancers who want to focus on their craft, not admin work.</p>
-        </div>
-        
-        <div class="row g-4">
-            <div class="col-md-6 col-lg-3">
-                <div class="feature-card">
-                    <div class="feature-icon blue">
-                        <i class="fas fa-project-diagram"></i>
-                    </div>
-                    <h3 class="feature-title">Project Hub</h3>
-                    <p class="feature-description">Manage unlimited projects with tasks, milestones, and real-time progress tracking in one intuitive dashboard.</p>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-3">
-                <div class="feature-card">
-                    <div class="feature-icon green">
-                        <i class="fas fa-stopwatch"></i>
-                    </div>
-                    <h3 class="feature-title">Smart Time Tracking</h3>
-                    <p class="feature-description">Track every minute with precision. Start/stop timers or log hours manually. Export reports with one click.</p>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-3">
-                <div class="feature-card">
-                    <div class="feature-icon orange">
-                        <i class="fas fa-file-invoice-dollar"></i>
-                    </div>
-                    <h3 class="feature-title">Pro Invoicing</h3>
-                    <p class="feature-description">Generate stunning PDF invoices in seconds. Multi-currency support, payment tracking, and automatic reminders.</p>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-3">
-                <div class="feature-card">
-                    <div class="feature-icon cyan">
-                        <i class="fas fa-users"></i>
-                    </div>
-                    <h3 class="feature-title">Client Portal</h3>
-                    <p class="feature-description">Keep all client info organized. Contact details, project history, and communication logs in one place.</p>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+    <!-- Hero -->
+    <section class="lp-hero">
+        <div class="lp-hero-content lp-fade-in">
+            <h1 class="lp-h1">
+                Focus on the work.<br>
+                <span class="lp-h1-muted">We'll handle the rest.</span>
+            </h1>
 
-<!-- Stats Section -->
-<section class="stats-section">
-    <div class="container">
-        <div class="row g-4">
-            <div class="col-6 col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">99%</div>
-                    <div class="stat-label">Uptime Guaranteed</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">24/7</div>
-                    <div class="stat-label">Support Available</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">5min</div>
-                    <div class="stat-label">Setup Time</div>
-                </div>
-            </div>
-            <div class="col-6 col-md-3">
-                <div class="stat-item">
-                    <div class="stat-number">Free</div>
-                    <div class="stat-label">To Get Started</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+            <p class="lp-sub">
+                A frictionless environment for independent professionals to track projects, monitor earnings, and stay flawlessly organized.
+            </p>
 
-<!-- Benefits Section -->
-<section class="benefits-section">
-    <div class="container">
-        <div class="text-center mb-5">
-            <span class="section-badge">
-                <i class="fas fa-rocket"></i>
-                Why Choose Us
-            </span>
-            <h2 class="section-title">Built for Freelancers, by Freelancers</h2>
-            <p class="section-subtitle">We understand the challenges of running a freelance business. That's why we built the tools you actually need.</p>
-        </div>
-        
-        <div class="row g-4">
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <div class="feature-icon blue">
-                        <i class="fas fa-bolt"></i>
-                    </div>
-                    <h3 class="feature-title">Lightning Fast</h3>
-                    <p class="feature-description">No bloat, no slowdowns. Our platform is optimized for speed so you can work without waiting.</p>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <div class="feature-icon green">
-                        <i class="fas fa-shield-alt"></i>
-                    </div>
-                    <h3 class="feature-title">Bank-Level Security</h3>
-                    <p class="feature-description">Your data is encrypted and protected. We take security as seriously as you take your business.</p>
-                </div>
-            </div>
-            
-            <div class="col-md-6 col-lg-4">
-                <div class="feature-card">
-                    <div class="feature-icon orange">
-                        <i class="fas fa-mobile-alt"></i>
-                    </div>
-                    <h3 class="feature-title">Works Everywhere</h3>
-                    <p class="feature-description">Access your business from any device. Desktop, tablet, or phone - it just works.</p>
-                </div>
+            <div class="lp-hero-cta-row">
+                {% if current_user.is_authenticated %}
+                <a href="{{ url_for('projects.dashboard') }}" class="lp-cta-primary">Start building</a>
+                {% else %}
+                <a href="{{ url_for('auth.register') }}" class="lp-cta-primary">Start building</a>
+                {% endif %}
             </div>
         </div>
-    </div>
-</section>
 
-<!-- CTA Section -->
-<section class="cta-section">
-    <div class="container">
-        <div class="cta-container">
-            <h2 class="cta-title">Ready to Transform Your Freelance Business?</h2>
-            <p class="cta-subtitle">Join thousands of freelancers who've simplified their workflow and boosted their income.</p>
-            
-            {% if not current_user.is_authenticated %}
-            <div class="cta-buttons">
-                <a href="{{ url_for('auth.register') }}" class="btn-hero-primary">
-                    Get Started for Free
-                    <i class="fas fa-arrow-right"></i>
-                </a>
-                <a href="{{ url_for('faq.index') }}" class="btn-hero-secondary">
-                    <i class="fas fa-question-circle"></i>
-                    Read FAQ
-                </a>
+        <!-- Minimal wireframe mockup -->
+        <div class="lp-mockup-wrap lp-fade-in lp-fade-in-delayed">
+            <div class="lp-mockup-window">
+                <div class="lp-mockup-dots">
+                    <span class="lp-dot lp-dot-red"></span>
+                    <span class="lp-dot lp-dot-amber"></span>
+                    <span class="lp-dot lp-dot-green"></span>
+                </div>
+
+                <div class="lp-mockup-body">
+                    <div class="lp-mockup-sidebar">
+                        <div class="lp-line lp-line-w100"></div>
+                        <div class="lp-line lp-line-w75"></div>
+                        <div class="lp-line lp-line-w83"></div>
+                    </div>
+
+                    <div class="lp-mockup-main">
+                        <div class="lp-mockup-title"></div>
+                        <div class="lp-mockup-stats">
+                            <div class="lp-mockup-stat"><div class="lp-mockup-stat-bar lp-stat-w50"></div></div>
+                            <div class="lp-mockup-stat"><div class="lp-mockup-stat-bar lp-stat-w67"></div></div>
+                            <div class="lp-mockup-stat"><div class="lp-mockup-stat-bar lp-stat-w50"></div></div>
+                        </div>
+                        <div class="lp-mockup-chart"></div>
+                    </div>
+                </div>
+
+                <div class="lp-mockup-fade"></div>
             </div>
-            {% else %}
-            <div class="cta-buttons">
-                <a href="{{ url_for('projects.dashboard') }}" class="btn-hero-primary">
-                    Go to Dashboard
-                    <i class="fas fa-arrow-right"></i>
-                </a>
-            </div>
-            {% endif %}
         </div>
-    </div>
-</section>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="lp-features">
+        <div class="lp-features-inner">
+            <h2 class="lp-h2">Exceptional by design.</h2>
+
+            <div class="lp-feature-grid">
+                <div class="lp-feature">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="lp-feature-icon" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 0 1 6 3.75h2.25A2.25 2.25 0 0 1 10.5 6v2.25a2.25 2.25 0 0 1-2.25 2.25H6a2.25 2.25 0 0 1-2.25-2.25V6ZM3.75 15.75A2.25 2.25 0 0 1 6 13.5h2.25a2.25 2.25 0 0 1 2.25 2.25V18a2.25 2.25 0 0 1-2.25 2.25H6A2.25 2.25 0 0 1 3.75 18v-2.25ZM13.5 6a2.25 2.25 0 0 1 2.25-2.25H18A2.25 2.25 0 0 1 20.25 6v2.25A2.25 2.25 0 0 1 18 10.5h-2.25a2.25 2.25 0 0 1-2.25-2.25V6ZM13.5 15.75a2.25 2.25 0 0 1 2.25-2.25H18a2.25 2.25 0 0 1 2.25 2.25V18A2.25 2.25 0 0 1 18 20.25h-2.25A2.25 2.25 0 0 1 13.5 18v-2.25Z" />
+                    </svg>
+                    <h3 class="lp-feature-title">Intuitive view</h3>
+                    <p class="lp-feature-text">
+                        See all your vital signs at a glance without navigating through endless menus. A true canvas for your career.
+                    </p>
+                </div>
+
+                <div class="lp-feature">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="lp-feature-icon" aria-hidden="true">
+                        <path fill-rule="evenodd" d="M21.53 9.53a.75.75 0 0 1-1.06 0l-4.72-4.72V15a6.75 6.75 0 0 1-13.5 0v-3a.75.75 0 0 1 1.5 0v3a5.25 5.25 0 1 0 10.5 0V4.81L9.53 9.53a.75.75 0 0 1-1.06-1.06l6-6a.75.75 0 0 1 1.06 0l6 6a.75.75 0 0 1 0 1.06Z" clip-rule="evenodd" />
+                    </svg>
+                    <h3 class="lp-feature-title">Zero friction</h3>
+                    <p class="lp-feature-text">
+                        Engineered for unparalleled responsiveness. Every single interaction feels instantaneous and natural.
+                    </p>
+                </div>
+
+                <div class="lp-feature">
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="lp-feature-icon" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75 11.25 15 15 9.75M21 12c0 1.268-.63 2.39-1.593 3.068a3.745 3.745 0 0 1-1.043 3.296 3.745 3.745 0 0 1-3.296 1.043A3.745 3.745 0 0 1 12 21c-1.268 0-2.39-.63-3.068-1.593a3.746 3.746 0 0 1-3.296-1.043 3.745 3.745 0 0 1-1.043-3.296A3.745 3.745 0 0 1 3 12c0-1.268.63-2.39 1.593-3.068a3.745 3.745 0 0 1 1.043-3.296 3.746 3.746 0 0 1 3.296-1.043A3.746 3.746 0 0 1 12 3c1.268 0 2.39.63 3.068 1.593a3.746 3.746 0 0 1 3.296 1.043 3.746 3.746 0 0 1 1.043 3.296A3.745 3.745 0 0 1 21 12Z" />
+                    </svg>
+                    <h3 class="lp-feature-title">Absolute privacy</h3>
+                    <p class="lp-feature-text">
+                        Your client data and financials remain strictly yours. Advanced architecture ensures complete peace of mind.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Brand footer (separate from base.html legal footer) -->
+    <footer class="lp-brandfoot">
+        <span class="lp-brand">Freelance.</span>
+        <p class="lp-brandfoot-text">© {{ current_year }} Freelance Pro. Designed with intent.</p>
+    </footer>
+
+</div>
 {% endblock %}
