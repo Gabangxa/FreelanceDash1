@@ -252,6 +252,28 @@ go through Alembic so production deployments don't silently drop data.
     delivery system planned next.
   - **Tests**: added pytest harness (`tests/conftest.py` w/ in-memory
     SQLite). 21 tests passing.
+- May 02, 2026. Task #17: "Continue with Google" sign-in (additive OAuth).
+  - Added `oauth_provider` + `oauth_provider_id` columns on `User` with a
+    composite `UNIQUE (oauth_provider, oauth_provider_id)` so two app
+    accounts can never both claim the same Google identity. Migration
+    `0005_add_user_oauth_columns` (idempotent, reversible).
+  - New `google_auth.py` blueprint adapted from Replit's
+    `flask_google_oauth` integration but with: Google `sub` (not email)
+    as the stable identifier; three-step lookup (provider+id → email
+    link → create with collision-safe generated username); session-
+    bound CSRF state; `is_safe_url`-validated `next` redirect carried
+    across the round-trip via session; 409 refusal to relink an account
+    already bound to a different Google identity.
+  - Blueprint is registered conditionally on
+    `GOOGLE_OAUTH_CLIENT_ID/SECRET` so the app boots in environments
+    without OAuth credentials. Templates check the
+    `google_oauth_enabled` context flag to show/hide the
+    "Continue with Google" button on `/auth/login` and `/auth/register`.
+  - New read-only `/settings/sign-in-methods` page surfaces which auth
+    methods (password, magic link, Google) are linked to the account.
+    Linked from the user dropdown.
+  - 19 new tests in `tests/test_google_oauth.py`; full suite is now
+    157 passing.
 - December 07, 2025. Added project completion feature and deadline alert system
   - Projects can now be marked as "completed" or reopened with a single click
   - Configurable deadline alerts (7 days, 3 days, 1 day, or custom interval)
