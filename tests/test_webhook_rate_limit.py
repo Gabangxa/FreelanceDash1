@@ -27,6 +27,7 @@ from webhooks.storage import (
     start_background_sweeper,
     stop_background_sweeper,
 )
+from tests import storage_contract
 
 
 @pytest.fixture(autouse=True)
@@ -43,6 +44,20 @@ def _isolated_db_storage(app):
         db.session.commit()
     yield
     reset_storage_for_tests()
+
+
+# ---------------------------------------------------------------------------
+# Shared backend contract -- run the same suite that test_storage_contract_nats
+# runs against JetStream so the DB and NATS backends provably satisfy the
+# same WebhookStorageBackend semantics. New backends only need to wire
+# this in once.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize("contract_fn", storage_contract.ALL_CONTRACTS)
+def test_db_backend_satisfies_storage_contract(app, contract_fn):
+    """Run every contract function from ``tests/storage_contract.py``
+    against the DB-backed storage backend."""
+    with app.app_context():
+        contract_fn(get_storage())
 
 
 # ---------------------------------------------------------------------------

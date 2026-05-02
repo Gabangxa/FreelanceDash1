@@ -583,16 +583,34 @@ class JetStreamKVStorage(WebhookStorageBackend):
                 logger.debug("kv CAS retry on %s", key, exc_info=True)
                 continue
 
-        # Final fallback: overwrite without CAS so we don't drop the
-        # event. Counter accuracy is best-effort under sustained
-        # contention (matches Redis's semantics under heavy concurrent
-        # writes).
-        payload = json.dumps([now], separators=(",", ":")).encode()
+        # Final fallback after exhausting CAS retries. We deliberately
+        # do NOT overwrite with ``[now]`` because that would reset the
+        # counter under sustained contention -- a crude attacker could
+        # exploit it to bypass rate limits. Instead, re-read the
+        # latest committed value, prune to the window, append our
+        # event, and blind-put. Concurrent writers may still clobber
+        # this put, but at least the historical timestamps inside
+        # ``window_seconds`` are preserved and the rate limit can't
+        # be reset to 1.
+        entry = bucket.get(key)
+        if entry is None:
+            timestamps: list = []
+        else:
+            try:
+                raw = json.loads(entry.value)
+                timestamps = [
+                    t for t in raw
+                    if isinstance(t, (int, float)) and t >= cutoff
+                ] if isinstance(raw, list) else []
+            except (json.JSONDecodeError, TypeError, ValueError):
+                timestamps = []
+        timestamps.append(now)
+        payload = json.dumps(timestamps, separators=(",", ":")).encode()
         try:
             bucket.put(key, payload)
-        except Exception:  # noqa: BLE001
+        except Exception:  # noqa: BLE001 - last-ditch; counter accuracy is best-effort here
             logger.exception("kv final-fallback put failed for %s", key)
-        return 1
+        return len(timestamps)
 
     def _zset_count(self, bucket, key: str, window_seconds: int) -> int:
         entry = bucket.get(key)
