@@ -304,6 +304,16 @@ def export_data_json():
         import json
         from datetime import datetime
         from collections import OrderedDict
+        from decimal import Decimal
+
+        def _json_default(obj):
+            # ``Decimal`` (used for invoice money / quantity columns) is
+            # not JSON-serializable by default. Render as a plain float
+            # so consumers see a number rather than a string -- precision
+            # is preserved at 2dp / 4dp by the column type itself.
+            if isinstance(obj, Decimal):
+                return float(obj)
+            raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
         
         # Get user data
         user_data = OrderedDict()
@@ -444,8 +454,10 @@ def export_data_json():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f"workvista_export_{timestamp}.json"
         
-        # Convert to JSON with pretty formatting
-        json_data = json.dumps(user_data, indent=2)
+        # Convert to JSON with pretty formatting. ``default=_json_default``
+        # handles Decimal columns (Invoice.amount, InvoiceItem.{quantity,
+        # rate, amount}) which json's stdlib encoder otherwise rejects.
+        json_data = json.dumps(user_data, indent=2, default=_json_default)
         
         # Create response
         from flask import Response

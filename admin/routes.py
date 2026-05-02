@@ -6,7 +6,11 @@ from models import User, Client, Project, Invoice, WebhookEvent, Notification, T
 from app import db
 from datetime import datetime, timedelta
 from sqlalchemy import func, desc
+from sqlalchemy.exc import SQLAlchemyError
 import json
+import logging
+
+logger = logging.getLogger(__name__)
 
 
 @bp.route('/dashboard')
@@ -264,13 +268,18 @@ def system():
     inspector = inspect(db.engine)
     table_names = inspector.get_table_names()
     
-    # Get table row counts
+    # Get table row counts. We narrow this from a bare ``except`` to the
+    # specific DB-side errors that can plausibly fire here (missing
+    # table, busy DB, etc). Anything else -- KeyboardInterrupt,
+    # MemoryError, programming errors -- should still propagate so
+    # operators see a real stack trace instead of a silent ``N/A``.
     table_stats = []
     for table in table_names:
         try:
             count = db.session.execute(text(f"SELECT COUNT(*) FROM {table}")).scalar()
             table_stats.append({'name': table, 'rows': count})
-        except:
+        except SQLAlchemyError:
+            logger.exception("Failed to count rows for table %s", table)
             table_stats.append({'name': table, 'rows': 'N/A'})
     
     system_info = {

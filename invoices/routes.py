@@ -11,7 +11,23 @@ from reportlab.lib.utils import ImageReader
 from io import BytesIO
 import uuid
 from datetime import datetime
+from decimal import Decimal, ROUND_HALF_UP
 from errors import handle_db_errors, UserFriendlyError
+
+# 2-decimal money quantum used to round invoice totals consistently.
+_MONEY_QUANTUM = Decimal('0.01')
+
+
+def _to_money(value) -> Decimal:
+    """Coerce a Decimal-or-numeric ``value`` to 2dp money rounding half-up.
+
+    The form already hands us ``Decimal`` (DecimalField), but we still
+    quantize after multiplication so 1.005 * 1 doesn't render as 1.005
+    in the templates / PDF / DB.
+    """
+    if not isinstance(value, Decimal):
+        value = Decimal(str(value))
+    return value.quantize(_MONEY_QUANTUM, rounding=ROUND_HALF_UP)
 
 invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices', template_folder='../templates/invoices')
 
@@ -44,14 +60,26 @@ def create_invoice():
         clients = Client.query.filter_by(user_id=current_user.id).all()
         form.client_id.choices = [(c.id, c.name) for c in clients]
 
-        # If client_id is provided, populate projects
+        # If client_id is provided, populate projects. Belt-and-suspenders:
+        # filter by both client_id (chosen in the form) AND user_id, so a
+        # tampered client_id can never surface another tenant's projects
+        # in the dropdown.
         if request.method == 'POST' and form.client_id.data:
-            projects = Project.query.filter_by(client_id=form.client_id.data).all()
+            projects = Project.query.filter_by(
+                client_id=form.client_id.data,
+                user_id=current_user.id,
+            ).all()
             form.project_id.choices = [(p.id, p.name) for p in projects]
 
         if form.validate_on_submit():
-            # Verify project belongs to selected client
-            project = Project.query.get(form.project_id.data)
+            # Verify project belongs to selected client AND to the current
+            # user. Going through ``user_id`` directly means we can't be
+            # tricked by a forged ``client_id`` that points at our own
+            # client but a project owned by a different tenant.
+            project = Project.query.filter_by(
+                id=form.project_id.data,
+                user_id=current_user.id,
+            ).first()
             if not project or project.client_id != form.client_id.data:
                 flash('Invalid project selection', 'danger')
                 return redirect(url_for('invoices.create_invoice'))
@@ -69,7 +97,7 @@ def create_invoice():
                 # Create invoice
                 invoice = Invoice(
                     invoice_number=invoice_number,
-                    amount=0,  # Will be calculated from items
+                    amount=Decimal('0'),  # Will be recalculated from items
                     currency=form.currency.data,
                     due_date=form.due_date.data,
                     notes=form.notes.data,
@@ -80,18 +108,26 @@ def create_invoice():
                 db.session.add(invoice)
                 db.session.flush()  # Get the invoice.id without committing
 
-                # Add invoice items
-                total_amount = 0
+                # Add invoice items. All math is in Decimal -- we never
+                # cast to float, which would re-introduce the binary-
+                # rounding drift the column type change is meant to fix.
+                total_amount = Decimal('0')
                 items_added = False
 
                 for item_data in form.items.data:
-                    # Validate item data
-                    if not item_data['description'] or item_data['quantity'] <= 0 or item_data['rate'] <= 0:
+                    # Validate item data (Decimal comparison, no coercion)
+                    if (
+                        not item_data['description']
+                        or item_data['quantity'] is None
+                        or item_data['rate'] is None
+                        or item_data['quantity'] <= 0
+                        or item_data['rate'] <= 0
+                    ):
                         continue
 
-                    quantity = float(item_data['quantity'])
-                    rate = float(item_data['rate'])
-                    item_amount = quantity * rate
+                    quantity = item_data['quantity']
+                    rate = item_data['rate']
+                    item_amount = _to_money(quantity * rate)
 
                     item = InvoiceItem(
                         description=item_data['description'],
@@ -110,8 +146,10 @@ def create_invoice():
                     flash('Invoice must have at least one valid item', 'danger')
                     return render_template('create.html', form=form)
 
-                # Update invoice total
-                invoice.amount = total_amount
+                # Update invoice total (already-quantized item amounts so
+                # the sum is exact; quantize once more just in case the
+                # column adapter is strict about scale).
+                invoice.amount = _to_money(total_amount)
                 db.session.commit()
                 logger.info(f"Invoice #{invoice.invoice_number} created by user {current_user.id}")
                 flash('Invoice created successfully', 'success')
@@ -179,7 +217,14 @@ def get_projects(client_id):
             logger.warning(f"Unauthorized project list request for client {client_id} by user {current_user.id}")
             return jsonify([]), 403
 
-        projects = Project.query.filter_by(client_id=client_id).all()
+        # Defense in depth: filter on user_id too even though the parent
+        # ``client`` row was already proven to belong to ``current_user``.
+        # That way any future refactor that drops the ``client`` lookup
+        # above doesn't silently leak another tenant's project list.
+        projects = Project.query.filter_by(
+            client_id=client_id,
+            user_id=current_user.id,
+        ).all()
         return jsonify([(p.id, p.name) for p in projects])
     except SQLAlchemyError as e:
         logger.exception(f"Error fetching projects for client {client_id}")

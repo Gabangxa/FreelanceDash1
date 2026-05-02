@@ -16,9 +16,16 @@ def view_client(id):
     try:
         # Secure query ensuring client belongs to current user with eager loading of projects
         client = Client.query.filter_by(id=id, user_id=current_user.id).first_or_404()
-        
-        # Get all projects for this client
-        projects = Project.query.filter_by(client_id=id).all()
+
+        # Defense in depth: scope the project lookup by user_id too, even
+        # though the parent ``client`` row was already proven to belong to
+        # ``current_user``. A future refactor that drops the parent check
+        # then can't silently leak another tenant's projects through this
+        # route.
+        projects = Project.query.filter_by(
+            client_id=id,
+            user_id=current_user.id,
+        ).all()
         
         return render_template('clients/detail.html', client=client, projects=projects)
     except SQLAlchemyError as e:
@@ -165,8 +172,13 @@ def delete_client(id):
         # Secure query ensuring client belongs to current user
         client = Client.query.filter_by(id=id, user_id=current_user.id).first_or_404()
 
-        # Check if client has associated projects
-        projects_count = Project.query.filter_by(client_id=id).count()
+        # Check if client has associated projects. Belt-and-suspenders:
+        # always carry user_id even when the parent client row was already
+        # tenant-scoped, so this count can't be tricked by a refactor.
+        projects_count = Project.query.filter_by(
+            client_id=id,
+            user_id=current_user.id,
+        ).count()
         if projects_count > 0:
             flash(f'Cannot delete client with {projects_count} associated projects. Remove projects first.', 'warning')
             return redirect(url_for('clients.list_clients'))

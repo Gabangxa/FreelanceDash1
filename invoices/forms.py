@@ -1,22 +1,39 @@
+from decimal import Decimal
+
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateTimeField, SelectField, FloatField, SubmitField, FieldList, FormField
+from wtforms import (
+    StringField,
+    TextAreaField,
+    DateTimeField,
+    SelectField,
+    DecimalField,
+    SubmitField,
+    FieldList,
+    FormField,
+)
 from wtforms.validators import DataRequired, NumberRange, Length, Optional, ValidationError
 from datetime import datetime
+
 
 class InvoiceItemForm(FlaskForm):
     description = TextAreaField('Description', validators=[
         DataRequired(message="Description is required"),
         Length(min=1, max=500, message="Description must be between 1 and 500 characters")
     ])
-    quantity = FloatField('Quantity', validators=[
-        DataRequired(message="Quantity is required"), 
-        NumberRange(min=0.01, message="Quantity must be greater than 0")
+    # DecimalField (not FloatField) so binary rounding never silently
+    # eats a cent. ``places=4`` on quantity to allow fractional hours.
+    quantity = DecimalField('Quantity', places=4, validators=[
+        DataRequired(message="Quantity is required"),
+        NumberRange(min=Decimal('0.01'), message="Quantity must be greater than 0"),
     ])
-    rate = FloatField('Rate', validators=[
+    rate = DecimalField('Rate', places=2, validators=[
         DataRequired(message="Rate is required"),
-        NumberRange(min=0.01, message="Rate must be greater than 0")
+        NumberRange(min=Decimal('0.01'), message="Rate must be greater than 0"),
     ])
-    amount = FloatField('Amount')
+    # ``amount`` is computed server-side from quantity * rate, so the
+    # form-side field is read-only and unvalidated -- the route ignores
+    # any value posted here.
+    amount = DecimalField('Amount', places=2, validators=[Optional()])
 
     class Meta:
         csrf = False  # Disable CSRF for nested form
@@ -76,7 +93,8 @@ class InvoiceForm(FlaskForm):
         valid_items = 0
         for item in field.data:
             if item['description'] and item['quantity'] and item['rate']:
-                if float(item['quantity']) > 0 and float(item['rate']) > 0:
+                # Decimal comparison is exact -- no float() coercion needed.
+                if item['quantity'] > 0 and item['rate'] > 0:
                     valid_items += 1
 
         if valid_items < 1:

@@ -377,7 +377,11 @@ class TimeEntry(db.Model):
 class Invoice(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     invoice_number = db.Column(db.String(20), unique=True, nullable=False, index=True)
-    amount = db.Column(db.Float, nullable=False)
+    # Money is Numeric, not Float, so totals like 0.10 + 0.20 don't drift
+    # by 1e-17 cents. Precision 12 / scale 2 covers up to 9,999,999,999.99
+    # in any single-currency unit which is more than enough for invoice
+    # amounts.
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     currency = db.Column(db.String(3), nullable=False, default='USD')
     status = db.Column(db.String(20), default='draft', index=True)
     due_date = db.Column(db.DateTime, index=True)
@@ -398,9 +402,11 @@ class Invoice(db.Model):
 class InvoiceItem(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     description = db.Column(db.Text, nullable=False)
-    quantity = db.Column(db.Float, nullable=False)
-    rate = db.Column(db.Float, nullable=False)
-    amount = db.Column(db.Float, nullable=False)
+    # Quantity gets 4 decimal places so fractional hours (1.25h, 0.5h)
+    # round-trip without precision loss. Rate / amount are 2dp money.
+    quantity = db.Column(db.Numeric(precision=12, scale=4), nullable=False)
+    rate = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), nullable=False, index=True)
 
 

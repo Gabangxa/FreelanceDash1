@@ -31,6 +31,8 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
+from sqlalchemy.exc import SQLAlchemyError
+
 logger = logging.getLogger(__name__)
 
 
@@ -296,7 +298,7 @@ class DBWebhookStorage(WebhookStorageBackend):
                 getattr(model, key_attr) == key,
                 model.created_at >= cutoff,
             ).count()
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             raise
 
@@ -373,7 +375,7 @@ class DBWebhookStorage(WebhookStorageBackend):
                 entry.value = value
                 entry.expires_at = expires
             db.session.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             raise
 
@@ -386,7 +388,7 @@ class DBWebhookStorage(WebhookStorageBackend):
             db.session.query(WebhookRateLimitEvent).delete()
             db.session.query(WebhookFailedAttempt).delete()
             db.session.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             raise
 
@@ -459,7 +461,7 @@ class DBWebhookStorage(WebhookStorageBackend):
                 .delete(synchronize_session=False)
             )
             db.session.commit()
-        except Exception:
+        except SQLAlchemyError:
             db.session.rollback()
             raise
 

@@ -134,6 +134,49 @@ go through Alembic so production deployments don't silently drop data.
 
 ## Changelog
 
+- May 02, 2026. Code-review fixes — money precision, IDOR hardening,
+  narrowed exception handling:
+  - **Money to Decimal end-to-end.** `Invoice.amount`,
+    `InvoiceItem.{quantity, rate, amount}` and `Subscription.amount`
+    converted from `Float` to `Numeric` (precision 12 / scale 2 for
+    money, scale 4 for quantity so fractional hours like 1.25h
+    round-trip exactly). `invoices/forms.py` switched from
+    `FloatField` to `DecimalField`, and `invoices/routes.py` now uses
+    `Decimal` arithmetic throughout the totaling loop with a
+    `_to_money()` helper that quantizes to 2dp using `ROUND_HALF_UP`.
+    Removes the binary-rounding drift that made `0.10 + 0.20` render
+    as `0.30000000000000004` in invoice totals.
+    `settings/routes.py:export_data_json` got a `default=` JSON
+    encoder so Decimal columns serialize cleanly.
+  - **Migration `0006_money_to_numeric`.** Idempotent (inspects each
+    column type before altering, skips when already `Numeric`),
+    SQLite-safe (`batch_alter_table`), reversible (`downgrade` flips
+    columns back to `Float`). Tested round-trip on SQLite:
+    NUMERIC → FLOAT → NUMERIC.
+  - **Belt-and-suspenders tenant scoping.** Every cross-table lookup
+    now carries `user_id=current_user.id` even when the parent row
+    was already scoped, so a future refactor can't silently leak
+    another tenant's data. Touched routes:
+    `clients/routes.py:view_client` + `delete_client` (project lookups),
+    `invoices/routes.py:create_invoice` (project lookup + dropdown
+    population) and `get_projects` (JSON helper),
+    `projects/routes.py:view_task` + `edit_task` (TimeEntry queries
+    via Project join) and `get_project_tasks` (Task query via Project
+    join).
+  - **IDOR regression tests.** New `tests/test_tenant_isolation.py`
+    creates two tenants per test (uuid-suffixed to dodge UNIQUE
+    collisions) and asserts that user A asking for any of user B's
+    row ids — client, project, task, invoice, invoice PDF, JSON
+    project-list helper, JSON task-list helper — gets a 404 / refusal,
+    never the data. 12 new tests, full suite now 174 passing.
+  - **Narrower exception handling.** `admin/routes.py` table-row-count
+    loop's bare `except:` → `except SQLAlchemyError:` with
+    `logger.exception`. Four unannotated `except Exception:` blocks
+    in `webhooks/storage.py` (rate-limit increment, cache write,
+    counter clear, expired-row sweep) tightened to
+    `except SQLAlchemyError:` so KeyboardInterrupt / MemoryError /
+    programming errors surface instead of getting swallowed and
+    re-raised as opaque DB failures.
 - May 02, 2026. Landing page redesign — Jony-Ive-inspired minimalist
   ("Freelance.") brand:
   - Replaced `templates/index.html` (was 965-line Bootstrap landing) with

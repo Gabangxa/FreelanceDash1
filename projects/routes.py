@@ -425,8 +425,20 @@ def view_task(id):
             Project.user_id == current_user.id
         ).first_or_404()
         
-        # Get time entries for this task
-        time_entries = TimeEntry.query.filter_by(task_id=id).order_by(TimeEntry.start_time.desc()).all()
+        # Get time entries for this task. The ``task`` lookup above
+        # already proved tenant ownership, but we re-scope through
+        # ``Project.user_id`` so a future refactor can't leak another
+        # tenant's entries via this route.
+        time_entries = (
+            TimeEntry.query
+            .join(Project, TimeEntry.project_id == Project.id)
+            .filter(
+                TimeEntry.task_id == id,
+                Project.user_id == current_user.id,
+            )
+            .order_by(TimeEntry.start_time.desc())
+            .all()
+        )
         
         # Calculate total time spent on the task. Route through the
         # centralized helper so this can never drift from the dashboard
@@ -515,9 +527,21 @@ def edit_task(id):
                 task.status = form.status.data
                 task.project_id = form.project_id.data
                 
-                # If project has changed, update all time entries associated with this task
+                # If project has changed, update all time entries associated with this task.
+                # Belt-and-suspenders: scope by Project.user_id too -- the
+                # task ownership check above is enough today, but this
+                # query stays safe even if that check is ever refactored
+                # away.
                 if original_project_id != form.project_id.data:
-                    time_entries = TimeEntry.query.filter_by(task_id=task.id).all()
+                    time_entries = (
+                        TimeEntry.query
+                        .join(Project, TimeEntry.project_id == Project.id)
+                        .filter(
+                            TimeEntry.task_id == task.id,
+                            Project.user_id == current_user.id,
+                        )
+                        .all()
+                    )
                     entries_count = 0
                     
                     for entry in time_entries:
@@ -1161,9 +1185,19 @@ def get_project_tasks(project_id):
             id=project_id,
             user_id=current_user.id
         ).first_or_404()
-        
-        # Get all tasks for the project
-        tasks = Task.query.filter_by(project_id=project_id).all()
+
+        # Get all tasks for the project. Defense in depth: re-scope the
+        # task lookup by Project.user_id so we can't leak tasks even if
+        # the parent ``project`` lookup above is ever refactored.
+        tasks = (
+            Task.query
+            .join(Project, Task.project_id == Project.id)
+            .filter(
+                Task.project_id == project_id,
+                Project.user_id == current_user.id,
+            )
+            .all()
+        )
         
         # Format tasks as JSON
         tasks_json = [{'id': task.id, 'title': task.title} for task in tasks]

@@ -18,8 +18,9 @@ class Subscription(db.Model):
     tier_name = db.Column(db.String(100), nullable=False)
     status = db.Column(db.String(20), default='active', index=True)
     
-    # Billing details
-    amount = db.Column(db.Float, nullable=False)
+    # Billing details. Money uses Numeric so subscription totals don't
+    # drift through floating-point rounding -- matches Invoice.amount.
+    amount = db.Column(db.Numeric(precision=12, scale=2), nullable=False)
     currency = db.Column(db.String(3), default='USD')
     billing_interval = db.Column(db.String(20), default='month')  # month or year
     
