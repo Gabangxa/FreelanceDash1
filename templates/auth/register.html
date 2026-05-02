@@ -1,77 +1,78 @@
 {% extends "base.html" %}
 
-{% block title %}Register - WorkVista{% endblock %}
+{% block title %}Create your account — Freelance.{% endblock %}
+
+{% block head %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource-variable/inter@5/index.css">
+{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-md-6 col-lg-5">
-        <div class="card shadow-sm">
-            <div class="card-body p-5">
-                <h1 class="text-center mb-4">
-                    <i class="fas fa-briefcase text-primary"></i>
-                    WorkVista
-                </h1>
-                <h4 class="card-title text-center mb-4">Create Account</h4>
-                {% if google_oauth_enabled %}
-                <div class="d-grid mb-3">
-                    <a href="{{ url_for('google_auth.login', next=request.args.get('next', '')) }}" class="btn btn-outline-primary btn-lg google-signin-btn">
-                        <i class="fab fa-google me-2"></i> Continue with Google
-                    </a>
-                </div>
-                <div class="auth-divider my-3" role="separator" aria-label="or">
-                    <span class="auth-divider-text">or</span>
-                </div>
-                {% endif %}
-                <form method="POST" action="{{ url_for('auth.register') }}" novalidate>
-                    {{ form.hidden_tag() }}
-                    <div class="mb-3">
-                        {{ form.username.label(class="form-label") }}
-                        {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else "")) }}
-                        {% for error in form.username.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.email.label(class="form-label") }}
-                        {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else "")) }}
-                        {% for error in form.email.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="mb-3">
-                        {{ form.password.label(class="form-label") }}
-                        {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), autocomplete="new-password") }}
-                        {% for error in form.password.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                        <div class="form-text mt-1">
-                            <small class="text-muted">Password must:</small>
-                            <ul class="password-requirements mb-0 ps-3 mt-1">
-                                <li class="small"><span id="req-length" class="text-muted">Be at least 8 characters</span></li>
-                                <li class="small"><span id="req-uppercase" class="text-muted">Include an uppercase letter</span></li>
-                                <li class="small"><span id="req-lowercase" class="text-muted">Include a lowercase letter</span></li>
-                                <li class="small"><span id="req-number" class="text-muted">Include a number</span></li>
-                            </ul>
-                        </div>
-                    </div>
-                    <div class="mb-3">
-                        {{ form.password2.label(class="form-label") }}
-                        {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else "")) }}
-                        {% for error in form.password2.errors %}
-                            <div class="invalid-feedback">{{ error }}</div>
-                        {% endfor %}
-                    </div>
-                    <div class="d-grid">
-                        {{ form.submit(class="btn btn-primary btn-lg") }}
-                    </div>
-                </form>
-                <hr class="my-4">
-                <p class="text-center mb-0">
-                    Already have an account? 
-                    <a href="{{ url_for('auth.login') }}" class="text-decoration-none">Sign in</a>
-                </p>
+<div class="lp-auth">
+    <a href="{{ url_for('index') }}" class="lp-auth-brand">Freelance.</a>
+
+    <div class="lp-auth-card">
+        <h1 class="lp-auth-title">Create your account</h1>
+        <p class="lp-auth-sub">Start tracking projects in under a minute.</p>
+
+        {% if google_oauth_enabled %}
+        <a href="{{ url_for('google_auth.login', next=request.args.get('next', '')) }}"
+           class="lp-btn lp-btn-secondary">
+            <i class="fab fa-google" aria-hidden="true"></i>
+            Continue with Google
+        </a>
+        <div class="lp-divider" role="separator" aria-label="or">or</div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('auth.register') }}" novalidate>
+            {{ form.hidden_tag() }}
+
+            <div class="lp-field">
+                {{ form.username.label(class="lp-field-label") }}
+                {{ form.username(class="form-control" + (" is-invalid" if form.username.errors else ""), autocomplete="username") }}
+                {% for error in form.username.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
             </div>
-        </div>
+
+            <div class="lp-field">
+                {{ form.email.label(class="lp-field-label") }}
+                {{ form.email(class="form-control" + (" is-invalid" if form.email.errors else ""), autocomplete="email") }}
+                {% for error in form.email.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="lp-field">
+                {{ form.password.label(class="lp-field-label") }}
+                {{ form.password(class="form-control" + (" is-invalid" if form.password.errors else ""), autocomplete="new-password") }}
+                {% for error in form.password.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
+                <ul class="lp-pw-hints" aria-live="polite">
+                    <li id="req-length">At least 8 characters</li>
+                    <li id="req-uppercase">One uppercase letter</li>
+                    <li id="req-lowercase">One lowercase letter</li>
+                    <li id="req-number">One number</li>
+                </ul>
+            </div>
+
+            <div class="lp-field">
+                {{ form.password2.label(class="lp-field-label") }}
+                {{ form.password2(class="form-control" + (" is-invalid" if form.password2.errors else ""), autocomplete="new-password") }}
+                {% for error in form.password2.errors %}
+                    <div class="invalid-feedback">{{ error }}</div>
+                {% endfor %}
+            </div>
+
+            <div class="lp-stack lp-stack--spaced">
+                <button type="submit" class="lp-btn lp-btn-primary">Create account</button>
+            </div>
+        </form>
+
+        <p class="lp-switch">
+            Already have an account?
+            <a href="{{ url_for('auth.login') }}" class="lp-link">Sign in</a>
+        </p>
     </div>
 </div>
 {% endblock %}
@@ -79,43 +80,24 @@
 {% block scripts %}
 <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
-        const passwordField = document.querySelector('input[name="password"]');
-        if (passwordField) {
-            passwordField.addEventListener('input', function() {
-                const password = this.value;
-                
-                // Check requirements
-                const lengthValid = password.length >= 8;
-                const uppercaseValid = /[A-Z]/.test(password);
-                const lowercaseValid = /[a-z]/.test(password);
-                const numberValid = /[0-9]/.test(password);
-                
-                // Update UI feedback
-                updateRequirement('req-length', lengthValid);
-                updateRequirement('req-uppercase', uppercaseValid);
-                updateRequirement('req-lowercase', lowercaseValid);
-                updateRequirement('req-number', numberValid);
+        var passwordField = document.querySelector('input[name="password"]');
+        if (!passwordField) return;
+
+        var checks = [
+            { id: 'req-length',    test: function(v) { return v.length >= 8; } },
+            { id: 'req-uppercase', test: function(v) { return /[A-Z]/.test(v); } },
+            { id: 'req-lowercase', test: function(v) { return /[a-z]/.test(v); } },
+            { id: 'req-number',    test: function(v) { return /[0-9]/.test(v); } }
+        ];
+
+        passwordField.addEventListener('input', function() {
+            var v = this.value;
+            checks.forEach(function(c) {
+                var el = document.getElementById(c.id);
+                if (!el) return;
+                el.classList.toggle('is-valid', c.test(v));
             });
-        }
-        
-        function updateRequirement(id, isValid) {
-            const element = document.getElementById(id);
-            if (element) {
-                if (isValid) {
-                    element.classList.remove('text-muted');
-                    element.classList.add('text-success');
-                    // Only add the check icon if it doesn't already exist
-                    if (!element.innerHTML.includes('fa-check')) {
-                        element.innerHTML = '<i class="fas fa-check me-1"></i>' + element.textContent;
-                    }
-                } else {
-                    element.classList.remove('text-success');
-                    element.classList.add('text-muted');
-                    // Remove check icon if it exists
-                    element.innerHTML = element.innerHTML.replace(/<i class="fas fa-check me-1"><\/i>/, '');
-                }
-            }
-        }
+        });
     });
 </script>
 {% endblock %}

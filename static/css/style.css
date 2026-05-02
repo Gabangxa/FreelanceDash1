@@ -2566,3 +2566,280 @@ code {
 .google-signin-btn .fab.fa-google {
     font-size: 1rem;
 }
+
+/* ==========================================================================
+   Auth pages — minimalist "Freelance." design, mirrors the landing page
+   tokens. Scoped under .lp-auth so styles cannot leak into the rest of
+   the app (the same isolation contract used by .lp-root on the landing).
+   ========================================================================== */
+.lp-auth {
+    --lp-bg: #fbfbfd;
+    --lp-bg-alt: #ffffff;
+    --lp-text: #1d1d1f;
+    --lp-text-muted: #6e6e73;
+    --lp-text-muted-soft: #86868b;
+    --lp-border: rgba(0, 0, 0, 0.10);
+    --lp-border-soft: rgba(0, 0, 0, 0.06);
+    --lp-input-bg: #ffffff;
+    --lp-danger: #b3261e;
+
+    /* Same full-bleed escape used by .lp-root: cancel the bootstrap
+       .container padding so the page background covers the viewport. */
+    margin-inline: calc(50% - 50vw);
+    margin-top: -1.5rem;
+    margin-bottom: -1.5rem;
+
+    min-height: calc(100vh - 1px);
+    background: var(--lp-bg);
+    color: var(--lp-text);
+    font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    padding: 64px 24px 96px;
+}
+
+.lp-auth *, .lp-auth *::before, .lp-auth *::after { box-sizing: border-box; }
+.lp-auth a { text-decoration: none; }
+
+.lp-auth .lp-auth-brand {
+    display: inline-block;
+    font-weight: 600;
+    font-size: 22px;
+    letter-spacing: -0.02em;
+    color: var(--lp-text);
+    margin-bottom: 56px;
+}
+.lp-auth .lp-auth-brand:hover { opacity: 0.7; color: var(--lp-text); }
+
+.lp-auth .lp-auth-card {
+    width: 100%;
+    max-width: 420px;
+}
+
+.lp-auth .lp-auth-title {
+    font-size: 32px;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-weight: 500;
+    color: var(--lp-text);
+    margin: 0 0 8px;
+    text-align: center;
+}
+.lp-auth .lp-auth-sub {
+    font-size: 15px;
+    color: var(--lp-text-muted);
+    margin: 0 0 32px;
+    text-align: center;
+}
+
+/* Form fields ----------------------------------------------------------- */
+.lp-auth .lp-field { margin-bottom: 16px; }
+.lp-auth .lp-field-label {
+    display: block;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--lp-text-muted);
+    margin: 0 0 6px;
+    letter-spacing: -0.005em;
+}
+.lp-auth .form-control {
+    width: 100%;
+    background: var(--lp-input-bg);
+    color: var(--lp-text);
+    border: 1px solid var(--lp-border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    line-height: 1.4;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+    appearance: none;
+    -webkit-appearance: none;
+}
+.lp-auth .form-control:focus {
+    outline: none;
+    border-color: var(--lp-text);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.08);
+}
+.lp-auth .form-control.is-invalid {
+    border-color: var(--lp-danger);
+}
+.lp-auth .form-control.is-invalid:focus {
+    box-shadow: 0 0 0 3px rgba(179, 38, 30, 0.15);
+}
+.lp-auth .invalid-feedback {
+    display: block;
+    font-size: 13px;
+    color: var(--lp-danger);
+    margin-top: 6px;
+}
+
+/* Inline checkbox + small links ---------------------------------------- */
+.lp-auth .lp-row-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin: 4px 0 24px;
+    font-size: 13px;
+    color: var(--lp-text-muted);
+}
+.lp-auth .lp-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    cursor: pointer;
+}
+.lp-auth .lp-check input[type="checkbox"] {
+    width: 16px;
+    height: 16px;
+    accent-color: var(--lp-text);
+    margin: 0;
+}
+.lp-auth .lp-link {
+    color: var(--lp-text);
+    font-weight: 500;
+    transition: opacity 0.15s ease;
+}
+.lp-auth .lp-link:hover { opacity: 0.6; color: var(--lp-text); }
+
+/* Buttons --------------------------------------------------------------- */
+.lp-auth .lp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 13px 20px;
+    border-radius: 9999px;
+    font-size: 15px;
+    font-weight: 500;
+    line-height: 1.2;
+    letter-spacing: -0.005em;
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background 0.15s ease, color 0.15s ease,
+                border-color 0.15s ease, transform 0.15s ease,
+                box-shadow 0.15s ease, opacity 0.15s ease;
+    font-family: inherit;
+}
+.lp-auth .lp-btn-primary {
+    background: var(--lp-text);
+    color: #ffffff;
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.12);
+}
+.lp-auth .lp-btn-primary:hover {
+    background: #000000;
+    color: #ffffff;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(0, 0, 0, 0.18);
+}
+.lp-auth .lp-btn-secondary {
+    background: transparent;
+    color: var(--lp-text);
+    border-color: var(--lp-border);
+}
+.lp-auth .lp-btn-secondary:hover {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--lp-text);
+    border-color: rgba(0, 0, 0, 0.18);
+}
+
+/* Divider --------------------------------------------------------------- */
+.lp-auth .lp-divider {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 20px 0;
+    color: var(--lp-text-muted-soft);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+.lp-auth .lp-divider::before,
+.lp-auth .lp-divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--lp-border-soft);
+}
+
+/* Bottom switch ("New here? Create an account") ------------------------ */
+.lp-auth .lp-switch {
+    margin-top: 32px;
+    text-align: center;
+    font-size: 14px;
+    color: var(--lp-text-muted);
+}
+
+/* Spacing helper between stacked buttons ------------------------------- */
+.lp-auth .lp-stack > * + * { margin-top: 12px; }
+.lp-auth .lp-stack--spaced { margin-top: 24px; }
+
+/* Password requirement list (register page) ---------------------------- */
+.lp-auth .lp-pw-hints {
+    list-style: none;
+    padding: 0;
+    margin: 8px 0 0;
+    font-size: 12.5px;
+    color: var(--lp-text-muted);
+    line-height: 1.6;
+}
+.lp-auth .lp-pw-hints li { display: flex; align-items: center; gap: 6px; }
+.lp-auth .lp-pw-hints li::before {
+    content: "";
+    display: inline-block;
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: var(--lp-text-muted-soft);
+    flex-shrink: 0;
+}
+.lp-auth .lp-pw-hints li.is-valid { color: #1f7a3a; }
+.lp-auth .lp-pw-hints li.is-valid::before { background: #1f7a3a; }
+
+/* Inline alert (flash messages relayered into the auth card) ----------- */
+.lp-auth .lp-alert {
+    padding: 12px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    margin-bottom: 16px;
+    border: 1px solid var(--lp-border);
+    background: var(--lp-bg-alt);
+    color: var(--lp-text);
+}
+
+/* ==========================================================================
+   Auth pages — dark mode token overrides (mirrors .lp-root dark mode).
+   ========================================================================== */
+[data-bs-theme="dark"] .lp-auth {
+    --lp-bg: #0A0F1A;
+    --lp-bg-alt: #0F1524;
+    --lp-text: #F9FAFB;
+    --lp-text-muted: #B0B7C3;
+    --lp-text-muted-soft: #8B93A1;
+    --lp-border: rgba(255, 255, 255, 0.14);
+    --lp-border-soft: rgba(255, 255, 255, 0.08);
+    --lp-input-bg: #131A2A;
+    --lp-danger: #ff6b6b;
+}
+[data-bs-theme="dark"] .lp-auth .form-control:focus {
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+}
+[data-bs-theme="dark"] .lp-auth .lp-btn-primary {
+    background: var(--lp-text);
+    color: var(--lp-bg);
+}
+[data-bs-theme="dark"] .lp-auth .lp-btn-primary:hover {
+    background: #ffffff;
+    color: var(--lp-bg);
+}
+[data-bs-theme="dark"] .lp-auth .lp-btn-secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+[data-bs-theme="dark"] .lp-auth .lp-pw-hints li.is-valid { color: #6ee7a4; }
+[data-bs-theme="dark"] .lp-auth .lp-pw-hints li.is-valid::before { background: #6ee7a4; }
