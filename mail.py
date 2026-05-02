@@ -314,6 +314,35 @@ def send_password_reset_email(user, token):
     )
 
 
+def send_magic_link_email(user, magic_link_url, expiry_minutes=15):
+    """Send a one-click sign-in link to the user.
+
+    The URL embeds a single-use, short-lived token (default 15 minutes)
+    issued by ``User.generate_magic_link_token``. Mirrors the password-reset
+    sender so it inherits the same retry + delivery-log machinery.
+    """
+    from datetime import datetime
+
+    subject = "Your WorkVista sign-in link"
+
+    context = {
+        'user': user,
+        'magic_link_url': magic_link_url,
+        'current_year': datetime.utcnow().year,
+        'expiry_minutes': expiry_minutes,
+    }
+
+    text_body = render_template('email/magic_link.txt', **context)
+    html_body = render_template('email/magic_link.html', **context)
+
+    return send_email(
+        subject=subject,
+        recipients=[user.email],
+        text_body=text_body,
+        html_body=html_body,
+    )
+
+
 def send_notification_email(user, notification):
     """Send a notification email to a user."""
     from datetime import datetime

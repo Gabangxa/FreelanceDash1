@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+
+{% block title %}Confirm sign in{% endblock %}
+
+{% block content %}
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card shadow">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Confirm sign in</h4>
+                </div>
+                <div class="card-body text-center">
+                    {% if valid %}
+                        <p class="card-text mb-4">
+                            Click the button below to finish signing in to your WorkVista account.
+                        </p>
+                        <form method="post" action="{{ request.path }}">
+                            {{ form.hidden_tag() }}
+                            {% if next_page %}
+                                <input type="hidden" name="next" value="{{ next_page }}">
+                            {% endif %}
+                            <div class="d-grid">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-sign-in-alt me-1"></i> Sign me in
+                                </button>
+                            </div>
+                        </form>
+                        <p class="text-muted small mt-3 mb-0">
+                            This link can only be used once and expires shortly.
+                        </p>
+                    {% else %}
+                        <p class="card-text mb-4">
+                            That sign-in link is invalid, has already been used, or has expired.
+                        </p>
+                        <a href="{{ url_for('auth.magic_link_request') }}" class="btn btn-primary">
+                            Request a new sign-in link
+                        </a>
+                    {% endif %}
+                </div>
+                <div class="card-footer text-center">
+                    <a href="{{ url_for('auth.login') }}" class="text-decoration-none">Back to sign in with password</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

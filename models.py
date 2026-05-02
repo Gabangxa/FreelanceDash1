@@ -22,6 +22,8 @@ class User(UserMixin, db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     reset_token = db.Column(db.String(100), nullable=True, index=True)
     reset_token_expiry = db.Column(db.DateTime, nullable=True)
+    magic_link_token_hash = db.Column(db.String(256), nullable=True)
+    magic_link_token_expiry = db.Column(db.DateTime, nullable=True)
 
     # Relationships
     projects = db.relationship('Project', backref='user', lazy=True, cascade='all, delete-orphan')
@@ -54,6 +56,70 @@ class User(UserMixin, db.Model):
         """Clear the reset token after it's been used."""
         self.reset_token = None
         self.reset_token_expiry = None
+
+    def generate_magic_link_token(self, expires_in=900):
+        """Issue a single-use magic-link sign-in token.
+
+        Returns the raw token (to embed in the email URL). Only the hash
+        is stored at rest -- like a password -- so a database leak alone
+        does not allow attackers to forge logins. Default lifetime is 15
+        minutes; calling this again rotates and invalidates any prior
+        outstanding token for this user.
+        """
+        raw_token = secrets.token_urlsafe(32)
+        self.magic_link_token_hash = generate_password_hash(raw_token)
+        self.magic_link_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
+        return raw_token
+
+    def verify_magic_link_token(self, token):
+        """Constant-time check that ``token`` matches the stored hash and
+        is not expired. Returns True/False; does NOT clear the token --
+        callers must call ``clear_magic_link_token`` after a successful
+        login to enforce single-use semantics.
+        """
+        if not token:
+            return False
+        if self.magic_link_token_hash is None or self.magic_link_token_expiry is None:
+            return False
+        if datetime.utcnow() > self.magic_link_token_expiry:
+            return False
+        # check_password_hash performs a constant-time comparison.
+        return check_password_hash(self.magic_link_token_hash, token)
+
+    def clear_magic_link_token(self):
+        """Invalidate the outstanding magic-link token (single-use)."""
+        self.magic_link_token_hash = None
+        self.magic_link_token_expiry = None
+
+    @classmethod
+    def consume_magic_link_token(cls, user_id, token):
+        """Atomically verify and burn a magic-link token.
+
+        Single-use enforcement requires that verification and invalidation
+        happen as one indivisible step -- otherwise two near-simultaneous
+        clicks (e.g. user click + mailbox-side prefetch) could both pass
+        the verify step and both succeed. We hold a row lock with
+        ``with_for_update`` for the duration of verify+clear, so a
+        concurrent caller blocks until our transaction commits and then
+        sees the cleared columns.
+
+        Returns the User on success, or None if the token was missing,
+        wrong, expired, or already consumed.
+        """
+        if not token or user_id is None:
+            return None
+        try:
+            user = cls.query.filter_by(id=user_id).with_for_update().first()
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+        if user is None or not user.verify_magic_link_token(token):
+            # Release the row lock without mutating anything.
+            db.session.rollback()
+            return None
+        user.clear_magic_link_token()
+        db.session.commit()
+        return user
         
     def get_subscription(self):
         """Get the user's active subscription or None if no active subscription exists."""

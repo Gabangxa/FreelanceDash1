@@ -55,6 +55,13 @@ class ResetPasswordRequestForm(FlaskForm):
         Email(message="Please enter a valid email address")
     ])
     submit = SubmitField('Request Password Reset')
+
+class MagicLinkRequestForm(FlaskForm):
+    email = StringField('Email', validators=[
+        DataRequired(message="Email is required"),
+        Email(message="Please enter a valid email address")
+    ])
+    submit = SubmitField('Email me a sign-in link')
     
 class ResetPasswordForm(FlaskForm):
     password = PasswordField('New Password', validators=[

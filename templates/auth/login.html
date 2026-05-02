@@ -41,6 +41,11 @@
                         {{ form.submit(class="btn btn-primary btn-lg") }}
                     </div>
                 </form>
+                <div class="d-grid mt-3">
+                    <a href="{{ url_for('auth.magic_link_request') }}" class="btn btn-outline-secondary">
+                        <i class="fas fa-envelope me-1"></i> Email me a sign-in link
+                    </a>
+                </div>
                 <hr class="my-4">
                 <p class="text-center mb-0">
                     New to WorkVista? 

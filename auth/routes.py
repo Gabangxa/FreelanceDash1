@@ -3,10 +3,11 @@ from flask_login import login_user, logout_user, login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError
 from app import db, logger
 from models import User
-from auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm
+from auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, ResetPasswordForm, MagicLinkRequestForm
+from flask_wtf import FlaskForm
 from werkzeug.security import generate_password_hash
 from errors import handle_db_errors, UserFriendlyError
-from mail import send_welcome_email, send_password_reset_email
+from mail import send_welcome_email, send_password_reset_email, send_magic_link_email
 from utils.security import is_safe_url
 import re
 import smtplib
@@ -115,6 +116,127 @@ def logout():
         logger.info(f"User logged out: {username} (ID: {user_id})")
         flash('You have been logged out successfully', 'info')
     return redirect(url_for('auth.login'))
+
+@auth_bp.route('/magic_link_request', methods=['GET', 'POST'])
+@handle_db_errors
+def magic_link_request():
+    """Step 1 of magic-link sign-in: accept an email and email a one-click
+    sign-in URL. Always renders the same neutral confirmation regardless of
+    whether the email exists, to avoid leaking account existence -- the
+    same posture as the password-reset flow.
+    """
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.dashboard'))
+
+    form = MagicLinkRequestForm()
+    if form.validate_on_submit():
+        try:
+            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+
+            if user:
+                # Issue a fresh single-use token (rotates any prior outstanding one).
+                raw_token = user.generate_magic_link_token()
+                db.session.commit()
+
+                magic_link_url = url_for(
+                    'auth.magic_link_login',
+                    user_id=user.id,
+                    token=raw_token,
+                    _external=True,
+                )
+
+                email_sent = send_magic_link_email(user, magic_link_url)
+                if email_sent:
+                    logger.info(f"Magic-link email sent to {user.email}")
+                else:
+                    logger.warning(f"Failed to send magic-link email to {user.email}")
+            else:
+                # Don't disclose whether the address is registered. Still log
+                # for ops visibility into request volume.
+                logger.info(f"Magic-link requested for unknown email: {form.email.data}")
+
+            flash(
+                'If your email address exists in our database, you will receive a sign-in link shortly.',
+                'info',
+            )
+            return redirect(url_for('auth.login'))
+
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.exception("Database error during magic-link request")
+            flash('A system error occurred. Please try again later.', 'danger')
+
+    return render_template('auth/magic_link_request.html', title='Email me a sign-in link', form=form)
+
+
+@auth_bp.route('/magic_link/<int:user_id>/<token>', methods=['GET', 'POST'])
+@handle_db_errors
+def magic_link_login(user_id, token):
+    """Step 2 of magic-link sign-in.
+
+    GET shows a confirm page with a CSRF-protected form. POST atomically
+    verifies + burns the token, logs the user in, and redirects.
+
+    We deliberately do NOT log the user in on the GET. Many corporate
+    mail gateways and email clients prefetch links to scan them for
+    malware, which would otherwise burn the single-use token before the
+    human ever clicked it. The interstitial requires a real form
+    submission (with CSRF), which scanners do not perform.
+
+    Single-use semantics are enforced by ``User.consume_magic_link_token``,
+    which holds a row lock across verify+clear so two near-simultaneous
+    POSTs can't both succeed.
+    """
+    if current_user.is_authenticated:
+        return redirect(url_for('projects.dashboard'))
+
+    next_page = request.args.get('next') or ''
+    # Bare FlaskForm just to get CSRF protection on the confirm POST --
+    # we don't need any user-supplied fields.
+    form = FlaskForm()
+
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            logger.warning(f"Magic-link POST failed CSRF validation for user_id={user_id}")
+            flash('Your sign-in attempt could not be verified. Please try again.', 'danger')
+            return redirect(url_for('auth.magic_link_request'))
+        try:
+            user = User.consume_magic_link_token(user_id, token)
+        except SQLAlchemyError:
+            logger.exception("Database error during magic-link login")
+            flash('A system error occurred. Please try again later.', 'danger')
+            return redirect(url_for('auth.login'))
+
+        if user is None:
+            logger.warning(f"Invalid, expired, or already-used magic-link for user_id={user_id}")
+            flash('That sign-in link is invalid or has expired. Please request a new one.', 'danger')
+            return redirect(url_for('auth.magic_link_request'))
+
+        login_user(user, remember=False)
+        logger.info(f"User logged in via magic link: {user.username} (ID: {user.id})")
+
+        # next can come from either the query string (carried through from
+        # the email URL) or the hidden form field on the confirm page.
+        target = request.form.get('next') or next_page
+        if not is_safe_url(target):
+            target = url_for('projects.dashboard')
+        return redirect(target)
+
+    # GET -- render the confirm page. Show a generic "expired" message if
+    # the token is already invalid so users know to request a new one
+    # without us actually consuming it. We use ``verify_magic_link_token``
+    # here for the read-only check; no row lock and no clear.
+    user = User.query.get(user_id)
+    valid = user is not None and user.verify_magic_link_token(token)
+
+    return render_template(
+        'auth/magic_link_confirm.html',
+        title='Confirm sign in',
+        valid=valid,
+        next_page=next_page,
+        form=form,
+    )
+
 
 @auth_bp.route('/reset_password_request', methods=['GET', 'POST'])
 @handle_db_errors
