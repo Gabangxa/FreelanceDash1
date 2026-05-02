@@ -10,6 +10,7 @@ from app import db
 from models import WebhookEvent, Notification, User
 from webhooks.services import WebhookProcessor
 from webhooks.security import require_webhook_security, require_admin_auth, WebhookSecurity
+from webhooks.storage import get_storage
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -128,13 +129,15 @@ def list_webhook_events():
 def security_status():
     """Get webhook security status and statistics"""
     try:
-        # Import here to avoid circular imports
-        from webhooks.security import rate_limit_storage, failed_attempts_storage
-        
-        # Calculate security metrics
-        active_rate_limits = len(rate_limit_storage)
-        failed_attempts = sum(len(attempts) for attempts in failed_attempts_storage.values())
-        
+        # Pull counter aggregates from the shared storage backend so the
+        # numbers reflect the union across all gunicorn workers, not just
+        # the worker handling this request.
+        storage = get_storage()
+        active_rate_limits = storage.active_rate_limit_keys()
+        failed_attempts = storage.total_failed_attempts(
+            WebhookSecurity.FAILED_ATTEMPT_WINDOW_SECONDS
+        )
+
         # Get recent webhook event statistics
         from datetime import timedelta
         recent_events = WebhookEvent.query.filter(
@@ -146,10 +149,14 @@ def security_status():
             WebhookEvent.error_message.isnot(None)
         ).count()
         
+        # Failed-attempt counters are kept on a 1h rolling window (see
+        # WebhookSecurity.FAILED_ATTEMPT_WINDOW_SECONDS), so the metric
+        # name reflects that window. Webhook event counts are reported
+        # over a 24h window from the persisted WebhookEvent table.
         return jsonify({
             'security_status': {
                 'active_rate_limits': active_rate_limits,
-                'failed_attempts_24h': failed_attempts,
+                'failed_attempts_1h': failed_attempts,
                 'total_events_24h': recent_events,
                 'failed_events_24h': failed_events,
                 'success_rate': round((recent_events - failed_events) / max(recent_events, 1) * 100, 2)
@@ -168,11 +175,8 @@ def security_status():
 def clear_security_cache():
     """Clear rate limiting and failed attempts cache"""
     try:
-        from webhooks.security import rate_limit_storage, failed_attempts_storage
-        
-        rate_limit_storage.clear()
-        failed_attempts_storage.clear()
-        
+        get_storage().clear_counters()
+
         logger.info("Webhook security cache cleared by admin")
         return jsonify({'message': 'Security cache cleared successfully'}), 200
         

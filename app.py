@@ -328,6 +328,56 @@ with app.app_context():
     # Create all tables that don't exist
     db.create_all()
 
+    # Initialise the webhook security storage backend (Redis if
+    # ``REDIS_URL`` is set, otherwise the DB fallback) and prime the
+    # dynamic IP allowlist cache. This logs one line for the chosen
+    # backend and one line for the IP-list reachability check so
+    # operators can confirm both at boot. Outbound HTTP refresh is
+    # skipped during tests / when explicitly disabled, so the test suite
+    # doesn't make network calls on import.
+    #
+    # If the operator explicitly set ``REDIS_URL`` we MUST fail fast on a
+    # connection error -- silently degrading to DB (or, worse, to broken
+    # behaviour) would mask a misconfiguration and let the app keep
+    # serving webhooks under the wrong assumptions about counter
+    # consistency. The DB fallback path is only acceptable when REDIS_URL
+    # is absent, in which case we still log any unexpected error but
+    # don't abort boot.
+    from webhooks.storage import get_storage as _get_webhook_storage
+    if os.environ.get("REDIS_URL"):
+        # Let the RuntimeError raised by get_storage() propagate and
+        # abort startup. gunicorn will refuse to boot the worker, which
+        # is exactly what we want for a misconfigured Redis URL.
+        _get_webhook_storage()
+    else:
+        try:
+            _get_webhook_storage()
+        except Exception as _exc:  # pragma: no cover - DB init shouldn't fail here
+            logger.error(
+                "Webhook DB-fallback storage backend init failed: %s", _exc,
+            )
+
+    if (
+        os.environ.get("FLASK_ENV", "").lower() != "test"
+        and os.environ.get("WEBHOOK_IP_REFRESH_ON_BOOT", "1").lower()
+        not in ("0", "false", "no")
+    ):
+        try:
+            from webhooks.ip_ranges import refresh_now as _refresh_ip
+            _gh = _refresh_ip("github")
+            _stripe = _refresh_ip("stripe")
+            logger.info(
+                "Webhook dynamic IP allowlist initial refresh: "
+                "github=%s, stripe=%s",
+                "ok" if _gh else "fallback",
+                "ok" if _stripe else "fallback",
+            )
+        except Exception as _exc:
+            logger.warning(
+                "Webhook IP allowlist initial refresh raised: %s "
+                "(static fallback ranges remain in effect)", _exc,
+            )
+
 # For testing/debugging purposes only
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

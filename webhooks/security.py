@@ -13,11 +13,11 @@ from flask import request, jsonify, current_app, g
 from werkzeug.exceptions import RequestEntityTooLarge
 import ipaddress
 
+from webhooks import ip_ranges
+from webhooks.storage import get_storage
+
 logger = logging.getLogger(__name__)
 
-# In-memory storage for rate limiting (in production, use Redis)
-rate_limit_storage = {}
-failed_attempts_storage = {}
 
 class WebhookSecurityError(Exception):
     """Custom exception for webhook security violations"""
@@ -30,23 +30,13 @@ class WebhookSecurityError(Exception):
 class WebhookSecurity:
     """Comprehensive webhook security manager"""
     
-    # Known webhook source IP ranges (can be configured via environment)
-    TRUSTED_IP_RANGES = {
-        'github': [
-            '140.82.112.0/20',
-            '185.199.108.0/22',
-            '192.30.252.0/22',
-            '143.55.64.0/20'
-        ],
-        'stripe': [
-            '54.187.174.169/32',
-            '54.187.205.235/32',
-            '54.187.216.72/32',
-            '54.241.31.99/32',
-            '54.241.31.102/32',
-            '54.241.34.107/32'
-        ]
-    }
+    # Trusted IP ranges are now sourced dynamically from
+    # ``webhooks.ip_ranges.get_ranges`` (which fetches GitHub/Stripe
+    # upstream lists, caches them in the shared storage backend with a 6h
+    # TTL, and falls back to the previously hard-coded values on failure).
+    # ``TRUSTED_IP_RANGES`` is kept only as a backwards-compat alias for
+    # any external code that imported it directly.
+    TRUSTED_IP_RANGES = ip_ranges.FALLBACK_RANGES
     
     # Rate limiting settings
     RATE_LIMITS = {
@@ -89,8 +79,11 @@ class WebhookSecurity:
         if not client_ip:
             raise WebhookSecurityError("Unable to determine client IP", 400)
         
-        # Get trusted IP ranges for this source
-        trusted_ranges = WebhookSecurity.TRUSTED_IP_RANGES.get(source, [])
+        # Get trusted IP ranges for this source. ``ip_ranges.get_ranges``
+        # consults the shared cache (Redis or DB) first and only falls
+        # back to a fresh upstream fetch when that cache is empty/expired,
+        # so a normal request does not trigger an outbound HTTP call.
+        trusted_ranges = ip_ranges.get_ranges(source)
         
         # If no trusted ranges configured, allow all (but log warning)
         if not trusted_ranges:
@@ -115,42 +108,36 @@ class WebhookSecurity:
     
     @staticmethod
     def check_rate_limit(source):
-        """Check and update rate limiting for webhook source"""
+        """Check and update rate limiting for webhook source.
+
+        Uses the shared storage backend (Redis or DB) so all gunicorn
+        workers see the same counter and counters survive restarts within
+        the configured window.
+        """
         # Use trusted remote_addr (sanitized by ProxyFix) instead of spoofable headers
         client_ip = request.remote_addr
         rate_key = f"{source}:{client_ip}"
-        
-        current_time = time.time()
-        
+
         # Get rate limit settings for this source
         limits = WebhookSecurity.RATE_LIMITS.get(
-            source, 
+            source,
             WebhookSecurity.RATE_LIMITS['default']
         )
-        
         max_requests = limits['requests']
         window_size = limits['window']
-        
-        # Clean up old entries
-        if rate_key in rate_limit_storage:
-            rate_limit_storage[rate_key] = [
-                timestamp for timestamp in rate_limit_storage[rate_key]
-                if current_time - timestamp < window_size
-            ]
-        else:
-            rate_limit_storage[rate_key] = []
-        
-        # Check if rate limit exceeded
-        if len(rate_limit_storage[rate_key]) >= max_requests:
-            # Log rate limit violation
+
+        storage = get_storage()
+        # incr_with_window inserts a new event under rate_key, prunes any
+        # expired entries for that key in the same operation, and returns
+        # the live count inside the trailing window.
+        current_count = storage.incr_with_window(rate_key, window_size)
+
+        if current_count > max_requests:
             logger.warning(
                 f"Rate limit exceeded for {source} from {client_ip}: "
-                f"{len(rate_limit_storage[rate_key])} requests in {window_size}s"
+                f"{current_count} requests in {window_size}s"
             )
             raise WebhookSecurityError("Rate limit exceeded", 429)
-        
-        # Add current request timestamp
-        rate_limit_storage[rate_key].append(current_time)
     
     @staticmethod
     def verify_signature(source, payload, headers):
@@ -284,30 +271,41 @@ class WebhookSecurity:
         
         return True
     
+    # Failed-attempt tracking window (seconds). Kept as a class attribute
+    # so the admin status endpoint can reuse the same value when summing
+    # the cross-key total.
+    FAILED_ATTEMPT_WINDOW_SECONDS = 3600
+
     @staticmethod
     def track_failed_attempt(source):
-        """Track failed webhook attempts for security monitoring"""
+        """Track failed webhook attempts for security monitoring.
+
+        Uses the shared storage backend so cross-worker activity is
+        aggregated into one counter (the previous in-memory dict made
+        per-worker brute-force essentially invisible).
+        """
         # Use trusted remote_addr (sanitized by ProxyFix) instead of spoofable headers
         client_ip = request.remote_addr
         attempt_key = f"{source}:{client_ip}"
-        current_time = time.time()
-        
-        if attempt_key not in failed_attempts_storage:
-            failed_attempts_storage[attempt_key] = []
-        
-        failed_attempts_storage[attempt_key].append(current_time)
-        
-        # Clean up old attempts (older than 1 hour)
-        failed_attempts_storage[attempt_key] = [
-            timestamp for timestamp in failed_attempts_storage[attempt_key]
-            if current_time - timestamp < 3600
-        ]
-        
+        window = WebhookSecurity.FAILED_ATTEMPT_WINDOW_SECONDS
+
+        try:
+            storage = get_storage()
+            attempt_count = storage.record_failed_attempt(attempt_key, window)
+        except Exception as exc:
+            # Tracking is best-effort security telemetry: a storage outage
+            # must never turn a real validation error into a 500.
+            logger.warning(
+                f"Failed to record webhook failed-attempt for {source} from "
+                f"{client_ip}: {exc}"
+            )
+            return
+
         # Log suspicious activity (more than 10 failed attempts in an hour)
-        if len(failed_attempts_storage[attempt_key]) > 10:
+        if attempt_count > 10:
             logger.warning(
                 f"Suspicious webhook activity detected for {source} from {client_ip}: "
-                f"{len(failed_attempts_storage[attempt_key])} failed attempts in last hour"
+                f"{attempt_count} failed attempts in last hour"
             )
     
     @staticmethod

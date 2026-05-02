@@ -383,6 +383,58 @@ class WebhookEvent(db.Model):
     )
 
 
+class WebhookRateLimitEvent(db.Model):
+    """Per-request marker used to compute sliding-window rate limits.
+
+    Each row is one webhook request from a given (source, client_ip)
+    combination. ``WebhookSecurity.check_rate_limit`` inserts a row, then
+    counts rows whose ``created_at`` falls inside the configured window.
+    Rows older than the window are pruned eagerly on the next insert for
+    the same key, keeping the table bounded without a background sweeper.
+
+    This table is only used when ``REDIS_URL`` is unset and the DB
+    fallback storage backend is active.
+    """
+    __tablename__ = 'webhook_rate_limit_event'
+    id = db.Column(db.Integer, primary_key=True)
+    rate_key = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_webhook_rl_key_ts', 'rate_key', 'created_at'),
+    )
+
+
+class WebhookFailedAttempt(db.Model):
+    """Per-failed-request marker for security-monitoring and alerting.
+
+    Same shape as ``WebhookRateLimitEvent``, but tracks failed validation
+    attempts (bad signatures, IP-list rejects, oversize payloads, etc.)
+    so we can spot brute-forcing across workers.
+    """
+    __tablename__ = 'webhook_failed_attempt'
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_key = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_webhook_fa_key_ts', 'attempt_key', 'created_at'),
+    )
+
+
+class WebhookCacheEntry(db.Model):
+    """Tiny key/value cache used by the DB storage backend.
+
+    Currently only stores the cached upstream IP allowlists for GitHub and
+    Stripe so the dynamic refresh in ``webhooks/ip_ranges.py`` doesn't
+    have to hit the upstream HTTP endpoint on every request.
+    """
+    __tablename__ = 'webhook_cache_entry'
+    cache_key = db.Column(db.String(200), primary_key=True)
+    value = db.Column(db.Text, nullable=False)
+    expires_at = db.Column(db.DateTime, nullable=True, index=True)
+
+
 class Notification(db.Model):
     """Store notifications for users"""
     id = db.Column(db.Integer, primary_key=True)
