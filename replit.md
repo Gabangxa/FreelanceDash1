@@ -86,10 +86,24 @@ Freelancer Suite is a comprehensive SaaS platform built with Flask that provides
 - **Font Awesome**: Icon library via CDN
 
 ### Environment Variables
-- `FLASK_SECRET_KEY`: Application secret key
-- `DATABASE_URL`: Database connection string
-- `MAIL_SERVER`, `MAIL_USERNAME`, `MAIL_PASSWORD`: Email configuration
-- `POLAR_API_KEY`: Subscription service API key
+- `FLASK_SECRET_KEY`: Application secret key. **Required in production** — the
+  app refuses to start without it (no per-process generated fallback, which
+  would silently invalidate sessions/CSRF on every gunicorn worker reload).
+- `DATABASE_URL`: Database connection string.
+- `MAIL_SERVER`, `MAIL_USERNAME`, `MAIL_PASSWORD`: Email configuration.
+- `POLAR_API_KEY`: Subscription service API key.
+- `FLASK_ENV`: `development` | `test` | (anything else = production).
+- `PRODUCTION`: Optional explicit production flag (`true`/`1`/`yes`).
+  When either `PRODUCTION=true` or `FLASK_ENV` is unset/non-development,
+  the app enables HTTPS-only Secure cookies and the strict secret-key check.
+
+### Database Migrations (Alembic / Flask-Migrate)
+The app now uses Flask-Migrate for schema changes. New tables continue to be
+created idempotently by `db.create_all()` at boot, but column changes must
+go through Alembic so production deployments don't silently drop data.
+- Run `flask db upgrade` after pulling new migrations.
+- Create a new migration with `flask db migrate -m "<description>"`.
+- Migrations live in `migrations/versions/`.
 
 ## Deployment Strategy
 
@@ -114,6 +128,31 @@ Freelancer Suite is a comprehensive SaaS platform built with Flask that provides
 
 ## Changelog
 
+- May 02, 2026. Hardening pass from code review (C1–C4, I8–I10):
+  - **WebhookEvent.metadata → event_metadata** (C1): the previous attribute
+    name collided with SQLAlchemy's reserved `MetaData` registry on
+    `DeclarativeBase`, so security/audit metadata never persisted. Added
+    Alembic migration `0001_add_event_metadata` and a model round-trip test.
+  - **Admin hours math** (C2): `TimeEntry.duration` is in minutes, not
+    seconds — replaced `/3600` with `/60.0` in `admin/routes.py` (was
+    under-reporting totals 60×). Added unit test.
+  - **Open-redirect filter** (C3): added `utils/security.is_safe_url` that
+    rejects `javascript:`, `data:`, `vbscript:`, protocol-relative `//host`
+    and backslash-host payloads. `auth/login` uses it for `?next=`. 16-case
+    test covers safe + dangerous payloads.
+  - **403 error logging** (I8): fixed `current_user` lookup that was always
+    logging "Unknown" because it was reading from `current_app` instead of
+    `flask_login`.
+  - **Production hardening** (I9/I10): app refuses to start without
+    `FLASK_SECRET_KEY` in production; cookie `Secure` flag is now tied to
+    explicit `IS_PRODUCTION` rather than `app.debug`.
+  - **Email reliability** (C4): `send_email_async` now wraps every send in
+    `app.app_context()`, retries 3× with exponential backoff, and persists
+    every attempt to a new `EmailDeliveryLog` table (recipient, subject,
+    status, attempts, last_error, sent_at). Foundation for the queue-based
+    delivery system planned next.
+  - **Tests**: added pytest harness (`tests/conftest.py` w/ in-memory
+    SQLite). 21 tests passing.
 - December 07, 2025. Added project completion feature and deadline alert system
   - Projects can now be marked as "completed" or reopened with a single click
   - Configurable deadline alerts (7 days, 3 days, 1 day, or custom interval)

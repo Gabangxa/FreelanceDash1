@@ -73,12 +73,15 @@ def dashboard():
     ).count()
     
     # Time tracking statistics
+    # NOTE: TimeEntry.duration is stored in *minutes* (see models.py),
+    # so we divide by 60 to get hours. Dividing by 3600 was a long-standing
+    # bug that under-reported totals by a factor of 60.
     total_hours = db.session.query(func.sum(TimeEntry.duration)).scalar() or 0
-    total_hours = round(total_hours / 3600, 2)  # Convert to hours
+    total_hours = round(total_hours / 60.0, 2)
     billable_hours = db.session.query(func.sum(TimeEntry.duration)).filter(
         TimeEntry.billable == True
     ).scalar() or 0
-    billable_hours = round(billable_hours / 3600, 2)
+    billable_hours = round(billable_hours / 60.0, 2)
     
     # Recent activity
     recent_users = User.query.order_by(desc(User.created_at)).limit(5).all()

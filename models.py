@@ -289,6 +289,25 @@ class UserSettings(db.Model):
         return f"data:{self.invoice_logo_mimetype};base64,{encoded}"
 
 
+class EmailDeliveryLog(db.Model):
+    """Persistent record of every outbound email send attempt.
+
+    This gives operations a single place to see which messages succeeded,
+    which failed, and how many retries each took. It is written from the
+    background email thread in ``mail.py`` and is the foundation for the
+    queue-based delivery system planned for the next phase.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    recipient = db.Column(db.String(254), nullable=False, index=True)
+    subject = db.Column(db.String(500), nullable=False)
+    status = db.Column(db.String(20), nullable=False, default='pending', index=True)
+    # 'pending' | 'sent' | 'failed'
+    attempts = db.Column(db.Integer, default=0, nullable=False)
+    last_error = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    sent_at = db.Column(db.DateTime)
+
+
 class WebhookEvent(db.Model):
     """Store incoming webhook events for processing"""
     id = db.Column(db.Integer, primary_key=True)
@@ -300,6 +319,9 @@ class WebhookEvent(db.Model):
     error_message = db.Column(db.Text)
     signature = db.Column(db.String(256))  # Webhook signature for verification
     headers = db.Column(db.Text)  # Store important headers as JSON
+    # NOTE: do not name this `metadata` -- that attribute is reserved on
+    # SQLAlchemy DeclarativeBase and assigning to it never persists.
+    event_metadata = db.Column(db.Text)  # Security/audit metadata as JSON
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
     
     # Relationships

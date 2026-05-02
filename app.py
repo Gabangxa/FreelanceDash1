@@ -4,6 +4,7 @@ import time
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, g, session
 from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -29,11 +30,34 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+
+def _is_production():
+    """Return True iff the app is running in a production environment.
+
+    The app considers itself in production when EITHER ``PRODUCTION=true`` is
+    set, OR ``FLASK_ENV`` is anything other than ``development``/``test``.
+    Tests should set ``FLASK_ENV=test``; local development should set
+    ``FLASK_ENV=development``.
+    """
+    if os.environ.get("PRODUCTION", "").lower() in ("1", "true", "yes"):
+        return True
+    flask_env = os.environ.get("FLASK_ENV", "").lower()
+    if flask_env in ("development", "test"):
+        return False
+    # Default: treat unknown/empty FLASK_ENV as production. This is the safe
+    # default for a deployed app.
+    return True
+
+
+IS_PRODUCTION = _is_production()
+
+
 class Base(DeclarativeBase):
     pass
 
 # Initialize extensions
 db = SQLAlchemy(model_class=Base)
+migrate = Migrate()
 login_manager = LoginManager()
 
 # Create Flask app
@@ -43,44 +67,65 @@ app = Flask(__name__)
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1, x_for=1)
 
 # Configuration
-if os.environ.get("FLASK_ENV") == "development":
-    app.config["DEBUG"] = True
+if not IS_PRODUCTION:
+    app.config["DEBUG"] = os.environ.get("FLASK_ENV", "").lower() == "development"
     app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev_key_only_for_development")
-    logging.getLogger().setLevel(logging.DEBUG)
+    if app.config["DEBUG"]:
+        logging.getLogger().setLevel(logging.DEBUG)
 else:
     # Production settings
     app.config["DEBUG"] = False
-    # Ensure we have a strong secret key in production
+    # Ensure we have a strong secret key in production. Refuse to start
+    # rather than fall back to a generated-per-process key, because that
+    # would silently invalidate every session and CSRF token on each
+    # gunicorn worker reload (and would differ between workers).
     app.secret_key = os.environ.get("FLASK_SECRET_KEY")
     if not app.secret_key:
-        logger.warning("No secret key set, generating a temporary one. This is not secure for production!")
-        app.secret_key = secrets.token_hex(32)
+        raise RuntimeError(
+            "FLASK_SECRET_KEY is required in production. Refusing to start "
+            "with a generated key (would invalidate sessions/CSRF on every "
+            "restart and differ across gunicorn workers). "
+            "Set FLASK_SECRET_KEY to a strong random value."
+        )
 
-# Enhanced security settings for cookies and sessions
+# Enhanced security settings for cookies and sessions. Cookie flags are tied
+# to IS_PRODUCTION (not app.debug) so that a one-off debug session in prod
+# can't quietly drop the Secure flag.
 app.config["SESSION_COOKIE_HTTPONLY"] = True  # Prevent JavaScript access to session cookie
-app.config["SESSION_COOKIE_SECURE"] = not app.debug  # Force HTTPS in production
+app.config["SESSION_COOKIE_SECURE"] = IS_PRODUCTION  # HTTPS-only in production
 app.config["SESSION_COOKIE_SAMESITE"] = "Lax"  # Prevent CSRF attacks
 app.config["PERMANENT_SESSION_LIFETIME"] = timedelta(days=1)  # Session expires after 1 day
 app.config["SESSION_REFRESH_EACH_REQUEST"] = True  # Update session on each request
 
 # Remember me cookie security
 app.config["REMEMBER_COOKIE_HTTPONLY"] = True
-app.config["REMEMBER_COOKIE_SECURE"] = not app.debug
+app.config["REMEMBER_COOKIE_SECURE"] = IS_PRODUCTION
 app.config["REMEMBER_COOKIE_SAMESITE"] = "Lax"
 app.config["REMEMBER_COOKIE_DURATION"] = timedelta(days=30)  # Remember for 30 days
 
 # Database configuration
 app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+
+# Pool tuning is only valid for client/server engines like Postgres/MySQL.
+# SQLite (used by the test suite) uses a StaticPool that rejects pool_size /
+# max_overflow, so apply those settings only when the URL clearly is not
+# SQLite. pool_recycle / pool_pre_ping are harmless across both.
+_db_uri = app.config.get("SQLALCHEMY_DATABASE_URI") or ""
+_is_sqlite = _db_uri.startswith("sqlite")
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
-    "pool_size": 10,  # Optimized connection pool size
-    "max_overflow": 20,  # Allow more connections during high load
 }
+if not _is_sqlite:
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"].update({
+        "pool_size": 10,
+        "max_overflow": 20,
+    })
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Disable to improve performance
 
 # Initialize extensions with app
 db.init_app(app)
+migrate.init_app(app, db)
 login_manager.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'  # Bootstrap message styling

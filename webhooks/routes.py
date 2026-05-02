@@ -50,8 +50,10 @@ def receive_webhook(source):
         webhook_event.signature = headers.get('X-Signature') or headers.get('X-Hub-Signature-256') or headers.get('Stripe-Signature')
         webhook_event.headers = json.dumps(security_info.get('headers', {}))
         
-        # Add security metadata as JSON
-        webhook_event.metadata = json.dumps({
+        # Add security metadata as JSON. Note: stored on the
+        # ``event_metadata`` column -- ``metadata`` is a reserved attribute
+        # on SQLAlchemy DeclarativeBase and silently does not persist.
+        webhook_event.event_metadata = json.dumps({
             'client_ip': security_info.get('client_ip'),
             'payload_size': security_info.get('payload_size'),
             'validation_time': security_info.get('validation_time'),
@@ -98,9 +100,9 @@ def list_webhook_events():
         for event in events:
             # Parse metadata if available
             metadata = {}
-            if event.metadata:
+            if event.event_metadata:
                 try:
-                    metadata = json.loads(event.metadata)
+                    metadata = json.loads(event.event_metadata)
                 except json.JSONDecodeError:
                     metadata = {}
             

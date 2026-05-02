@@ -148,8 +148,16 @@ def register_error_handlers(app):
 
     @app.errorhandler(403)
     def forbidden_error(error):
-        # Log access attempts that are forbidden
-        user_id = getattr(getattr(current_app, 'current_user', None), 'id', 'Unknown')
+        # Log access attempts that are forbidden. ``current_user`` lives on
+        # flask_login, NOT on flask.current_app -- the previous code always
+        # logged "Unknown" because the attribute lookup silently failed.
+        user_id = 'Unknown'
+        try:
+            from flask_login import current_user
+            if current_user.is_authenticated:
+                user_id = current_user.id
+        except Exception:
+            pass
         app.logger.warning(f"403 Forbidden access: {request.method} {request.path} | User: {user_id} | IP: {request.remote_addr}")
         
         if request.path.startswith('/api/'):

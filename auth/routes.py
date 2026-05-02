@@ -1,6 +1,5 @@
 from flask import Blueprint, render_template, redirect, url_for, flash, request, current_app
 from flask_login import login_user, logout_user, login_required, current_user
-from urllib.parse import urlparse
 from sqlalchemy.exc import SQLAlchemyError
 from app import db, logger
 from models import User
@@ -8,6 +7,7 @@ from auth.forms import LoginForm, RegistrationForm, ResetPasswordRequestForm, Re
 from werkzeug.security import generate_password_hash
 from errors import handle_db_errors, UserFriendlyError
 from mail import send_welcome_email, send_password_reset_email
+from utils.security import is_safe_url
 import re
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
@@ -32,9 +32,12 @@ def login():
             login_user(user, remember=form.remember_me.data)
             logger.info(f"User logged in: {user.username} (ID: {user.id})")
 
-            # Security: Safe redirect handling
+            # Security: Safe redirect handling. is_safe_url enforces a
+            # same-origin http(s) allowlist and rejects javascript:/data:/
+            # protocol-relative payloads that the previous netloc-only
+            # check would let through.
             next_page = request.args.get('next')
-            if not next_page or urlparse(next_page).netloc != '':
+            if not is_safe_url(next_page):
                 next_page = url_for('projects.dashboard')
             return redirect(next_page)
 
