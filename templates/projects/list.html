@@ -44,7 +44,7 @@
 
 <!-- Quick Filter Tabs -->
 <div class="mb-4">
-    <ul class="nav nav-pills nav-fill bg-light rounded p-1" id="project-filter-tabs" role="tablist" style="background: var(--bg-secondary) !important;">
+    <ul class="nav nav-pills nav-fill bg-light rounded p-1 project-filter-tabs" id="project-filter-tabs" role="tablist">
         <li class="nav-item" role="presentation">
             <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all-projects" type="button" role="tab">
                 <i class="fas fa-list me-1"></i>All Projects
@@ -70,8 +70,8 @@
 <div class="card">
     <div class="card-body p-0">
         {% for project in projects %}
-        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card text-decoration-none" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
-            <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 102, 255, 0.15) 0%, rgba(0, 102, 255, 0.05) 100%);">
+        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card text-decoration-none list-item-flush {% if loop.first %}list-item-flush-mid{% endif %}">
+            <div class="item-icon item-icon-bg-project">
                 <i class="fas fa-folder text-primary"></i>
             </div>
             <div class="item-content">

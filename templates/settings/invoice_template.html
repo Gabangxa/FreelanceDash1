@@ -3,6 +3,22 @@
 {% block title %}Invoice Template Settings - Freelancer Suite{% endblock %}
 
 {% block content %}
+{# Per-request nonced <style> block: lets us inject the user's chosen
+   primary/secondary colors into CSS without using inline style="" attributes
+   (which would violate the new style-src CSP). The safe_color filter
+   whitelists strict #RGB / #RRGGBB hex strings to prevent CSS injection. #}
+<style nonce="{{ csp_nonce }}">
+    .invoice-preview {
+        background-color: {{ settings.invoice_color_secondary | safe_color('#ffffff') }};
+    }
+    .invoice-preview-title,
+    .invoice-preview-section-label {
+        color: {{ settings.invoice_color_primary | safe_color('#3498db') }};
+    }
+    .invoice-preview-title {
+        border-bottom-color: {{ settings.invoice_color_primary | safe_color('#3498db') }};
+    }
+</style>
 <div class="container py-4">
     <h1 class="mb-4">Invoice Template Settings</h1>
     
@@ -25,7 +41,7 @@
                             <label class="form-label">Current Logo</label>
                             <div class="mb-2">
                                 {% if logo_data_uri %}
-                                    <img src="{{ logo_data_uri }}" alt="Company Logo" class="img-thumbnail mb-2" style="max-height: 100px;">
+                                    <img src="{{ logo_data_uri }}" alt="Company Logo" class="img-thumbnail mb-2 logo-thumb-100">
                                     <div class="form-check mb-3">
                                         <input type="checkbox" class="form-check-input" id="remove_logo">
                                         <label class="form-check-label" for="remove_logo">Remove logo</label>
@@ -123,26 +139,26 @@
                 </div>
                 <div class="card-body">
                     <div class="d-flex justify-content-center align-items-center mb-3">
-                        <div id="template-preview" class="border p-3 w-100" style="min-height: 250px; background-color: {{ settings.invoice_color_secondary }};">
+                        <div id="template-preview" class="border p-3 w-100 invoice-preview">
                             {% if logo_data_uri %}
                                 <div class="mb-3">
-                                    <img src="{{ logo_data_uri }}" alt="Company Logo" style="max-height: 50px;">
+                                    <img src="{{ logo_data_uri }}" alt="Company Logo" class="logo-preview-50">
                                 </div>
                             {% endif %}
-                            <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; border-bottom: 2px solid {{ settings.invoice_color_primary }}; margin-bottom: 10px;">
+                            <div class="invoice-preview-title">
                                 INVOICE
                             </div>
-                            <div class="small" style="margin-bottom: 20px;">
+                            <div class="small invoice-preview-meta">
                                 <div>{{ settings.company_name or 'Your Company Name' }}</div>
                                 <div>{{ settings.company_address or 'Company Address' }}</div>
                             </div>
-                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                            <div class="invoice-preview-grid">
                                 <div>
-                                    <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; font-size: 0.8em;">BILL TO</div>
+                                    <div class="invoice-preview-section-label">BILL TO</div>
                                     <div class="small">Client Name</div>
                                 </div>
                                 <div>
-                                    <div style="color: {{ settings.invoice_color_primary }}; font-weight: bold; font-size: 0.8em;">INVOICE INFO</div>
+                                    <div class="invoice-preview-section-label">INVOICE INFO</div>
                                     <div class="small">Invoice #: INV-001</div>
                                     <div class="small">Date: 2023-01-01</div>
                                 </div>
@@ -219,21 +235,24 @@ document.addEventListener('DOMContentLoaded', function() {
     function updatePreviewColors() {
         const primaryColor = primaryColorInput.value || '#3498db';
         const secondaryColor = secondaryColorInput.value || '#f8f9fa';
-        
-        // Update preview styles
+
+        // DOM-API style assignments are NOT subject to the style-src CSP
+        // (only inline style="" attributes and <style> blocks are), so we can
+        // safely set element.style.* here. Targets the CSP-friendly classes
+        // emitted by the template instead of the old [style*="..."] selectors.
         templatePreview.style.backgroundColor = secondaryColor;
-        
-        // Update text colors
-        const headings = templatePreview.querySelectorAll('[style*="color:"]');
-        headings.forEach(heading => {
-            heading.style.color = primaryColor;
-        });
-        
-        // Update border colors
-        const borders = templatePreview.querySelectorAll('[style*="border-bottom:"]');
-        borders.forEach(border => {
-            border.style.borderBottomColor = primaryColor;
-        });
+
+        templatePreview
+            .querySelectorAll('.invoice-preview-title, .invoice-preview-section-label')
+            .forEach(el => {
+                el.style.color = primaryColor;
+            });
+
+        templatePreview
+            .querySelectorAll('.invoice-preview-title')
+            .forEach(el => {
+                el.style.borderBottomColor = primaryColor;
+            });
     }
     
     // Handle template changes

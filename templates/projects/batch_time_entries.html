@@ -46,7 +46,7 @@
                 
                 <!-- Progress indicator for form submission -->
                 <div id="formProgress" class="progress mb-4 d-none">
-                    <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 100%"></div>
+                    <div class="progress-bar progress-bar-striped progress-bar-animated w-100" role="progressbar"></div>
                 </div>
                 
                 <!-- Time entries container -->
@@ -657,7 +657,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 // Add progress bar
                 const progressContainer = document.createElement('div');
                 progressContainer.className = 'progress mt-3';
-                progressContainer.innerHTML = '<div class="progress-bar progress-bar-striped progress-bar-animated" style="width: 100%"></div>';
+                progressContainer.innerHTML = '<div class="progress-bar progress-bar-striped progress-bar-animated w-100"></div>';
                 submitBtn.parentNode.appendChild(progressContainer);
             }
         });

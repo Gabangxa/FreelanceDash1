@@ -72,8 +72,8 @@
     </div>
     <div class="card-body p-0">
         {% for client in clients %}
-        <div class="list-item-card" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
-            <div class="item-icon" style="background: linear-gradient(135deg, rgba(0, 168, 112, 0.15) 0%, rgba(0, 168, 112, 0.05) 100%);">
+        <div class="list-item-card list-item-flush {% if loop.first %}list-item-flush-mid{% endif %}">
+            <div class="item-icon item-icon-bg-client">
                 <i class="fas fa-user text-success"></i>
             </div>
             <div class="item-content">

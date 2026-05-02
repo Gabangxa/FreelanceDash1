@@ -199,6 +199,24 @@ from utils.duration import minutes_to_hours as _minutes_to_hours  # noqa: E402
 app.add_template_filter(_format_duration, name='format_duration')
 app.add_template_filter(_minutes_to_hours, name='minutes_to_hours')
 
+# Whitelist for embedding user-controlled color values into nonced <style>
+# blocks. Without this, an attacker who could write a malformed value into
+# UserSettings could inject arbitrary CSS into the rendered page. Accepts
+# only strict #RGB / #RRGGBB hex strings; anything else falls back to the
+# provided default so the preview still renders.
+import re as _re  # noqa: E402
+
+_HEX_COLOR_RE = _re.compile(r'^#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6})$')
+
+
+def _safe_color(value, default='#3498db'):
+    if value and _HEX_COLOR_RE.match(value.strip()):
+        return value.strip()
+    return default
+
+
+app.add_template_filter(_safe_color, name='safe_color')
+
 @app.after_request
 def add_security_headers_and_log_timing(response):
     # Add comprehensive security headers
@@ -208,20 +226,17 @@ def add_security_headers_and_log_timing(response):
     
     # Add Content Security Policy.
     #
-    # Rollout note: script-src enforces a per-request nonce (generated in the
-    # before_request hook above) and no longer allows 'unsafe-inline'. All
-    # inline <script> tags in templates must carry nonce="{{ csp_nonce }}".
-    # style-src still permits 'unsafe-inline' temporarily — there is a parallel
-    # follow-up to audit inline style="" usage and drop that allowance, see
-    # TODO below.
+    # Rollout note: both script-src and style-src enforce a per-request nonce
+    # (generated in the before_request hook above) and no longer allow
+    # 'unsafe-inline'. All inline <script> and <style> tags in templates must
+    # carry nonce="{{ csp_nonce }}", and inline style="" attributes have been
+    # migrated to CSS classes. Any new template work must follow the same
+    # convention.
     nonce = getattr(g, 'csp_nonce', '')
     csp_directives = [
         "default-src 'self'",  # Default policy for fetching content
         f"script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com https://cdnjs.cloudflare.com 'nonce-{nonce}'",
-        # TODO(csp-styles): drop 'unsafe-inline' from style-src once inline
-        # style="" attributes across templates are audited / refactored. Track
-        # in the CSP hardening follow-up.
-        "style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
+        f"style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'nonce-{nonce}'",
         "img-src 'self' data: https://cdnjs.buymeacoffee.com",
         "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
         "connect-src 'self'",

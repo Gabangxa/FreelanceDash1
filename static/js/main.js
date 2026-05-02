@@ -178,8 +178,8 @@ function startTimer() {
                 `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
         }, 1000);
 
-        startBtn.style.display = 'none';
-        stopBtn.style.display = 'inline-block';
+        startBtn.classList.add('cs-hidden');
+        stopBtn.classList.remove('cs-hidden');
     }
 }
 
@@ -194,8 +194,8 @@ function stopTimer() {
             durationInput.value = duration;
         }
 
-        document.getElementById('start-timer').style.display = 'inline-block';
-        document.getElementById('stop-timer').style.display = 'none';
+        document.getElementById('start-timer').classList.remove('cs-hidden');
+        document.getElementById('stop-timer').classList.add('cs-hidden');
     }
 }
 
@@ -244,10 +244,10 @@ function updateThemeIcons(theme) {
     const lightIcon = document.getElementById('light-icon');
     
     if (theme === 'dark') {
-        if (darkIcon) darkIcon.style.display = 'inline-block';
-        if (lightIcon) lightIcon.style.display = 'none';
+        if (darkIcon) darkIcon.classList.remove('cs-hidden');
+        if (lightIcon) lightIcon.classList.add('cs-hidden');
     } else {
-        if (darkIcon) darkIcon.style.display = 'none';
-        if (lightIcon) lightIcon.style.display = 'inline-block';
+        if (darkIcon) darkIcon.classList.add('cs-hidden');
+        if (lightIcon) lightIcon.classList.remove('cs-hidden');
     }
 }

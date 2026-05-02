@@ -1896,3 +1896,125 @@ code {
     max-width: 400px;
     margin: 0 auto var(--space-6);
 }
+
+/* ==========================================================================
+   CSP-hardening utility classes (migrated from inline style="" attributes)
+   These exist so templates do not need inline styles, allowing us to drop
+   'unsafe-inline' from style-src in the Content-Security-Policy header.
+   ========================================================================== */
+
+/* Notification badge / theme icons — toggled via JS classList */
+.cs-hidden { display: none; }
+
+/* Notification dropdown sizing (was style="width: 350px;") */
+.notification-dropdown.notification-dropdown-wide { width: 350px; }
+
+/* Deadline-alerts card on the dashboard */
+.deadline-alerts-card {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.05) 0%, rgba(255, 193, 7, 0.05) 100%);
+}
+.deadline-alerts-card > .card-header {
+    background: transparent;
+}
+.alert-rounded-12 { border-radius: 12px; }
+
+/* Small / meta text */
+.text-meta-sm { font-size: 0.875rem; }
+
+/* Compact quick-action button (dashboard "+ New" pills) */
+.quick-action-btn-compact {
+    padding: 0.5rem 0.75rem;
+    font-size: 0.8125rem;
+}
+
+/* Edge-to-edge list rows inside .card-body.p-0 lists */
+.list-item-flush {
+    margin: 0;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+}
+.list-item-flush-mid { border-top: 0; }
+
+/* Item-icon gradient backgrounds (project/task/client/invoice list rows) */
+.item-icon-bg-project {
+    background: linear-gradient(135deg, rgba(0, 102, 255, 0.15) 0%, rgba(0, 102, 255, 0.05) 100%);
+}
+.item-icon-bg-task,
+.item-icon-bg-client {
+    background: linear-gradient(135deg, rgba(0, 168, 112, 0.15) 0%, rgba(0, 168, 112, 0.05) 100%);
+}
+.item-icon-bg-invoice {
+    background: linear-gradient(135deg, rgba(245, 166, 35, 0.15) 0%, rgba(245, 166, 35, 0.05) 100%);
+}
+
+/* Empty-state padding override used in dashboard */
+.empty-state-modern.empty-state-compact {
+    padding: 3rem 1.5rem;
+}
+
+/* Input-group max-widths for date / day pickers */
+.input-group-week { max-width: 280px; }
+.input-group-days { max-width: 180px; }
+
+/* Invoice list row amount text (was font-size: 1rem;) */
+.invoice-amount { font-size: 1rem; }
+
+/* Project filter tab pill bar — overrides Bootstrap's bg-light without using
+   an inline style attribute. */
+.nav.nav-pills.project-filter-tabs.bg-light {
+    background: var(--bg-secondary) !important;
+}
+
+/* Generic icon circles used on settings/export_data cards */
+.icon-circle-60 {
+    width: 60px;
+    height: 60px;
+}
+.icon-circle-tint-blue {
+    background-color: rgba(52, 152, 219, 0.1);
+}
+
+/* Logo previews on invoice template settings page */
+.logo-thumb-100 { max-height: 100px; }
+.logo-preview-50 { max-height: 50px; }
+
+/* Invoice template preview block (dynamic colors are injected via a
+   per-request nonced <style> block on the page itself, see
+   templates/settings/invoice_template.html). */
+.invoice-preview {
+    min-height: 250px;
+}
+.invoice-preview-title {
+    font-weight: bold;
+    border-bottom-style: solid;
+    border-bottom-width: 2px;
+    margin-bottom: 10px;
+}
+.invoice-preview-meta { margin-bottom: 20px; }
+.invoice-preview-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+}
+.invoice-preview-section-label {
+    font-weight: bold;
+    font-size: 0.8em;
+}
+
+/* Landing-page mockup widths and avatar gradients */
+.mockup-text-line-w70 { width: 70%; }
+.mockup-text-line-w40 { width: 40%; }
+.mockup-text-line-w85 { width: 85%; }
+.mockup-text-line-w55 { width: 55%; }
+.mockup-text-line-w60 { width: 60%; }
+.mockup-text-line-w35 { width: 35%; }
+.mockup-progress-bar-w45 { width: 45%; }
+.mockup-progress-bar-w90 { width: 90%; }
+.mockup-avatar-task {
+    background: linear-gradient(135deg, #00A870 0%, #00B8D9 100%);
+}
+.mockup-avatar-invoice {
+    background: linear-gradient(135deg, #F5A623 0%, #E53935 100%);
+}

@@ -53,7 +53,7 @@
                             <td>{{ user.projects|length }}</td>
                             <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
-                                <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=user.id) }}" style="display: inline;" class="js-confirm-form" data-confirm-message="Are you sure you want to {% if user.is_admin %}remove{% else %}grant{% endif %} admin privileges for {{ user.username }}?">
+                                <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=user.id) }}" class="js-confirm-form d-inline" data-confirm-message="Are you sure you want to {% if user.is_admin %}remove{% else %}grant{% endif %} admin privileges for {{ user.username }}?">
                                     {% if user.id != current_user.id %}
                                     <button type="submit" class="btn btn-sm {% if user.is_admin %}btn-warning{% else %}btn-success{% endif %}">
                                         <i class="fas {% if user.is_admin %}fa-user-minus{% else %}fa-user-shield{% endif %}"></i>

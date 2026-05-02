@@ -18,7 +18,7 @@
 {% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 .stat-card-filter {
     cursor: pointer;
     transition: all 0.3s ease;
@@ -150,8 +150,8 @@
     </div>
     <div class="card-body p-0" id="invoice-list">
         {% for invoice in invoices %}
-        <div class="list-item-card invoice-item" data-status="{{ invoice.status }}" style="margin: 0; border-radius: 0; border-left: 0; border-right: 0; {% if loop.first %}border-top: 0;{% endif %}">
-            <div class="item-icon" style="background: linear-gradient(135deg, rgba(245, 166, 35, 0.15) 0%, rgba(245, 166, 35, 0.05) 100%);">
+        <div class="list-item-card invoice-item list-item-flush {% if loop.first %}list-item-flush-mid{% endif %}" data-status="{{ invoice.status }}">
+            <div class="item-icon item-icon-bg-invoice">
                 <i class="fas fa-file-invoice-dollar text-warning"></i>
             </div>
             <div class="item-content">
@@ -165,7 +165,7 @@
                 </div>
             </div>
             <div class="item-actions d-flex align-items-center gap-3">
-                <span class="fw-bold" style="font-size: 1rem;">
+                <span class="fw-bold invoice-amount">
                     {{ invoice.currency }} {{ "%.2f"|format(invoice.amount) }}
                 </span>
                 <span class="badge bg-{{ 'success' if invoice.status == 'paid' else 'warning' if invoice.status == 'pending' else 'secondary' }}">

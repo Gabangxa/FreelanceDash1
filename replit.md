@@ -27,6 +27,12 @@ Freelancer Suite is a comprehensive SaaS platform built with Flask that provides
 - Input validation and sanitization
 - Secure session management
 - Password reset functionality with time-limited tokens
+- Content Security Policy (CSP) with per-request nonces for both `script-src`
+  and `style-src` (no `'unsafe-inline'`). All inline `<script>` and `<style>`
+  blocks must carry `nonce="{{ csp_nonce }}"`, and inline `style=""`
+  attributes are not used in templates — utility classes in
+  `static/css/style.css` and the `safe_color` Jinja filter (for hex-color
+  values injected into nonced `<style>` blocks) cover the equivalent needs.
 
 ## Key Components
 

@@ -3,7 +3,7 @@
 {% block title %}Freelancer Suite - The Modern Way to Run Your Freelance Business{% endblock %}
 
 {% block content %}
-<style>
+<style nonce="{{ csp_nonce }}">
 /* Landing Page Specific Styles */
 .landing-hero {
     min-height: 90vh;
@@ -743,8 +743,8 @@
                                 <div class="mockup-card-header">
                                     <div class="mockup-avatar"></div>
                                     <div class="mockup-text">
-                                        <div class="mockup-text-line" style="width: 70%;"></div>
-                                        <div class="mockup-text-line" style="width: 40%;"></div>
+                                        <div class="mockup-text-line mockup-text-line-w70"></div>
+                                        <div class="mockup-text-line mockup-text-line-w40"></div>
                                     </div>
                                 </div>
                                 <div class="mockup-progress">
@@ -753,26 +753,26 @@
                             </div>
                             <div class="mockup-card">
                                 <div class="mockup-card-header">
-                                    <div class="mockup-avatar" style="background: linear-gradient(135deg, #00A870 0%, #00B8D9 100%);"></div>
+                                    <div class="mockup-avatar mockup-avatar-task"></div>
                                     <div class="mockup-text">
-                                        <div class="mockup-text-line" style="width: 85%;"></div>
-                                        <div class="mockup-text-line" style="width: 55%;"></div>
+                                        <div class="mockup-text-line mockup-text-line-w85"></div>
+                                        <div class="mockup-text-line mockup-text-line-w55"></div>
                                     </div>
                                 </div>
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-bar" style="width: 45%;"></div>
+                                    <div class="mockup-progress-bar mockup-progress-bar-w45"></div>
                                 </div>
                             </div>
                             <div class="mockup-card">
                                 <div class="mockup-card-header">
-                                    <div class="mockup-avatar" style="background: linear-gradient(135deg, #F5A623 0%, #E53935 100%);"></div>
+                                    <div class="mockup-avatar mockup-avatar-invoice"></div>
                                     <div class="mockup-text">
-                                        <div class="mockup-text-line" style="width: 60%;"></div>
-                                        <div class="mockup-text-line" style="width: 35%;"></div>
+                                        <div class="mockup-text-line mockup-text-line-w60"></div>
+                                        <div class="mockup-text-line mockup-text-line-w35"></div>
                                     </div>
                                 </div>
                                 <div class="mockup-progress">
-                                    <div class="mockup-progress-bar" style="width: 90%;"></div>
+                                    <div class="mockup-progress-bar mockup-progress-bar-w90"></div>
                                 </div>
                             </div>
                         </div>

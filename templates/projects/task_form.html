@@ -41,12 +41,12 @@
         <div class="card">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h4 class="mb-0">{{ title }}</h4>
-                <span id="project-badge" class="badge bg-primary" {% if not project %}style="display: none;"{% endif %}>
+                <span id="project-badge" class="badge bg-primary {% if not project %}cs-hidden{% endif %}">
                     Project: {% if project %}{{ project.name }}{% endif %}
                 </span>
             </div>
             <div class="card-body">
-                <div id="project-alert" class="alert alert-info mb-4" {% if not project %}style="display: none;"{% endif %}>
+                <div id="project-alert" class="alert alert-info mb-4 {% if not project %}cs-hidden{% endif %}">
                     <i class="fas fa-info-circle me-2"></i>
                     Creating a task for project: <strong id="project-name">{% if project %}{{ project.name }}{% endif %}</strong>
                 </div>
@@ -70,7 +70,7 @@
                         {% for error in form.project_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
                         {% endfor %}
-                        <small id="project-help-text" class="form-text text-muted" {% if not project %}style="display: none;"{% endif %}>
+                        <small id="project-help-text" class="form-text text-muted {% if not project %}cs-hidden{% endif %}">
                             Pre-selected based on the project you came from.
                         </small>
                     </div>
@@ -122,19 +122,19 @@
             
             if (selectedProjectId && selectedProjectId > 0) {
                 // If a valid project is selected, show the project name in the badge and alert
-                projectBadge.style.display = 'inline-block';
+                projectBadge.classList.remove('cs-hidden');
                 projectBadge.textContent = 'Project: ' + selectedProjectName;
-                
+
                 projectName.textContent = selectedProjectName;
-                projectAlert.style.display = 'block';
-                
+                projectAlert.classList.remove('cs-hidden');
+
                 // Only show the help text if the selected project matches the original
-                projectHelpText.style.display = (selectedProjectId === originalProjectId) ? 'block' : 'none';
+                projectHelpText.classList.toggle('cs-hidden', selectedProjectId !== originalProjectId);
             } else {
                 // Hide project-specific UI elements if no project is selected
-                projectBadge.style.display = 'none';
-                projectAlert.style.display = 'none';
-                projectHelpText.style.display = 'none';
+                projectBadge.classList.add('cs-hidden');
+                projectAlert.classList.add('cs-hidden');
+                projectHelpText.classList.add('cs-hidden');
             }
         }
         
