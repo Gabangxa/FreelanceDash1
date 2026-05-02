@@ -51,9 +51,7 @@
                                 <i class="fas fa-check me-1"></i>Linked
                             </span>
                         {% elif google_oauth_enabled %}
-                            <a href="{{ url_for('google_auth.login') }}" class="btn btn-sm btn-outline-primary">
-                                Link Google
-                            </a>
+                            <span class="badge bg-secondary rounded-pill">Not linked</span>
                         {% else %}
                             <span class="badge bg-secondary rounded-pill">Unavailable</span>
                         {% endif %}

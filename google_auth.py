@@ -43,6 +43,7 @@ import requests
 from flask import Blueprint, abort, current_app, flash, redirect, request, session, url_for
 from flask_login import current_user, login_user
 from oauthlib.oauth2 import WebApplicationClient
+from sqlalchemy import func
 from sqlalchemy.exc import SQLAlchemyError
 
 from app import db
@@ -306,8 +307,10 @@ def _find_or_create_user(sub: str, email: str, given_name: str) -> User:
 
     # 2) Email match -- link the Google identity additively. The user
     #    keeps any existing password / magic-link capability so they can
-    #    still sign in either way.
-    user = User.query.filter_by(email=email).first()
+    #    still sign in either way. Compare case-insensitively at the DB
+    #    level so legacy mixed-case rows still match (the caller already
+    #    lower/strips the Google-supplied email).
+    user = User.query.filter(func.lower(User.email) == email).first()
     if user is not None:
         if user.oauth_provider and (
             user.oauth_provider != PROVIDER_KEY or user.oauth_provider_id != sub

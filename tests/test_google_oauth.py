@@ -232,6 +232,27 @@ def test_sign_in_methods_settings_page_renders_for_logged_in_user(client, db_ses
 # Regression: existing password login flow still works
 # --------------------------------------------------------------------------- #
 
+def test_email_link_lookup_is_case_insensitive(db_session):
+    """A legacy local account stored with a mixed-case email must still
+    match a Google email returned in lower-case. Otherwise the user
+    would silently get a brand-new account instead of having their
+    existing one linked."""
+    u = User(
+        username="legacy_mixed",
+        email="MixedCase@Example.com",
+    )
+    u.set_password("irrelevant")
+    db.session.add(u)
+    db.session.commit()
+    original_id = u.id
+
+    found = ga._find_or_create_user("sub-mixed", "mixedcase@example.com", "Mixed")
+
+    assert found.id == original_id
+    assert found.oauth_provider == "google"
+    assert found.oauth_provider_id == "sub-mixed"
+
+
 def test_oauth_only_user_cannot_login_with_password(client, db_session):
     """Regression: an OAuth-only user (no password_hash) attempting
     email/password login must get the normal "invalid credentials"
@@ -258,6 +279,16 @@ def test_oauth_only_user_cannot_login_with_password(client, db_session):
     # Should bounce back to login (302), NOT crash with a 500.
     assert resp.status_code in (301, 302)
     assert "/auth/login" in resp.headers["Location"]
+
+
+def test_callback_state_mismatch_aborts(client, db_session, monkeypatch):
+    """The OAuth callback must reject a mismatched ``state`` parameter
+    rather than trust attacker-supplied query args."""
+    # Pretend OAuth is configured so the route is registered.
+    with client.session_transaction() as s:
+        s[ga.SESSION_STATE_KEY] = "expected-state"
+    resp = client.get("/google_login/callback?state=wrong-state&code=anything")
+    assert resp.status_code == 400
 
 
 def test_password_login_still_works_after_oauth_changes(client, db_session):
