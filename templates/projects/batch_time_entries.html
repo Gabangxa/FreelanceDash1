@@ -70,7 +70,7 @@
                                 <!-- Project -->
                                 <div class="col-md-6 col-lg-3">
                                     <label class="form-label">{{ entry_form.form.project_id.label }}</label>
-                                    {{ entry_form.form.project_id(class="form-select project-select " + ("is-invalid" if entry_form.form.project_id.errors else ""), onchange="loadTasks(this)") }}
+                                    {{ entry_form.form.project_id(class="form-select project-select " + ("is-invalid" if entry_form.form.project_id.errors else "")) }}
                                     {% if entry_form.form.project_id.errors %}
                                     <div class="invalid-feedback">
                                         {% for error in entry_form.form.project_id.errors %}
@@ -170,7 +170,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     // Get elements
     const timeEntriesContainer = document.getElementById('timeEntriesContainer');

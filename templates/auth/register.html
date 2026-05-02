@@ -67,7 +67,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         const passwordField = document.querySelector('input[name="password"]');
         if (passwordField) {

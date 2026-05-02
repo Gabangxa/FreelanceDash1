@@ -251,7 +251,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const filterTiles = document.querySelectorAll('.stat-card-filter');
     const invoiceItems = document.querySelectorAll('.invoice-item');

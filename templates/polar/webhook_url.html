@@ -18,7 +18,7 @@
                     <div class="input-group mb-3">
                         <input type="text" class="form-control" value="{{ webhook_url }}" id="webhookUrl" readonly>
                         <div class="input-group-append">
-                            <button class="btn btn-outline-secondary" type="button" id="copyBtn" onclick="copyWebhookUrl()">
+                            <button class="btn btn-outline-secondary" type="button" id="copyBtn">
                                 <i class="fas fa-copy"></i> Copy
                             </button>
                         </div>
@@ -49,23 +49,26 @@
     </div>
 </div>
 
-<script>
-function copyWebhookUrl() {
-    var copyText = document.getElementById("webhookUrl");
-    copyText.select();
-    copyText.setSelectionRange(0, 99999); /* For mobile devices */
-    document.execCommand("copy");
-    
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
     var copyBtn = document.getElementById("copyBtn");
-    copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
-    copyBtn.classList.remove("btn-outline-secondary");
-    copyBtn.classList.add("btn-success");
-    
-    setTimeout(function() {
-        copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
-        copyBtn.classList.remove("btn-success");
-        copyBtn.classList.add("btn-outline-secondary");
-    }, 2000);
-}
+    if (!copyBtn) return;
+    copyBtn.addEventListener('click', function() {
+        var copyText = document.getElementById("webhookUrl");
+        copyText.select();
+        copyText.setSelectionRange(0, 99999); /* For mobile devices */
+        document.execCommand("copy");
+
+        copyBtn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+        copyBtn.classList.remove("btn-outline-secondary");
+        copyBtn.classList.add("btn-success");
+
+        setTimeout(function() {
+            copyBtn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+            copyBtn.classList.remove("btn-success");
+            copyBtn.classList.add("btn-outline-secondary");
+        }, 2000);
+    });
+});
 </script>
 {% endblock %}

@@ -53,10 +53,9 @@
                             <td>{{ user.projects|length }}</td>
                             <td>{{ user.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
                             <td>
-                                <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=user.id) }}" style="display: inline;">
+                                <form method="POST" action="{{ url_for('admin.toggle_admin', user_id=user.id) }}" style="display: inline;" class="js-confirm-form" data-confirm-message="Are you sure you want to {% if user.is_admin %}remove{% else %}grant{% endif %} admin privileges for {{ user.username }}?">
                                     {% if user.id != current_user.id %}
-                                    <button type="submit" class="btn btn-sm {% if user.is_admin %}btn-warning{% else %}btn-success{% endif %}" 
-                                            onclick="return confirm('Are you sure you want to {% if user.is_admin %}remove{% else %}grant{% endif %} admin privileges for {{ user.username }}?');">
+                                    <button type="submit" class="btn btn-sm {% if user.is_admin %}btn-warning{% else %}btn-success{% endif %}">
                                         <i class="fas {% if user.is_admin %}fa-user-minus{% else %}fa-user-shield{% endif %}"></i>
                                         {% if user.is_admin %}Remove Admin{% else %}Make Admin{% endif %}
                                     </button>
@@ -107,4 +106,20 @@
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Confirm submission for admin-toggle forms (replaces inline onclick=confirm).
+    document.querySelectorAll('form.js-confirm-form').forEach(function(form) {
+        form.addEventListener('submit', function(event) {
+            const message = form.getAttribute('data-confirm-message') || 'Are you sure?';
+            if (!window.confirm(message)) {
+                event.preventDefault();
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

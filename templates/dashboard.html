@@ -274,7 +274,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
     window.timeTrackingChart = null;
     
     function initializeTimeTrackingChart() {

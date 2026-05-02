@@ -174,7 +174,7 @@
     
     {% if current_user.is_authenticated %}
     <!-- Notification functionality -->
-    <script>
+    <script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         // Load notification count and update badge
         function loadNotificationCount() {

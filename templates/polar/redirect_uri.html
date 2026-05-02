@@ -18,7 +18,7 @@
             <div class="alert alert-info mb-3">
                 <div class="input-group">
                     <input type="text" class="form-control" id="redirect-uri" value="{{ redirect_uri }}" readonly>
-                    <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('redirect-uri')">
+                    <button class="btn btn-outline-secondary" type="button" data-copy-target="redirect-uri">
                         <i class="fas fa-copy"></i> Copy
                     </button>
                 </div>
@@ -71,24 +71,28 @@
     </div>
 </div>
 
-<script>
-function copyToClipboard(elementId) {
-    const element = document.getElementById(elementId);
-    element.select();
-    document.execCommand('copy');
-    
-    // Show a temporary success message
-    const button = element.nextElementSibling;
-    const originalText = button.innerHTML;
-    button.innerHTML = '<i class="fas fa-check"></i> Copied!';
-    button.classList.remove('btn-outline-secondary');
-    button.classList.add('btn-success');
-    
-    setTimeout(() => {
-        button.innerHTML = originalText;
-        button.classList.remove('btn-success');
-        button.classList.add('btn-outline-secondary');
-    }, 2000);
-}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('[data-copy-target]').forEach(function(button) {
+        button.addEventListener('click', function() {
+            const elementId = button.getAttribute('data-copy-target');
+            const element = document.getElementById(elementId);
+            if (!element) return;
+            element.select();
+            document.execCommand('copy');
+
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            button.classList.remove('btn-outline-secondary');
+            button.classList.add('btn-success');
+
+            setTimeout(function() {
+                button.innerHTML = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-secondary');
+            }, 2000);
+        });
+    });
+});
 </script>
 {% endblock %}

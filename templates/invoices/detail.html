@@ -21,7 +21,7 @@
                             <label class="form-label mb-0">Status:</label>
                         </div>
                         <div class="col-auto">
-                            <select name="status" class="form-select" onchange="this.form.submit()">
+                            <select name="status" class="form-select js-submit-on-change">
                                 <option value="draft" {% if invoice.status == 'draft' %}selected{% endif %}>Draft</option>
                                 <option value="pending" {% if invoice.status == 'pending' %}selected{% endif %}>Pending</option>
                                 <option value="paid" {% if invoice.status == 'paid' %}selected{% endif %}>Paid</option>
@@ -85,4 +85,21 @@
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit the parent form when a .js-submit-on-change select changes
+    // (replaces inline onchange="this.form.submit()" so we can drop
+    // 'unsafe-inline' from script-src).
+    document.querySelectorAll('select.js-submit-on-change').forEach(function(select) {
+        select.addEventListener('change', function() {
+            if (select.form) {
+                select.form.submit();
+            }
+        });
+    });
+});
+</script>
 {% endblock %}

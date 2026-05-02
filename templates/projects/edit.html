@@ -72,7 +72,7 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         // Format date fields
         const startDateField = document.querySelector('[name="start_date"]');

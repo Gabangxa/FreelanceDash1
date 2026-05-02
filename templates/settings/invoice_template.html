@@ -27,7 +27,7 @@
                                 {% if logo_data_uri %}
                                     <img src="{{ logo_data_uri }}" alt="Company Logo" class="img-thumbnail mb-2" style="max-height: 100px;">
                                     <div class="form-check mb-3">
-                                        <input type="checkbox" class="form-check-input" id="remove_logo" onchange="document.getElementById('remove_logo_hidden').value = this.checked ? '1' : '0';">
+                                        <input type="checkbox" class="form-check-input" id="remove_logo">
                                         <label class="form-check-label" for="remove_logo">Remove logo</label>
                                         {{ form.remove_logo(id="remove_logo_hidden", value="0") }}
                                     </div>
@@ -65,7 +65,7 @@
                                 {{ form.invoice_color_primary.label(class="form-label") }}
                                 <div class="input-group">
                                     <span class="input-group-text">
-                                        <input type="color" id="color_picker_primary" value="{{ form.invoice_color_primary.data or '#3498db' }}" onchange="document.getElementById('invoice_color_primary').value = this.value;">
+                                        <input type="color" id="color_picker_primary" value="{{ form.invoice_color_primary.data or '#3498db' }}">
                                     </span>
                                     {{ form.invoice_color_primary(class="form-control", id="invoice_color_primary") }}
                                 </div>
@@ -81,7 +81,7 @@
                                 {{ form.invoice_color_secondary.label(class="form-label") }}
                                 <div class="input-group">
                                     <span class="input-group-text">
-                                        <input type="color" id="color_picker_secondary" value="{{ form.invoice_color_secondary.data or '#f8f9fa' }}" onchange="document.getElementById('invoice_color_secondary').value = this.value;">
+                                        <input type="color" id="color_picker_secondary" value="{{ form.invoice_color_secondary.data or '#f8f9fa' }}">
                                     </span>
                                     {{ form.invoice_color_secondary(class="form-control", id="invoice_color_secondary") }}
                                 </div>
@@ -175,8 +175,17 @@
 {% endblock %}
 
 {% block scripts %}
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
+    // Wire up the "Remove logo" checkbox -> hidden form field
+    const removeLogoCheckbox = document.getElementById('remove_logo');
+    const removeLogoHidden = document.getElementById('remove_logo_hidden');
+    if (removeLogoCheckbox && removeLogoHidden) {
+        removeLogoCheckbox.addEventListener('change', function() {
+            removeLogoHidden.value = this.checked ? '1' : '0';
+        });
+    }
+
     // Update template preview when template selection changes
     const templateSelect = document.getElementById('invoice_template');
     const templatePreview = document.getElementById('template-preview');

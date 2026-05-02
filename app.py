@@ -168,7 +168,12 @@ app.slow_db_threshold = slow_db_threshold
 def log_request_info():
     # Add timestamp for application-level tracking
     g.request_start_time = time.time()
-    
+
+    # Generate a per-request CSP nonce used by inline <script> tags so we can
+    # drop 'unsafe-inline' from script-src. Stashed on flask.g and exposed to
+    # templates via the context processor below.
+    g.csp_nonce = secrets.token_urlsafe(16)
+
     if app.debug:
         logger.debug('Request Headers: %s', request.headers)
         logger.debug('Request Body: %s', request.get_data())
@@ -178,7 +183,10 @@ def log_request_info():
 def inject_common_variables():
     """Inject common variables into all templates."""
     return {
-        'current_year': datetime.now().year
+        'current_year': datetime.now().year,
+        # Per-request CSP nonce. Templates emit `nonce="{{ csp_nonce }}"` on
+        # inline <script> tags so they execute under the strict script-src.
+        'csp_nonce': getattr(g, 'csp_nonce', '')
     }
 
 @app.after_request
@@ -188,10 +196,21 @@ def add_security_headers_and_log_timing(response):
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'  # Prevents clickjacking
     response.headers['X-XSS-Protection'] = '1; mode=block'  # Browser XSS filtering
     
-    # Add Content Security Policy
+    # Add Content Security Policy.
+    #
+    # Rollout note: script-src enforces a per-request nonce (generated in the
+    # before_request hook above) and no longer allows 'unsafe-inline'. All
+    # inline <script> tags in templates must carry nonce="{{ csp_nonce }}".
+    # style-src still permits 'unsafe-inline' temporarily — there is a parallel
+    # follow-up to audit inline style="" usage and drop that allowance, see
+    # TODO below.
+    nonce = getattr(g, 'csp_nonce', '')
     csp_directives = [
         "default-src 'self'",  # Default policy for fetching content
-        "script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com https://cdnjs.cloudflare.com 'unsafe-inline'",
+        f"script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com https://cdnjs.cloudflare.com 'nonce-{nonce}'",
+        # TODO(csp-styles): drop 'unsafe-inline' from style-src once inline
+        # style="" attributes across templates are audited / refactored. Track
+        # in the CSP hardening follow-up.
         "style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'unsafe-inline'",
         "img-src 'self' data: https://cdnjs.buymeacoffee.com",
         "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",

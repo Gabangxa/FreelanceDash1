@@ -103,7 +103,7 @@
 </div>
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
     document.addEventListener('DOMContentLoaded', function() {
         const projectSelect = document.getElementById('project-select');
         const projectBadge = document.getElementById('project-badge');
