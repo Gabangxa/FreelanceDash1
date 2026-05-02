@@ -346,10 +346,14 @@ def test_refresh_now_returns_true_and_caches_on_success(app):
         return_value=_fake_response({"hooks": fresh}),
     ):
         assert ip_ranges.refresh_now("github") is True
-        # Cache populated with the just-fetched list.
+        # Cache populated with the just-fetched list plus the
+        # fetched-at / origin metadata used by the admin status panel.
         cached = get_storage().cache_get("ip_ranges:github")
         assert cached is not None
-        assert json.loads(cached) == fresh
+        payload = json.loads(cached)
+        assert payload["ranges"] == fresh
+        assert payload["origin"] == ip_ranges.ORIGIN_UPSTREAM
+        assert payload["fetched_at"] is not None
 
 
 # ---------------------------------------------------------------------------
@@ -743,3 +747,139 @@ def test_background_sweeper_is_idempotent(app, monkeypatch):
         assert second is None  # already running
     finally:
         stop_background_sweeper()
+
+
+# ---------------------------------------------------------------------------
+# IP allowlist status (admin status panel feed)
+# ---------------------------------------------------------------------------
+def test_get_status_reports_fallback_when_cache_empty(app):
+    """With no cache entry yet, get_status must report the static
+    fallback list with origin=fallback and cached=False so the admin
+    panel doesn't show a confusingly-empty allowlist before the
+    boot-time refresh has run."""
+    with app.app_context():
+        status = ip_ranges.get_status("github")
+    assert status["source"] == "github"
+    assert status["origin"] == ip_ranges.ORIGIN_FALLBACK
+    assert status["cached"] is False
+    assert status["fetched_at"] is None
+    assert status["range_count"] == len(ip_ranges.FALLBACK_RANGES["github"])
+
+
+def test_get_status_reports_upstream_after_successful_refresh(app):
+    fresh = ["192.0.2.0/24", "203.0.113.5/32"]
+    with app.app_context(), patch.object(
+        ip_ranges.requests,
+        "get",
+        return_value=_fake_response({"hooks": fresh}),
+    ):
+        assert ip_ranges.refresh_now("github") is True
+        status = ip_ranges.get_status("github")
+    assert status["source"] == "github"
+    assert status["origin"] == ip_ranges.ORIGIN_UPSTREAM
+    assert status["cached"] is True
+    assert status["range_count"] == len(fresh)
+    # ISO-8601 UTC timestamp ending in Z (see _utc_now_iso).
+    assert status["fetched_at"] is not None
+    assert status["fetched_at"].endswith("Z")
+
+
+def test_get_status_reports_fallback_origin_after_outage(app):
+    """After ``get_ranges`` has fallen back to the static list during
+    an upstream outage the cached entry must carry origin=fallback so
+    the admin panel can flag the source as unhealthy."""
+    with app.app_context(), patch.object(
+        ip_ranges.requests,
+        "get",
+        side_effect=ConnectionError("upstream down"),
+    ):
+        ip_ranges.get_ranges("github")
+        status = ip_ranges.get_status("github")
+    assert status["origin"] == ip_ranges.ORIGIN_FALLBACK
+    assert status["cached"] is True
+    assert status["range_count"] == len(ip_ranges.FALLBACK_RANGES["github"])
+    assert status["fetched_at"] is not None
+
+
+def test_get_status_for_unknown_source_is_empty(app):
+    with app.app_context():
+        status = ip_ranges.get_status("definitely-not-a-source")
+    assert status["range_count"] == 0
+    assert status["origin"] == ip_ranges.ORIGIN_UNKNOWN
+    assert status["cached"] is False
+
+
+def test_all_statuses_returns_one_entry_per_known_source(app):
+    with app.app_context():
+        statuses = ip_ranges.all_statuses()
+    sources = {s["source"] for s in statuses}
+    assert sources == set(ip_ranges.FALLBACK_RANGES.keys())
+
+
+def test_get_ranges_tolerates_legacy_bare_list_cache(app):
+    """A cache entry primed with the pre-metadata bare-list shape must
+    still serve the ranges (so a rolling deploy doesn't invalidate
+    every cached entry the moment the new code ships)."""
+    with app.app_context():
+        get_storage().cache_set(
+            "ip_ranges:github",
+            json.dumps(["10.0.0.0/8", "172.16.0.0/12"]),
+            3600,
+        )
+        # No HTTP allowed: the legacy list must be honoured directly.
+        with patch.object(
+            ip_ranges.requests, "get", side_effect=AssertionError("no http")
+        ):
+            assert ip_ranges.get_ranges("github") == [
+                "10.0.0.0/8", "172.16.0.0/12"
+            ]
+        # ...and reported with origin=unknown so the admin panel can
+        # surface that the metadata is missing.
+        status = ip_ranges.get_status("github")
+        assert status["origin"] == ip_ranges.ORIGIN_UNKNOWN
+        assert status["range_count"] == 2
+
+
+# ---------------------------------------------------------------------------
+# /webhooks/security/status endpoint surfaces backend + IP allowlist health
+# ---------------------------------------------------------------------------
+def test_security_status_endpoint_includes_backend_and_allowlist(app, client):
+    """The admin status endpoint must expose the active storage backend
+    name and a per-source allowlist health snapshot so operators don't
+    have to grep server logs to know whether the dynamic refresh is
+    healthy."""
+    app.config["WEBHOOK_ADMIN_TOKEN"] = "test-admin-token"
+    fresh = ["192.0.2.0/24"]
+    with app.app_context(), patch.object(
+        ip_ranges.requests,
+        "get",
+        return_value=_fake_response({"hooks": fresh}),
+    ):
+        ip_ranges.refresh_now("github")
+
+    resp = client.get(
+        "/webhooks/security/status",
+        headers={"X-Admin-Token": "test-admin-token"},
+    )
+    assert resp.status_code == 200
+    body = resp.get_json()
+
+    assert body["storage_backend"] == get_storage().name
+    assert isinstance(body["ip_allowlist"], list)
+    by_source = {entry["source"]: entry for entry in body["ip_allowlist"]}
+    assert "github" in by_source and "stripe" in by_source
+
+    gh = by_source["github"]
+    assert gh["origin"] == ip_ranges.ORIGIN_UPSTREAM
+    assert gh["cached"] is True
+    assert gh["range_count"] == len(fresh)
+    assert gh["fetched_at"] is not None
+
+    # Stripe was never refreshed so it must still report the static
+    # fallback rather than crashing or being absent.
+    stripe_entry = by_source["stripe"]
+    assert stripe_entry["origin"] == ip_ranges.ORIGIN_FALLBACK
+    assert stripe_entry["cached"] is False
+    assert stripe_entry["range_count"] == len(
+        ip_ranges.FALLBACK_RANGES["stripe"]
+    )

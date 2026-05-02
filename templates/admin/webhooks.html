@@ -15,6 +15,67 @@
         </div>
     </div>
 
+    {% if security_health is defined %}
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">
+                <i class="fas fa-shield-alt me-2"></i>Webhook Security Health
+            </h5>
+            {% if security_health.storage_backend %}
+            <span class="badge bg-secondary">
+                Storage backend: {{ security_health.storage_backend }}
+            </span>
+            {% endif %}
+        </div>
+        <div class="card-body">
+            {% if security_health.error %}
+            <div class="alert alert-warning mb-0">
+                Security status unavailable: {{ security_health.error }}
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-sm mb-0 align-middle">
+                    <thead>
+                        <tr>
+                            <th>Source</th>
+                            <th class="text-end">CIDRs in allowlist</th>
+                            <th>Origin</th>
+                            <th>Last refreshed (UTC)</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in security_health.ip_allowlist %}
+                        <tr>
+                            <td><strong>{{ entry.source }}</strong></td>
+                            <td class="text-end">{{ entry.range_count }}</td>
+                            <td>
+                                {% if entry.origin == 'upstream' %}
+                                <span class="badge bg-success">upstream</span>
+                                {% elif entry.origin == 'fallback' %}
+                                <span class="badge bg-warning text-dark" title="Upstream unreachable; serving the static hard-coded list">fallback</span>
+                                {% else %}
+                                <span class="badge bg-secondary">{{ entry.origin }}</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if entry.fetched_at %}
+                                {{ entry.fetched_at }}
+                                {% else %}
+                                <span class="text-muted">never (not yet cached)</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="4" class="text-center text-muted">No webhook sources configured.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endif %}
+
     <div class="card">
         <div class="card-header">
             <h5 class="mb-0">Recent Webhook Events ({{ webhook_events.total }})</h5>

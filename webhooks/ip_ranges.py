@@ -13,12 +13,29 @@ doesn't cause an outage.
 Important: ``get_ranges`` consults the cache first and only fetches when
 the cache is empty/expired. A normal webhook request must NOT trigger an
 outbound HTTP call.
+
+Cache payload shape
+-------------------
+The cached value is a JSON object so the admin status panel can surface
+when the list was last refreshed and whether it came from upstream or
+the static fallback::
+
+    {
+        "ranges":    ["140.82.112.0/20", ...],
+        "fetched_at": "2026-05-02T12:34:56Z",   # ISO-8601 UTC
+        "origin":    "upstream" | "fallback"
+    }
+
+A bare list is also tolerated as a legacy/forward-compat shape (older
+caches, hand-primed test fixtures) and is treated as an unknown-origin
+entry so reads never raise just because the metadata is missing.
 """
 from __future__ import annotations
 
 import json
 import logging
-from typing import Callable, Dict, List, Optional
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional
 
 import requests
 
@@ -56,6 +73,10 @@ FALLBACK_RANGES: Dict[str, List[str]] = {
 GITHUB_META_URL = "https://api.github.com/meta"
 STRIPE_IPS_URL = "https://stripe.com/files/ips/ips_webhooks.json"
 HTTP_TIMEOUT_SECONDS = 5
+
+ORIGIN_UPSTREAM = "upstream"
+ORIGIN_FALLBACK = "fallback"
+ORIGIN_UNKNOWN = "unknown"
 
 
 def _fetch_github() -> Optional[List[str]]:
@@ -100,6 +121,53 @@ def _cache_key(source: str) -> str:
     return f"ip_ranges:{source}"
 
 
+def _utc_now_iso() -> str:
+    return datetime.utcnow().replace(microsecond=0).isoformat() + "Z"
+
+
+def _build_payload(ranges: List[str], origin: str) -> str:
+    return json.dumps(
+        {
+            "ranges": list(ranges),
+            "fetched_at": _utc_now_iso(),
+            "origin": origin,
+        }
+    )
+
+
+def _parse_cached(raw: str) -> Optional[Dict[str, Any]]:
+    """Parse a cached payload into a normalised dict.
+
+    Returns ``None`` for malformed/empty payloads so callers refetch.
+    Tolerates the legacy bare-list shape so a cache primed before the
+    metadata was added (or by a hand-rolled test fixture) still serves
+    the ranges without crashing.
+    """
+    try:
+        value = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+
+    if isinstance(value, dict):
+        ranges = value.get("ranges")
+        if not isinstance(ranges, list) or not ranges:
+            return None
+        return {
+            "ranges": [str(v) for v in ranges],
+            "fetched_at": value.get("fetched_at"),
+            "origin": value.get("origin") or ORIGIN_UNKNOWN,
+        }
+
+    if isinstance(value, list) and value:
+        return {
+            "ranges": [str(v) for v in value],
+            "fetched_at": None,
+            "origin": ORIGIN_UNKNOWN,
+        }
+
+    return None
+
+
 def get_ranges(source: str) -> List[str]:
     """Return IP ranges for ``source``, refreshing from upstream if the
     cache is empty/expired. Falls back to the hard-coded list on any
@@ -115,14 +183,12 @@ def get_ranges(source: str) -> List[str]:
         storage = get_storage()
         cached = storage.cache_get(_cache_key(source))
         if cached:
-            try:
-                value = json.loads(cached)
-                if isinstance(value, list) and value:
-                    return [str(v) for v in value]
-            except (ValueError, TypeError):
-                logger.warning(
-                    "Corrupt cached IP ranges for %s; refetching", source
-                )
+            parsed = _parse_cached(cached)
+            if parsed is not None:
+                return list(parsed["ranges"])
+            logger.warning(
+                "Corrupt cached IP ranges for %s; refetching", source
+            )
     except Exception as exc:  # pragma: no cover - defensive
         # Storage outage shouldn't take the webhook receiver offline; we
         # still try to refresh and ultimately fall back to the static list.
@@ -136,7 +202,9 @@ def get_ranges(source: str) -> List[str]:
         if storage is not None:
             try:
                 storage.cache_set(
-                    _cache_key(source), json.dumps(fresh), CACHE_TTL_SECONDS
+                    _cache_key(source),
+                    _build_payload(fresh, ORIGIN_UPSTREAM),
+                    CACHE_TTL_SECONDS,
                 )
             except Exception as exc:  # pragma: no cover - defensive
                 logger.warning(
@@ -157,7 +225,7 @@ def get_ranges(source: str) -> List[str]:
         try:
             storage.cache_set(
                 _cache_key(source),
-                json.dumps(fallback),
+                _build_payload(fallback, ORIGIN_FALLBACK),
                 FALLBACK_CACHE_TTL_SECONDS,
             )
         except Exception as exc:  # pragma: no cover - defensive
@@ -190,10 +258,83 @@ def refresh_now(source: str) -> bool:
         return False
     try:
         get_storage().cache_set(
-            _cache_key(source), json.dumps(fresh), CACHE_TTL_SECONDS
+            _cache_key(source),
+            _build_payload(fresh, ORIGIN_UPSTREAM),
+            CACHE_TTL_SECONDS,
         )
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning(
             "Failed to write cached IP ranges for %s: %s", source, exc
         )
     return True
+
+
+def get_status(source: str) -> Dict[str, Any]:
+    """Return a snapshot of the current allowlist state for ``source``.
+
+    Used by the admin ``/webhooks/security/status`` endpoint so operators
+    can tell at a glance whether the dynamic refresh is healthy without
+    having to grep server logs.
+
+    The returned dict is JSON-serialisable and shaped as::
+
+        {
+            "source":       "github",
+            "range_count":  N,
+            "fetched_at":   "<iso>" | None,
+            "origin":       "upstream" | "fallback" | "unknown",
+            "cached":       True | False,
+        }
+
+    ``cached=False`` means the storage backend has no entry yet (e.g. the
+    boot-time refresh hasn't run yet, or the entry has been evicted) and
+    the values shown reflect the static fallback list. ``cached=True``
+    means the values were read from the shared storage backend.
+
+    Reading status must never raise: if storage itself is unavailable we
+    still return a best-effort snapshot derived from the static fallback
+    so the admin panel keeps rendering during a Redis/DB outage.
+    """
+    if source not in FALLBACK_RANGES:
+        return {
+            "source": source,
+            "range_count": 0,
+            "fetched_at": None,
+            "origin": ORIGIN_UNKNOWN,
+            "cached": False,
+        }
+
+    fallback = FALLBACK_RANGES[source]
+    try:
+        cached = get_storage().cache_get(_cache_key(source))
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning(
+            "Webhook storage unavailable when reading IP range status "
+            "for %s: %s",
+            source, exc,
+        )
+        cached = None
+
+    if cached:
+        parsed = _parse_cached(cached)
+        if parsed is not None:
+            return {
+                "source": source,
+                "range_count": len(parsed["ranges"]),
+                "fetched_at": parsed["fetched_at"],
+                "origin": parsed["origin"],
+                "cached": True,
+            }
+
+    return {
+        "source": source,
+        "range_count": len(fallback),
+        "fetched_at": None,
+        "origin": ORIGIN_FALLBACK,
+        "cached": False,
+    }
+
+
+def all_statuses() -> List[Dict[str, Any]]:
+    """Return ``get_status`` for every known source, in stable order."""
+    return [get_status(source) for source in sorted(FALLBACK_RANGES.keys())]

@@ -12,6 +12,7 @@ from models import WebhookEvent, Notification, User
 from webhooks.services import WebhookProcessor
 from webhooks.security import require_webhook_security, require_admin_auth, WebhookSecurity
 from webhooks.storage import get_storage
+from webhooks import ip_ranges
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -151,6 +152,14 @@ def security_status():
             WebhookEvent.error_message.isnot(None)
         ).count()
         
+        # Per-source dynamic IP allowlist health. Surfaced here so an
+        # operator can tell at a glance whether the GitHub/Stripe range
+        # cache is being served from upstream or from the static
+        # fallback (which happens during an upstream outage), and how
+        # long ago each source was refreshed -- previously the only way
+        # to know was to grep server logs.
+        ip_allowlist = ip_ranges.all_statuses()
+
         # Failed-attempt counters are kept on a 1h rolling window (see
         # WebhookSecurity.FAILED_ATTEMPT_WINDOW_SECONDS), so the metric
         # name reflects that window. Webhook event counts are reported
@@ -163,6 +172,8 @@ def security_status():
                 'failed_events_24h': failed_events,
                 'success_rate': round((recent_events - failed_events) / max(recent_events, 1) * 100, 2)
             },
+            'storage_backend': storage.name,
+            'ip_allowlist': ip_allowlist,
             'sources': list(WebhookSecurity.RATE_LIMITS.keys()),
             'timestamp': datetime.utcnow().isoformat()
         }), 200

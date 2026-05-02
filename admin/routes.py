@@ -220,12 +220,34 @@ def webhooks():
     """View webhook events"""
     page = request.args.get('page', 1, type=int)
     per_page = 50
-    
+
     webhook_events = WebhookEvent.query.order_by(desc(WebhookEvent.created_at)).paginate(
         page=page, per_page=per_page, error_out=False
     )
-    
-    return render_template('admin/webhooks.html', webhook_events=webhook_events)
+
+    # Surface the dynamic IP allowlist + storage backend health in the
+    # admin webhooks page so operators don't have to hit the JSON
+    # endpoint or grep server logs to know whether the GitHub/Stripe
+    # range refresh is healthy. We swallow any exception here so a
+    # transient storage outage can never take the events list offline.
+    security_health = {
+        'storage_backend': None,
+        'ip_allowlist': [],
+        'error': None,
+    }
+    try:
+        from webhooks.storage import get_storage
+        from webhooks import ip_ranges
+        security_health['storage_backend'] = get_storage().name
+        security_health['ip_allowlist'] = ip_ranges.all_statuses()
+    except Exception as exc:  # noqa: BLE001 - status panel must never crash
+        security_health['error'] = str(exc)
+
+    return render_template(
+        'admin/webhooks.html',
+        webhook_events=webhook_events,
+        security_health=security_health,
+    )
 
 
 @bp.route('/system')
