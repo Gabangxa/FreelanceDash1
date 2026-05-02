@@ -1,4 +1,6 @@
+import warnings
 from datetime import datetime, timedelta
+from typing import Optional
 from app import db, login_manager
 from flask_login import UserMixin
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -73,49 +75,96 @@ class User(UserMixin, db.Model):
             logger.warning(f"Error getting subscription: {str(e)}")
             return None
         
-    def has_subscription_feature(self, feature_name):
+    def _resolve_features(self):
+        """Internal: return the active feature dict for this user.
+
+        Pulls from the user's active subscription if one exists, otherwise
+        falls back to the shared free-tier defaults defined in
+        ``polar.features``. Both code paths return the same schema (same
+        keys, same value types) so callers don't have to special-case
+        anonymous/free users.
         """
-        Check if the user has access to a specific feature based on subscription.
-        
-        Args:
-            feature_name: Name of the feature to check (e.g., 'custom_branding', 'team_members')
-            
-        Returns:
-            bool: True if user has access to the feature, False otherwise
-        """
+        from polar.features import free_tier_features
         subscription = self.get_subscription()
-        
-        # If no active subscription, use free tier defaults
         if subscription is None:
-            # Default free tier features
-            free_features = {
-                'clients_limit': 3,
-                'projects_limit': 5,
-                'custom_branding': False,
-                'advanced_reporting': False,
-                'team_members': 0,
-                'api_access': False,
-                'priority_support': False
-            }
-            
-            # For simple boolean features, return the free tier value
-            if feature_name in free_features:
-                return free_features[feature_name]
-                
-            # For numeric limits, return the limit value
-            if feature_name.endswith('_limit'):
-                return free_features.get(feature_name, 0)
-                
+            return free_tier_features()
+        return subscription.get_features()
+
+    def has_feature(self, name: str) -> bool:
+        """Return True iff the user has the boolean feature ``name``.
+
+        Only valid for ``KIND_BOOL`` features (e.g. ``custom_branding``,
+        ``api_access``). Calling this for a numeric limit or list feature
+        returns ``False`` -- use ``get_feature_limit`` for limits.
+        """
+        from polar.features import feature_kind, KIND_BOOL
+        if feature_kind(name) != KIND_BOOL:
+            # Defensive: silently returning False for the wrong kind would
+            # let bugs sneak by. Be explicit about the contract violation.
             return False
-            
-        # Get features from the subscription
-        features = subscription.get_features()
-        
-        # Check if the feature exists in the subscription
-        if feature_name in features:
-            return features[feature_name]
-            
-        # Feature not found
+        value = self._resolve_features().get(name, False)
+        return bool(value)
+
+    def get_feature_limit(self, name: str) -> Optional[int]:
+        """Return the numeric limit for feature ``name``.
+
+        ``None`` means *unlimited* (the caller should skip any cap check).
+        Returns ``0`` for features that legitimately allow zero (e.g.
+        ``team_members`` on free tier). Only valid for ``KIND_LIMIT``
+        features; other kinds raise ValueError so the wrong-method bug is
+        caught early instead of silently misbehaving.
+        """
+        from polar.features import feature_kind, KIND_LIMIT
+        if feature_kind(name) != KIND_LIMIT:
+            raise ValueError(
+                f"get_feature_limit('{name}') called on a non-limit feature. "
+                f"Use has_feature() for boolean flags."
+            )
+        value = self._resolve_features().get(name)
+        # The shared schema already returns None for unlimited, so no
+        # legacy 0->None translation is needed here. We still defensively
+        # coerce 0 through unchanged so a real cap of 0 is preserved.
+        if value is None:
+            return None
+        return int(value)
+
+    def has_subscription_feature(self, feature_name):
+        """DEPRECATED: split into ``has_feature`` and ``get_feature_limit``.
+
+        The original method returned a polymorphic ``bool | int`` value,
+        which is a footgun: ``if user.has_subscription_feature('clients_limit'):``
+        is ``True`` for a cap of 1 but ``False`` for the legacy ``0``-means-
+        unlimited sentinel. Use:
+
+            * ``has_feature(name)``       for boolean flags.
+            * ``get_feature_limit(name)`` for numeric caps (None = unlimited).
+
+        This shim is intentionally bug-compatible with the old method
+        (returns ``0`` for unlimited limits) so any unmigrated caller keeps
+        working until the deprecation warnings have flushed them out.
+        """
+        warnings.warn(
+            "User.has_subscription_feature() is deprecated; use has_feature() "
+            "for boolean flags and get_feature_limit() for numeric limits "
+            "(None = unlimited).",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from polar.features import feature_kind, KIND_BOOL, KIND_LIMIT, KIND_LIST
+        kind = feature_kind(feature_name)
+        if kind == KIND_BOOL:
+            return self.has_feature(feature_name)
+        if kind == KIND_LIMIT:
+            value = self.get_feature_limit(feature_name)
+            # Preserve the old "0 == unlimited" contract for legacy callers.
+            return 0 if value is None else value
+        if kind == KIND_LIST:
+            return self._resolve_features().get(feature_name, [])
+        # Unknown feature: preserve the original method's behavior so a
+        # typoed ``*_limit`` lookup still returns the legacy 0 sentinel
+        # (instead of False, which would compare oddly with `>=`).
+        if feature_name.endswith("_limit"):
+            return 0
         return False
         
     def get_or_create_settings(self):

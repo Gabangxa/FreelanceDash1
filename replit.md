@@ -128,6 +128,29 @@ go through Alembic so production deployments don't silently drop data.
 
 ## Changelog
 
+- May 02, 2026. Feature gating split into `has_feature` + `get_feature_limit`:
+  - New `polar/features.py` is the single source of truth for the feature
+    schema (`FEATURE_SCHEMA` + per-tier overrides). `Subscription.get_features`
+    and the new `User._resolve_features` both delegate to it, so the
+    duplicated free-tier defaults that used to live in both `models.py` and
+    `polar/models.py` are gone.
+  - `User.has_feature(name) -> bool` for boolean flags, and
+    `User.get_feature_limit(name) -> Optional[int]` for numeric caps where
+    `None` means *unlimited*. This replaces the legacy `0 == unlimited`
+    sentinel — which was indistinguishable from a real cap of zero
+    (e.g. `team_members=0` on free tier).
+  - `clients/routes.py` and `projects/routes.py` migrated to
+    `get_feature_limit(...)`, treating `None` as "no cap" and skipping the
+    DB count entirely. Defensive `int(...)` wrappers removed. Fixed a latent
+    bug in `projects/routes.py` where `count >= bool/int` could compare
+    oddly when the old method returned a bool.
+  - `User.has_subscription_feature` kept as a deprecation shim
+    (`DeprecationWarning`, bug-compatible: returns `0` for unlimited
+    limits and `0` for unknown `*_limit` names).
+  - 12 new tests in `tests/test_feature_gating.py` cover free/pro/business
+    tiers, `None` translation, contract-violation guards, schema-key
+    agreement, the shim's deprecation warning, and unknown-limit
+    legacy preservation. Suite is now 35 passing.
 - May 02, 2026. Hardening pass from code review (C1–C4, I8–I10):
   - **WebhookEvent.metadata → event_metadata** (C1): the previous attribute
     name collided with SQLAlchemy's reserved `MetaData` registry on

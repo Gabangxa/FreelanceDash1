@@ -54,39 +54,19 @@ class Subscription(db.Model):
     def get_features(self):
         """
         Get features available for this subscription tier.
-        
+
+        Delegates to the shared schema in ``polar.features`` so both this
+        method and ``User.has_feature`` / ``User.get_feature_limit`` agree
+        on a single source of truth.
+
         Returns:
-            Dictionary of features and their values.
+            Dict[str, Any]: feature_name -> value. Numeric-limit features
+            return ``None`` for *unlimited* (not the legacy ``0`` sentinel),
+            so callers can distinguish "unlimited" from "literally zero"
+            (e.g. ``team_members=0`` on free tier).
         """
-        features = {}
-        
-        # Default features (free tier)
-        features['clients_limit'] = 3
-        features['projects_limit'] = 5
-        features['custom_branding'] = False
-        features['advanced_reporting'] = False
-        features['invoice_templates'] = ['basic']
-        
-        # Professional tier
-        if self.tier_name.lower() == 'professional':
-            features['clients_limit'] = 0  # Unlimited
-            features['projects_limit'] = 0  # Unlimited
-            features['custom_branding'] = True
-            features['advanced_reporting'] = True
-            features['invoice_templates'] = ['basic', 'professional', 'elegant']
-        
-        # Business tier
-        elif self.tier_name.lower() == 'business':
-            features['clients_limit'] = 0  # Unlimited
-            features['projects_limit'] = 0  # Unlimited
-            features['custom_branding'] = True
-            features['advanced_reporting'] = True
-            features['team_members'] = 3
-            features['api_access'] = True
-            features['priority_support'] = True
-            features['invoice_templates'] = ['basic', 'professional', 'elegant', 'premium', 'custom']
-        
-        return features
+        from polar.features import features_for_tier
+        return features_for_tier(self.tier_name)
 
 
 class SubscriptionLog(db.Model):

@@ -195,15 +195,15 @@ def create_project():
     form = ProjectForm()
 
     try:
-        # Check project limit based on subscription tier
-        project_count = Project.query.filter_by(user_id=current_user.id).count()
-        projects_limit = current_user.has_subscription_feature('projects_limit')
-        
-        # If project limit is reached, show a subscription upgrade message
-        if project_count >= projects_limit:
-            flash(f'You have reached the maximum number of projects ({projects_limit}) for your current plan. '
-                  f'Please upgrade your subscription to add more projects.', 'warning')
-            return redirect(url_for('polar.index'))
+        # Check project limit based on subscription tier. ``None`` from
+        # get_feature_limit means *unlimited* -- skip the cap entirely.
+        projects_limit = current_user.get_feature_limit('projects_limit')
+        if projects_limit is not None:
+            project_count = Project.query.filter_by(user_id=current_user.id).count()
+            if project_count >= projects_limit:
+                flash(f'You have reached the maximum number of projects ({projects_limit}) for your current plan. '
+                      f'Please upgrade your subscription to add more projects.', 'warning')
+                return redirect(url_for('polar.index'))
             
         form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
 

@@ -55,21 +55,15 @@ def create_client():
     # On POST: process the form
     if form.validate_on_submit():
         try:
-            # Check client limit based on subscription tier
-            client_count = Client.query.filter_by(user_id=current_user.id).count()
-            
-            # Get clients limit and ensure it's an integer
-            try:
-                clients_limit = current_user.has_subscription_feature('clients_limit')
-                clients_limit = int(clients_limit) if clients_limit is not None else 3
-            except (ValueError, TypeError):
-                clients_limit = 3  # Default if there's an issue
-            
-            # If client limit is reached, show a subscription upgrade message
-            if client_count >= clients_limit:
-                flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '
-                      f'Please upgrade your subscription to add more clients.', 'warning')
-                return redirect(url_for('polar.index'))
+            # Check client limit based on subscription tier. ``None`` from
+            # get_feature_limit means *unlimited* -- skip the cap entirely.
+            clients_limit = current_user.get_feature_limit('clients_limit')
+            if clients_limit is not None:
+                client_count = Client.query.filter_by(user_id=current_user.id).count()
+                if client_count >= clients_limit:
+                    flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '
+                          f'Please upgrade your subscription to add more clients.', 'warning')
+                    return redirect(url_for('polar.index'))
             
             # Create new client
             client = Client(
