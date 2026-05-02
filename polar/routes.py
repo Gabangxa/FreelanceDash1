@@ -133,7 +133,7 @@ def checkout(tier_id):
         return redirect(checkout_session['checkout_url'])
         
     except PolarAPIError as e:
-        logger.error(f"Polar checkout error: {str(e)}")
+        logger.exception("Polar checkout error")
         flash('Unable to create checkout session. Please try again later.', 'danger')
         return redirect(url_for('subscriptions.index'))
 
@@ -231,7 +231,7 @@ def checkout_success():
         return redirect(url_for('subscriptions.index'))
         
     except PolarAPIError as e:
-        logger.error(f"Polar subscription activation error: {str(e)}")
+        logger.exception("Polar subscription activation error")
         db.session.rollback()
         flash('Unable to activate subscription. Please contact support.', 'danger')
         return redirect(url_for('subscriptions.index'))
@@ -571,7 +571,7 @@ def cancel_subscription():
         
         flash('Your subscription has been cancelled', 'success')
     except PolarAPIError as e:
-        logger.error(f"Polar subscription cancellation error: {str(e)}")
+        logger.exception("Polar subscription cancellation error")
         db.session.rollback()
         flash('Unable to cancel subscription. Please try again later.', 'danger')
     

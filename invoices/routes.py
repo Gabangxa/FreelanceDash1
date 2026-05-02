@@ -29,7 +29,7 @@ def list_invoices():
                     .all())
         return render_template('list.html', invoices=invoices)
     except SQLAlchemyError as e:
-        logger.error(f"Database error in list_invoices: {str(e)}")
+        logger.exception("Database error in list_invoices")
         flash('An error occurred while loading invoices. Please try again.', 'danger')
         return render_template('list.html', invoices=[])
 
@@ -119,11 +119,11 @@ def create_invoice():
 
             except IntegrityError as e:
                 db.session.rollback()
-                logger.error(f"Integrity error creating invoice: {str(e)}")
+                logger.exception("Integrity error creating invoice")
                 flash('Error creating invoice: Duplicate invoice number. Please try again.', 'danger')
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Database error creating invoice: {str(e)}")
+                logger.exception("Database error creating invoice")
                 flash('Error creating invoice. Please try again.', 'danger')
 
         return render_template('create.html', form=form)
@@ -156,7 +156,7 @@ def view_invoice(id):
                     flash('Invoice status updated successfully', 'success')
                 except SQLAlchemyError as e:
                     db.session.rollback()
-                    logger.error(f"Error updating invoice status: {str(e)}")
+                    logger.exception("Error updating invoice status")
                     flash('Error updating status. Please try again.', 'danger')
 
             return redirect(url_for('invoices.view_invoice', id=id))
@@ -164,7 +164,7 @@ def view_invoice(id):
         return render_template('detail.html', invoice=invoice)
 
     except SQLAlchemyError as e:
-        logger.error(f"Database error viewing invoice {id}: {str(e)}")
+        logger.exception(f"Database error viewing invoice {id}")
         flash('Error loading invoice data. Please try again.', 'danger')
         return redirect(url_for('invoices.list_invoices'))
 
@@ -182,7 +182,7 @@ def get_projects(client_id):
         projects = Project.query.filter_by(client_id=client_id).all()
         return jsonify([(p.id, p.name) for p in projects])
     except SQLAlchemyError as e:
-        logger.error(f"Error fetching projects for client {client_id}: {str(e)}")
+        logger.exception(f"Error fetching projects for client {client_id}")
         return jsonify({"error": "Could not fetch projects"}), 500
 
 @invoices_bp.route('/<int:id>/pdf')
@@ -508,7 +508,7 @@ def generate_pdf(id):
         return response
 
     except SQLAlchemyError as e:
-        logger.error(f"Error generating PDF for invoice {id}: {str(e)}")
+        logger.exception(f"Error generating PDF for invoice {id}")
         flash('Error generating PDF. Please try again.', 'danger')
         return redirect(url_for('invoices.view_invoice', id=id))
     except (ValueError, OSError, KeyError, TypeError) as e:
@@ -535,7 +535,7 @@ def delete_invoice(id):
         flash('Invoice deleted successfully', 'success')
     except SQLAlchemyError as e:
         db.session.rollback()
-        logger.error(f"Error deleting invoice {id}: {str(e)}")
+        logger.exception(f"Error deleting invoice {id}")
         flash('Error deleting invoice. Please try again.', 'danger')
 
     return redirect(url_for('invoices.list_invoices'))

@@ -138,7 +138,7 @@ def dashboard():
                                 week_form=week_form,
                                 week_display=week_display)
     except SQLAlchemyError as e:
-        logger.error(f"Database error in dashboard: {str(e)}")
+        logger.exception("Database error in dashboard")
         flash('Error loading dashboard data. Please try again.', 'danger')
         today = datetime.utcnow()
         start_of_week = today - timedelta(days=today.weekday())
@@ -192,7 +192,7 @@ def list_projects():
             
         return render_template('projects/list.html', projects=projects)
     except SQLAlchemyError as e:
-        logger.error(f"Database error in list_projects: {str(e)}")
+        logger.exception("Database error in list_projects")
         flash('Error loading projects. Please try again.', 'danger')
         return render_template('projects/list.html', projects=[])
 
@@ -231,7 +231,7 @@ def create_project():
                 return redirect(url_for('projects.list_projects'))
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Error creating project: {str(e)}")
+                logger.exception("Error creating project")
                 flash('Error creating project. Please try again.', 'danger')
 
         return render_template('projects/detail.html', form=form, title='New Project')
@@ -251,7 +251,7 @@ def view_project(id):
         csrf_form = EmptyForm()
         return render_template('projects/detail.html', project=project, today=datetime.utcnow().strftime('%Y-%m-%d'), csrf_form=csrf_form)
     except SQLAlchemyError as e:
-        logger.error(f"Error viewing project {id}: {str(e)}")
+        logger.exception(f"Error viewing project {id}")
         flash('Error loading project details. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -283,7 +283,7 @@ def edit_project(id):
                 return redirect(url_for('projects.view_project', id=project.id))
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Error updating project {id}: {str(e)}")
+                logger.exception(f"Error updating project {id}")
                 flash('Error updating project. Please try again.', 'danger')
         
         return render_template('projects/edit.html', form=form, project=project)
@@ -311,7 +311,7 @@ def toggle_project_complete(id):
         return redirect(url_for('projects.view_project', id=id))
     except SQLAlchemyError as e:
         db.session.rollback()
-        logger.error(f"Error toggling project status {id}: {str(e)}")
+        logger.exception(f"Error toggling project status {id}")
         flash('Error updating project status. Please try again.', 'danger')
         return redirect(url_for('projects.view_project', id=id))
 
@@ -334,7 +334,7 @@ def delete_project(id):
         return redirect(url_for('projects.list_projects'))
     except SQLAlchemyError as e:
         db.session.rollback()
-        logger.error(f"Error deleting project {id}: {str(e)}")
+        logger.exception(f"Error deleting project {id}")
         flash('Error deleting project. Please try again.', 'danger')
         return redirect(url_for('projects.view_project', id=id))
     except (KeyError, ValueError) as e:
@@ -385,7 +385,7 @@ def create_task():
                 return redirect(url_for('projects.view_project', id=form.project_id.data))
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Error creating task: {str(e)}")
+                logger.exception("Error creating task")
                 flash('Error creating task. Please try again.', 'danger')
 
         # Pass the current project as context if it exists
@@ -447,7 +447,7 @@ def view_task(id):
         )
         
     except SQLAlchemyError as e:
-        logger.error(f"Error viewing task {id}: {str(e)}")
+        logger.exception(f"Error viewing task {id}")
         flash('Error loading task details. Please try again.', 'danger')
         return redirect(url_for('projects.view_project', id=task.project_id))
 
@@ -472,7 +472,7 @@ def delete_task(id):
             flash('Task deleted successfully', 'success')
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error deleting task {id}: {str(e)}")
+            logger.exception(f"Database error deleting task {id}")
             flash('Error deleting task. Please try again.', 'danger')
             
         return redirect(url_for('projects.view_project', id=project_id))
@@ -534,12 +534,12 @@ def edit_task(id):
                 return redirect(url_for('projects.view_project', id=task.project_id))
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Error updating task {id}: {str(e)}")
+                logger.exception(f"Error updating task {id}")
                 flash('Error updating task. Please try again.', 'danger')
 
         return render_template('projects/task_form.html', form=form, task=task, title='Edit Task')
     except SQLAlchemyError as e:
-        logger.error(f"Error loading task {id}: {str(e)}")
+        logger.exception(f"Error loading task {id}")
         flash('Error loading task. Please try again.', 'danger')
         return redirect(url_for('projects.list_projects'))
 
@@ -645,7 +645,7 @@ def create_time_entry():
             flash('Time entry recorded successfully', 'success')
         except SQLAlchemyError as e:
             db.session.rollback()
-            proj_logger.error(f"Error creating time entry: {str(e)}")
+            proj_logger.exception("Error creating time entry")
             flash('Error recording time entry. Please try again.', 'danger')
 
         return redirect(url_for('projects.view_project', id=project.id))
@@ -728,7 +728,7 @@ def edit_time_entry(id):
                 
             except SQLAlchemyError as e:
                 db.session.rollback()
-                proj_logger.error(f"Error updating time entry {id}: {str(e)}")
+                proj_logger.exception(f"Error updating time entry {id}")
                 flash('Error updating time entry. Please try again.', 'danger')
         
         # Populate form with existing data
@@ -1029,7 +1029,7 @@ def batch_time_entries():
                         # Calculate end time by adding hours
                         end_time = start_time + timedelta(minutes=duration_minutes)
                     except (ValueError, TypeError) as e:
-                        logger.error(f"Error processing date/time: {str(e)}")
+                        logger.exception("Error processing date/time")
                         error_entries.append(f"Entry {entry_number}: Invalid date or hours format")
                         entry_error = True
                         continue
@@ -1091,7 +1091,7 @@ def batch_time_entries():
                     except SQLAlchemyError as e:
                         # Roll back the transaction if any error occurs
                         db.session.rollback()
-                        logger.error(f"Database error saving batch time entries: {str(e)}")
+                        logger.exception("Database error saving batch time entries")
                         flash('Error saving time entries. Please try again.', 'danger')
                 else:
                     # No valid entries to save

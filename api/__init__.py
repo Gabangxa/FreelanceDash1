@@ -78,7 +78,7 @@ def api_method_not_allowed(e):
 @api_bp.errorhandler(500)
 def api_server_error(e):
     """Handle 500 errors in the API with a proper JSON response."""
-    logger.error(f"API Server Error: {str(e)}")
+    logger.exception("API Server Error")
     return jsonify({
         'status': 'error',
         'message': 'An unexpected error occurred',

@@ -83,7 +83,7 @@ class PolarAPI:
             raise PolarAPIError("Could not connect to Polar API. Please check your internet connection.")
             
         except requests.exceptions.RequestException as e:
-            logger.error(f"Polar API error: {str(e)}")
+            logger.exception("Polar API error")
             
             # Try to extract more details from the response
             if hasattr(e, 'response') and e.response is not None:
@@ -277,7 +277,7 @@ def get_polar_api():
             _polar_api_instance = PolarAPI()
         except ValueError as e:
             # Convert ValueError to PolarAPIError for consistent error handling
-            logger.error(f"Failed to initialize Polar API client: {str(e)}")
+            logger.exception("Failed to initialize Polar API client")
             raise PolarAPIError(f"Failed to initialize Polar API: {str(e)}")
             
     return _polar_api_instance

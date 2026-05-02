@@ -105,7 +105,7 @@ class WebhookSecurity:
             )
             
         except (ipaddress.AddressValueError, ValueError) as e:
-            logger.error(f"Invalid IP address format: {client_ip} - {str(e)}")
+            logger.exception(f"Invalid IP address format: {client_ip}")
             raise WebhookSecurityError("Invalid IP address format", 400)
     
     @staticmethod

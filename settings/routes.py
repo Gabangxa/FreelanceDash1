@@ -39,7 +39,7 @@ def company_settings():
             return redirect(url_for('settings.company_settings'))
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error updating company settings: {str(e)}")
+            logger.exception("Database error updating company settings")
             flash('Error updating company settings. Please try again.', 'danger')
     
     # Populate form with existing data
@@ -110,7 +110,7 @@ def invoice_template():
             return redirect(url_for('settings.invoice_template'))
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error updating invoice template settings: {str(e)}")
+            logger.exception("Database error updating invoice template settings")
             flash('Error updating invoice template settings. Please try again.', 'danger')
     
     # Populate form with existing data
@@ -192,7 +192,7 @@ def notification_settings():
             return redirect(url_for('settings.notification_settings'))
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error updating notification settings: {str(e)}")
+            logger.exception("Database error updating notification settings")
             flash('Error updating notification settings. Please try again.', 'danger')
     
     # Populate form with existing data
@@ -260,7 +260,7 @@ def deadline_alert_settings():
             return redirect(url_for('settings.deadline_alert_settings'))
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error updating deadline alert settings: {str(e)}")
+            logger.exception("Database error updating deadline alert settings")
             flash('Error updating deadline alert settings. Please try again.', 'danger')
     
     if request.method == 'GET':
@@ -759,7 +759,7 @@ def delete_account():
             
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Error deleting account: {str(e)}")
+            logger.exception("Error deleting account")
             flash('An error occurred while trying to delete your account. Please try again.', 'danger')
     
     return render_template('delete_account.html', form=form)

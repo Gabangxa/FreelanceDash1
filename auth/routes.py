@@ -43,7 +43,7 @@ def login():
             return redirect(next_page)
 
         except SQLAlchemyError as e:
-            logger.error(f"Database error during login: {str(e)}")
+            logger.exception("Database error during login")
             db.session.rollback()
             flash('A system error occurred. Please try again later.', 'danger')
 
@@ -100,7 +100,7 @@ def register():
 
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error during registration: {str(e)}")
+            logger.exception("Database error during registration")
             flash('An error occurred during registration. Please try again.', 'danger')
 
     return render_template('auth/register.html', title='Register', form=form)
@@ -147,7 +147,7 @@ def reset_password_request():
             
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error during password reset request: {str(e)}")
+            logger.exception("Database error during password reset request")
             flash('A system error occurred. Please try again later.', 'danger')
             
     return render_template('auth/reset_password_request.html', title='Reset Password', form=form)
@@ -172,7 +172,7 @@ def reset_password(token):
             return redirect(url_for('auth.reset_password_request'))
             
     except SQLAlchemyError as e:
-        logger.error(f"Database error during password reset token verification: {str(e)}")
+        logger.exception("Database error during password reset token verification")
         flash('A system error occurred. Please try again later.', 'danger')
         return redirect(url_for('auth.reset_password_request'))
     
@@ -192,7 +192,7 @@ def reset_password(token):
             
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error during password reset: {str(e)}")
+            logger.exception("Database error during password reset")
             flash('A system error occurred. Please try again later.', 'danger')
     
     return render_template('auth/reset_password.html', title='Reset Password', form=form, token=token)

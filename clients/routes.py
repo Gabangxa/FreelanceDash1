@@ -22,7 +22,7 @@ def view_client(id):
         
         return render_template('clients/detail.html', client=client, projects=projects)
     except SQLAlchemyError as e:
-        logger.error(f"Error viewing client {id}: {str(e)}")
+        logger.exception(f"Error viewing client {id}")
         flash('Error loading client details. Please try again.', 'danger')
         return redirect(url_for('clients.list_clients'))
 
@@ -35,7 +35,7 @@ def list_clients():
         clients = Client.query.filter_by(user_id=current_user.id).all()
         return render_template('clients/list.html', clients=clients)
     except SQLAlchemyError as e:
-        logger.error(f"Database error in list_clients: {str(e)}")
+        logger.exception("Database error in list_clients")
         flash('Error loading clients. Please try again.', 'danger')
         return render_template('clients/list.html', clients=[])
 
@@ -148,12 +148,12 @@ def edit_client(id):
                 return redirect(url_for('clients.list_clients'))
             except SQLAlchemyError as e:
                 db.session.rollback()
-                logger.error(f"Database error updating client {id}: {str(e)}")
+                logger.exception(f"Database error updating client {id}")
                 flash('Error updating client. Please try again.', 'danger')
 
         return render_template('clients/create.html', form=form, client=client)
     except SQLAlchemyError as e:
-        logger.error(f"Error loading client {id}: {str(e)}")
+        logger.exception(f"Error loading client {id}")
         flash('Error loading client details. Please try again.', 'danger')
         return redirect(url_for('clients.list_clients'))
 
@@ -180,7 +180,7 @@ def delete_client(id):
             flash('Client deleted successfully', 'success')
         except SQLAlchemyError as e:
             db.session.rollback()
-            logger.error(f"Database error deleting client {id}: {str(e)}")
+            logger.exception(f"Database error deleting client {id}")
             flash('Error deleting client. Please try again.', 'danger')
 
         return redirect(url_for('clients.list_clients'))
