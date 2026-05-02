@@ -100,6 +100,28 @@ unset NATS_URL
 That's it. Storage falls back to `REDIS_URL` if set, otherwise the DB
 tables. Publishers go quiet. No code changes, no migration to revert.
 
+## Reconnect behaviour (operator note)
+
+`nats-py`'s `max_reconnect_attempts=-1` / `reconnect_time_wait=2`
+options only kick in **after** a successful initial connection. They
+handle dropped connections, not a failed boot.
+
+If NATS is unreachable at app startup, `nats_client.init()` logs the
+failure, leaves the module in the `error` state (visible on the admin
+panel), and `events.publish` quietly returns `False` for the lifetime
+of that worker process. **A process restart is required** to retry the
+initial connect.
+
+Practically that means: if you flip on `NATS_URL` and the server is
+down, fix the server, then `gunicorn`-reload (or kill the workers and
+let the supervisor respawn them). Don't expect the app to silently
+self-heal -- the admin panel is the source of truth for the current
+state.
+
+Storage backend reads/writes against an unreachable NATS server fail
+fast and abort boot (same fail-fast policy as Redis); only the
+fire-and-log publisher is best-effort.
+
 ## Out of scope (Phase 1 territory)
 
 * Long-lived subscriber processes (need a Reserved VM, not autoscale)
