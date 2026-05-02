@@ -252,7 +252,23 @@ class WebhookProcessor:
             
             db.session.add(notification)
             db.session.commit()
-            
+
+            # Bus event: publish-and-forget so future services can
+            # subscribe (delivery worker, analytics, audit). No PII --
+            # only IDs and metadata. See docs/nats.md for the contract.
+            import events as _events
+            _events.publish(
+                "notification.created",
+                user_id=user_id,
+                payload={
+                    "notification_id": notification.id,
+                    "notification_type": notification_type,
+                    "priority": priority,
+                    "source": "webhook",
+                    "webhook_event_id": webhook_event.id,
+                },
+            )
+
             # Deliver the notification
             from notifications.services import NotificationDeliveryService
             delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
@@ -301,7 +317,25 @@ class WebhookProcessor:
             
             # Get the notifications we just created for delivery
             recent_notifications = Notification.query.filter_by(webhook_event_id=webhook_event.id).all()
-            
+
+            # Bus event per created notification. Publish before delivery
+            # so the bus state mirrors the DB state even if delivery
+            # fails. Failures inside events.publish are swallowed and
+            # logged -- never propagate to the request.
+            import events as _events
+            for notification in recent_notifications:
+                _events.publish(
+                    "notification.created",
+                    user_id=notification.user_id,
+                    payload={
+                        "notification_id": notification.id,
+                        "notification_type": notification.notification_type,
+                        "priority": notification.priority,
+                        "source": "webhook-system",
+                        "webhook_event_id": webhook_event.id,
+                    },
+                )
+
             for notification in recent_notifications:
                 delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
                 if any(r.get('status') == 'success' for r in delivery_result.values() if isinstance(r, dict)):

@@ -134,6 +134,48 @@ go through Alembic so production deployments don't silently drop data.
 
 ## Changelog
 
+- May 02, 2026. NATS Phase 0 — message-bus foundation (no subscribers yet):
+  - **`nats_client.py`.** Owns one asyncio event loop in a daemon thread
+    that bridges sync Flask handlers to async `nats-py`. Module is a
+    pure no-op when `NATS_URL` is unset (existing dev / test
+    environments are unaffected, no `nats-py` server required). When
+    `NATS_URL` *is* set, `init()` connects once at app startup and
+    `publish(subject, payload)` is fire-and-log: failures are caught
+    and a wedged NATS server can never break webhook ingest, invoice
+    creation, or notification delivery. Exposes a `_SyncKV` wrapper
+    for JetStream KV buckets so the storage layer can use the bus
+    without touching asyncio.
+  - **`events.py`.** Standard envelope (`v`, `id`, `type`, `user_id`,
+    `timestamp`, `payload`) under the `app.<entity>.<verb>` subject
+    convention. Two publishers wired up: `webhook.received` (in
+    `webhooks/routes.py` after the event commits) and
+    `notification.created` (in `webhooks/services.py` for both the
+    user-targeted and system-wide creation paths). No PII on the bus —
+    IDs and metadata only.
+  - **`JetStreamKVStorage` (third storage backend).** Sits behind the
+    existing `WebhookStorageBackend` ABC alongside Redis and the DB
+    fallback. Three buckets (`webhook_rate_limit`,
+    `webhook_failed_attempt`, `webhook_cache`) with per-entry expiry
+    encoded inline (KV doesn't have sorted sets, so we serialise a
+    JSON list of timestamps and use `last_revision` CAS with a
+    bounded retry budget for atomic-ish increments). `get_storage()`
+    selection is now `NATS_URL > REDIS_URL > DB`, with the same
+    fail-fast policy as Redis: a configured-but-unreachable backend
+    aborts boot rather than silently degrading.
+  - **Operator visibility.** Admin → Webhooks page now surfaces NATS
+    state (connected / connecting / error / disabled), the configured
+    server URL, and the timestamp of the last successfully-published
+    event. The status panel never crashes the events list.
+  - **Tests.** 12 new unit tests pinning the no-op stub semantics and
+    envelope shape (`tests/test_nats_client.py`). Storage contract
+    extracted into `tests/storage_contract.py` so the same behaviour
+    suite can run against any backend; live JetStream contract tests
+    in `tests/test_storage_contract_nats.py` skip cleanly unless
+    `NATS_TEST_URL` is set. Existing 174 tests stay green.
+  - **Docs.** `docs/nats.md` covers Synadia hosting choice, env vars
+    (`NATS_URL`, `NATS_CREDS_PATH`, `NATS_CLIENT_NAME`), subject
+    naming, the envelope contract, local-dev `nats-server -js`
+    commands, and the one-line rollback (`unset NATS_URL`).
 - May 02, 2026. Code-review fixes — money precision, IDOR hardening,
   narrowed exception handling:
   - **Money to Decimal end-to-end.** `Invoice.amount`,

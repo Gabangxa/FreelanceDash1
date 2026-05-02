@@ -13,6 +13,7 @@ from webhooks.services import WebhookProcessor
 from webhooks.security import require_webhook_security, require_admin_auth, WebhookSecurity
 from webhooks.storage import get_storage
 from webhooks import ip_ranges
+import events
 
 # Setup logger
 logger = logging.getLogger(__name__)
@@ -65,7 +66,22 @@ def receive_webhook(source):
         
         db.session.add(webhook_event)
         db.session.commit()  # Commit the event first
-        
+
+        # Publish a fire-and-forget bus event so future subscriber
+        # services (the planned notification-delivery worker, audit
+        # log, etc.) can react without us re-plumbing this call site.
+        # No PII on the bus -- just IDs, source, event type. Failures
+        # are swallowed inside events.publish so a wedged NATS
+        # connection can't break webhook ingest.
+        events.publish(
+            "webhook.received",
+            payload={
+                "webhook_id": webhook_event.id,
+                "source": webhook_event.source,
+                "event_type": webhook_event.event_type,
+            },
+        )
+
         # Process webhook (ideally this would be queued to a background job)
         # For now, we process synchronously but commit the event first for safety
         try:

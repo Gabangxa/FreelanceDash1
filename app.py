@@ -427,6 +427,21 @@ with app.app_context():
     except Exception:  # noqa: BLE001 - top-level safety net for sweeper start  # pragma: no cover - thread start shouldn't fail here
         logger.exception("Webhook storage background sweeper failed to start")
 
+    # Bring up the NATS client (if NATS_URL is set). This is a no-op
+    # when NATS_URL is unset, so dev / test environments are unaffected.
+    # init() never raises -- a wedged NATS server must not prevent boot.
+    # Skip during tests so the asyncio loop thread doesn't try to phone
+    # home over the network from CI.
+    if os.environ.get("FLASK_ENV", "").lower() != "test":
+        try:
+            import nats_client as _nats_client
+            _nats_client.init()
+        except Exception:  # noqa: BLE001 - top-level safety net
+            logger.exception(
+                "NATS client init raised (publishers will no-op until "
+                "the connection recovers)"
+            )
+
     if (
         os.environ.get("FLASK_ENV", "").lower() != "test"
         and os.environ.get("WEBHOOK_IP_REFRESH_ON_BOOT", "1").lower()

@@ -33,6 +33,42 @@
                 Security status unavailable: {{ security_health.error }}
             </div>
             {% else %}
+            {% if security_health.nats %}
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">NATS state</div>
+                        {% if security_health.nats.state == 'connected' %}
+                        <span class="badge bg-success">connected</span>
+                        {% elif security_health.nats.state == 'connecting' %}
+                        <span class="badge bg-info">connecting</span>
+                        {% elif security_health.nats.state == 'error' %}
+                        <span class="badge bg-danger" title="{{ security_health.nats.last_error }}">error</span>
+                        {% elif security_health.nats.state == 'disabled' %}
+                        <span class="badge bg-secondary" title="NATS_URL not set; bus features are no-ops">disabled</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ security_health.nats.state }}</span>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">NATS server</div>
+                        <code class="small">{{ security_health.nats.url or '—' }}</code>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="text-muted small">Last published event (UTC)</div>
+                        {% if security_health.nats.last_event_at %}
+                        <span>{{ security_health.nats.last_event_at }}</span>
+                        {% else %}
+                        <span class="text-muted">no events published yet</span>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            {% endif %}
             <div class="table-responsive">
                 <table class="table table-sm mb-0 align-middle">
                     <thead>

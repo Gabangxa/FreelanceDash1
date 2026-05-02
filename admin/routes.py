@@ -237,13 +237,19 @@ def webhooks():
     security_health = {
         'storage_backend': None,
         'ip_allowlist': [],
+        'nats': None,
         'error': None,
     }
     try:
         from webhooks.storage import get_storage
         from webhooks import ip_ranges
+        import nats_client
         security_health['storage_backend'] = get_storage().name
         security_health['ip_allowlist'] = ip_ranges.all_statuses()
+        # NATS connection state, last published event timestamp, etc.
+        # Always present (no-op stub when NATS_URL is unset) so the
+        # template can render unconditionally.
+        security_health['nats'] = nats_client.state()
     except Exception as exc:  # noqa: BLE001 - status panel must never crash
         security_health['error'] = str(exc)
 

@@ -46,3 +46,16 @@ def db_session(app):
     with app.app_context():
         yield db.session
         db.session.rollback()
+
+
+@pytest.fixture(autouse=True)
+def _reset_nats_client_state():
+    """Make sure no test leaves the nats_client module in a partially-
+    connected state. The module is a no-op stub under FLASK_ENV=test
+    (NATS_URL is unset), so reset is essentially free, but doing it
+    eagerly between tests stops one test's monkeypatched NATS_URL from
+    polluting the next."""
+    import nats_client
+    nats_client.reset_for_tests()
+    yield
+    nats_client.reset_for_tests()

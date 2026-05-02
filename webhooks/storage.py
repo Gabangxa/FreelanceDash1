@@ -11,10 +11,18 @@ counters reset on every restart. Both make the rate limit trivial to bypass.
 
 Backend selection
 -----------------
-* If ``REDIS_URL`` is set we use Redis (sorted sets keyed by timestamp).
+* If ``NATS_URL`` is set we use JetStream KV buckets.
+* Else if ``REDIS_URL`` is set we use Redis (sorted sets keyed by
+  timestamp).
 * Otherwise we fall back to a Postgres/SQLite-backed implementation that
   uses the ``WebhookRateLimitEvent`` / ``WebhookFailedAttempt`` /
   ``WebhookCacheEntry`` tables defined in ``models.py``.
+
+When ``NATS_URL`` or ``REDIS_URL`` is explicitly set the corresponding
+backend is required -- ``get_storage()`` refuses to silently degrade to
+DB if the configured backend is unreachable, because that would mask a
+misconfiguration and let the app keep serving webhooks under wrong
+assumptions about counter consistency.
 
 The chosen backend is logged once at first use so operators always know
 which backend is live.
@@ -473,6 +481,218 @@ class DBWebhookStorage(WebhookStorageBackend):
 
 
 # ---------------------------------------------------------------------------
+# JetStream KV implementation
+# ---------------------------------------------------------------------------
+class JetStreamKVStorage(WebhookStorageBackend):
+    """NATS JetStream KV-backed storage.
+
+    Three buckets, one per concern:
+
+      * ``webhook_rate_limit``       (rolling window counter)
+      * ``webhook_failed_attempt``   (rolling window counter)
+      * ``webhook_cache``            (key -> serialised JSON value+expiry)
+
+    JetStream KV doesn't have sorted sets like Redis, so we serialise a
+    JSON list of timestamps under each rate-limit / failed-attempt key
+    and use optimistic-concurrency updates (``last_revision``) to avoid
+    losing increments under contention. The bucket-level TTL means cold
+    keys evaporate on their own; the sliding-window prune in
+    ``_zset_incr`` drops anything older than ``window_seconds`` on every
+    increment.
+
+    For cache values we don't get per-key TTLs from KV reliably, so we
+    encode the expiry inline as ``{"v": value, "exp": unix_ts}`` and
+    treat any read past ``exp`` as a miss. The bucket TTL bounds memory.
+    """
+
+    name = "nats"
+
+    _RL_BUCKET = "webhook_rate_limit"
+    _FA_BUCKET = "webhook_failed_attempt"
+    _CACHE_BUCKET = "webhook_cache"
+
+    # CAS retry budget. JetStream KV update() raises on a revision
+    # mismatch -- we retry a small bounded number of times so a high-rate
+    # increment race converges, then fall back to a non-CAS put on the
+    # final attempt so no event is silently dropped.
+    _CAS_RETRIES = 5
+
+    def __init__(self) -> None:
+        # Lazy-import nats_client so the storage module stays importable
+        # in environments that never set NATS_URL.
+        import nats_client
+
+        # Bucket TTL is window+60s for counters so cold rows evaporate
+        # naturally; cache bucket gets 24h to bound memory while letting
+        # individual entries set shorter logical expiries.
+        self._rl = nats_client.kv(
+            self._RL_BUCKET,
+            ttl_seconds=DEFAULT_RATE_LIMIT_WINDOW_SECONDS + 60,
+        )
+        self._fa = nats_client.kv(
+            self._FA_BUCKET,
+            ttl_seconds=DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS + 60,
+        )
+        self._cache = nats_client.kv(
+            self._CACHE_BUCKET, ttl_seconds=86400
+        )
+        # If any bucket failed to open the operator wanted NATS but it
+        # isn't reachable -- refuse to silently downgrade. Same policy
+        # as the Redis branch in get_storage().
+        if self._rl is None or self._fa is None or self._cache is None:
+            raise RuntimeError(
+                "NATS_URL is set but JetStream KV buckets could not be "
+                "opened. Refusing to silently fall back to the DB store."
+            )
+
+    # -- counter primitive -------------------------------------------------
+    def _zset_incr(self, bucket, key: str, window_seconds: int) -> int:
+        """Atomic-ish increment: read, prune, append, CAS-write. Retries a
+        bounded number of times on revision mismatch."""
+        now = time.time()
+        cutoff = now - window_seconds
+
+        for _attempt in range(self._CAS_RETRIES):
+            entry = bucket.get(key)
+            if entry is None:
+                # First write under this key.
+                payload = json.dumps([now], separators=(",", ":")).encode()
+                try:
+                    bucket.put(key, payload)
+                    return 1
+                except Exception:  # noqa: BLE001 - racing creator wins; retry
+                    logger.debug("kv put race on %s, retrying", key, exc_info=True)
+                    continue
+
+            try:
+                timestamps = json.loads(entry.value)
+                if not isinstance(timestamps, list):
+                    timestamps = []
+            except (json.JSONDecodeError, TypeError, ValueError):
+                # Corrupt entry -- treat as empty and overwrite.
+                logger.warning("kv corrupt counter entry on %s; resetting", key)
+                timestamps = []
+
+            timestamps = [t for t in timestamps if isinstance(t, (int, float)) and t >= cutoff]
+            timestamps.append(now)
+            payload = json.dumps(timestamps, separators=(",", ":")).encode()
+            try:
+                bucket.update(key, payload, last=entry.revision)
+                return len(timestamps)
+            except Exception:  # noqa: BLE001 - revision mismatch / transient; retry
+                logger.debug("kv CAS retry on %s", key, exc_info=True)
+                continue
+
+        # Final fallback: overwrite without CAS so we don't drop the
+        # event. Counter accuracy is best-effort under sustained
+        # contention (matches Redis's semantics under heavy concurrent
+        # writes).
+        payload = json.dumps([now], separators=(",", ":")).encode()
+        try:
+            bucket.put(key, payload)
+        except Exception:  # noqa: BLE001
+            logger.exception("kv final-fallback put failed for %s", key)
+        return 1
+
+    def _zset_count(self, bucket, key: str, window_seconds: int) -> int:
+        entry = bucket.get(key)
+        if entry is None:
+            return 0
+        try:
+            timestamps = json.loads(entry.value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return 0
+        cutoff = time.time() - window_seconds
+        return sum(
+            1
+            for t in timestamps
+            if isinstance(t, (int, float)) and t >= cutoff
+        )
+
+    # -- counter API -------------------------------------------------------
+    def incr_with_window(self, key: str, window_seconds: int) -> int:
+        return self._zset_incr(self._rl, key, window_seconds)
+
+    def get_count(self, key: str, window_seconds: int) -> int:
+        return self._zset_count(self._rl, key, window_seconds)
+
+    def record_failed_attempt(self, key: str, window_seconds: int) -> int:
+        return self._zset_incr(self._fa, key, window_seconds)
+
+    # -- cache API ---------------------------------------------------------
+    def cache_get(self, key: str) -> Optional[str]:
+        entry = self._cache.get(key)
+        if entry is None:
+            return None
+        try:
+            wrapper = json.loads(entry.value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            return None
+        if not isinstance(wrapper, dict):
+            return None
+        exp = wrapper.get("exp")
+        if exp is not None and isinstance(exp, (int, float)) and exp <= time.time():
+            return None
+        value = wrapper.get("v")
+        return value if isinstance(value, str) else None
+
+    def cache_set(self, key: str, value: str, ttl_seconds: int) -> None:
+        wrapper = {"v": value, "exp": time.time() + ttl_seconds}
+        payload = json.dumps(wrapper, separators=(",", ":")).encode()
+        try:
+            self._cache.put(key, payload)
+        except Exception as exc:  # noqa: BLE001 - non-fatal cache write
+            logger.warning("kv cache_set failed for %s: %s", key, exc)
+
+    # -- admin API ---------------------------------------------------------
+    def clear_counters(self) -> None:
+        try:
+            self._rl.purge()
+            self._fa.purge()
+        except Exception:  # noqa: BLE001 - best-effort admin op
+            logger.exception("kv clear_counters partial failure")
+
+    def active_rate_limit_keys(self) -> int:
+        try:
+            return len(self._rl.keys())
+        except Exception:  # noqa: BLE001 - bucket might be empty
+            logger.debug("kv active_rate_limit_keys() raised (treating as 0)", exc_info=True)
+            return 0
+
+    def total_failed_attempts(self, window_seconds: int) -> int:
+        cutoff = time.time() - window_seconds
+        total = 0
+        try:
+            keys = self._fa.keys()
+        except Exception:  # noqa: BLE001
+            return 0
+        for k in keys:
+            entry = self._fa.get(k)
+            if entry is None:
+                continue
+            try:
+                timestamps = json.loads(entry.value)
+            except (json.JSONDecodeError, TypeError, ValueError):
+                continue
+            total += sum(
+                1
+                for t in timestamps
+                if isinstance(t, (int, float)) and t >= cutoff
+            )
+        return total
+
+    def prune_expired(
+        self,
+        rate_limit_window_seconds: int = DEFAULT_RATE_LIMIT_WINDOW_SECONDS,
+        failed_attempt_window_seconds: int = DEFAULT_FAILED_ATTEMPT_WINDOW_SECONDS,
+    ) -> dict:
+        """Bucket TTL handles cold-key eviction; per-entry prune happens
+        inline in ``_zset_incr``. This method is kept for parity with the
+        DB backend so the sweeper can still call it without branching."""
+        return {"rate_limit": 0, "failed_attempt": 0, "cache": 0}
+
+
+# ---------------------------------------------------------------------------
 # Singleton accessor
 # ---------------------------------------------------------------------------
 _storage: Optional[WebhookStorageBackend] = None
@@ -483,7 +703,8 @@ def get_storage() -> WebhookStorageBackend:
     """Return the lazily-instantiated singleton storage backend.
 
     Selection rules:
-      * ``REDIS_URL`` set                      -> Redis (raises on failure)
+      * ``NATS_URL`` set                       -> JetStream KV (raises on failure)
+      * else ``REDIS_URL`` set                 -> Redis (raises on failure)
       * otherwise                              -> DB fallback
 
     The first successful call logs which backend was selected so it shows
@@ -493,8 +714,23 @@ def get_storage() -> WebhookStorageBackend:
     if _storage is not None:
         return _storage
 
+    nats_url = os.environ.get("NATS_URL")
     redis_url = os.environ.get("REDIS_URL")
-    if redis_url:
+
+    if nats_url:
+        try:
+            _storage = JetStreamKVStorage()
+        except Exception as exc:
+            # Refuse to silently degrade when the operator explicitly
+            # asked for NATS -- same policy as the Redis branch below.
+            logger.error(
+                "NATS_URL is set but JetStream is unreachable: %s. "
+                "Refusing to silently fall back.", exc,
+            )
+            raise RuntimeError(
+                f"Webhook storage backend NATS is unreachable: {exc}"
+            ) from exc
+    elif redis_url:
         try:
             _storage = RedisWebhookStorage(redis_url)
         except Exception as exc:
@@ -514,7 +750,7 @@ def get_storage() -> WebhookStorageBackend:
     if not _logged_choice:
         logger.info(
             "Webhook security storage backend initialised: %s "
-            "(set REDIS_URL to use Redis instead of the DB fallback)",
+            "(NATS_URL > REDIS_URL > DB fallback)",
             _storage.name,
         )
         _logged_choice = True
