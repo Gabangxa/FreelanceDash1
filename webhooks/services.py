@@ -223,6 +223,12 @@ class WebhookProcessor:
             logger.exception("Error processing generic webhook")
             return False
     
+    # NOTE: This and ``_create_system_notification`` are the only two
+    # places in the codebase that construct ``Notification`` rows
+    # (verified by ripgrep). Both publish ``notification.created`` on
+    # the bus after commit. If you add a third creation site, publish
+    # the same event there too -- see ``docs/nats.md`` for the
+    # invariant. There is no central hook today.
     def _create_user_notification(self, user_id: int, title: str, message: str, 
                                 webhook_event: WebhookEvent, notification_type: str = 'webhook',
                                 priority: str = 'normal', action_url: Optional[str] = None) -> bool:

@@ -72,6 +72,23 @@ subscriber needs the full row, it loads it from Postgres by ID. This
 keeps the bus auditable and lets us avoid encrypting payloads in
 Phase 0.
 
+### Invariant: every `Notification` row publishes `notification.created`
+
+The only places that construct `Notification()` rows in this codebase
+are `webhooks/services.py::_create_user_notification` (line ~244) and
+`webhooks/services.py::_create_system_notification` (line ~300). Both
+publish `notification.created` after the row commits. **If you add a
+new code path that writes a `Notification` row, you must publish the
+event from that site too** -- there is no central hook today, and a
+missing publish silently breaks any future subscriber that assumes
+DB-row-and-bus-event are 1:1.
+
+When the planned notification-delivery worker ships in Phase 1 we
+should refactor creation behind a single helper (e.g. a SQLAlchemy
+`after_insert` listener on `Notification`, or a `notifications.create()`
+factory function) so this invariant becomes mechanical instead of
+documentational. Tracked separately.
+
 ## Running NATS locally for dev
 
 ```bash
