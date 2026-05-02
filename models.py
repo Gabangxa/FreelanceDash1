@@ -51,6 +51,17 @@ class User(UserMixin, db.Model):
         self.password_hash = generate_password_hash(password)
 
     def check_password(self, password):
+        # OAuth-only accounts (created via Google sign-in, Task #17) have
+        # ``password_hash`` set to NULL because the user has never set a
+        # local password. ``check_password_hash`` would raise
+        # ``AttributeError`` on a None hash, which would surface as a 500
+        # error if any caller tried email/password login against an
+        # OAuth-only row. Treat a missing hash as "no password set" and
+        # fall through to the normal "invalid credentials" path -- this
+        # also avoids leaking the existence of OAuth-only accounts via
+        # a different error response.
+        if not self.password_hash:
+            return False
         return check_password_hash(self.password_hash, password)
         
     def generate_reset_token(self, expires_in=3600):

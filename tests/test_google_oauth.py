@@ -232,6 +232,34 @@ def test_sign_in_methods_settings_page_renders_for_logged_in_user(client, db_ses
 # Regression: existing password login flow still works
 # --------------------------------------------------------------------------- #
 
+def test_oauth_only_user_cannot_login_with_password(client, db_session):
+    """Regression: an OAuth-only user (no password_hash) attempting
+    email/password login must get the normal "invalid credentials"
+    response, NOT a 500. ``User.check_password`` on a NULL hash used
+    to raise AttributeError before the Task-#17 null guard."""
+    u = User(
+        username="oauth_only",
+        email="oauth_only@example.com",
+        oauth_provider="google",
+        oauth_provider_id="sub-pwlogin",
+    )
+    db.session.add(u)
+    db.session.commit()
+
+    # Direct model-level check first -- belt-and-braces.
+    assert u.check_password("anything") is False
+    assert u.check_password("") is False
+
+    resp = client.post(
+        "/auth/login",
+        data={"email": u.email, "password": "anything"},
+        follow_redirects=False,
+    )
+    # Should bounce back to login (302), NOT crash with a 500.
+    assert resp.status_code in (301, 302)
+    assert "/auth/login" in resp.headers["Location"]
+
+
 def test_password_login_still_works_after_oauth_changes(client, db_session):
     u = _make_password_user("regression_pw", "regression@example.com")
     resp = client.post(
