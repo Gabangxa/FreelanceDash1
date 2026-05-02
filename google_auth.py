@@ -40,7 +40,7 @@ import re
 import secrets
 
 import requests
-from flask import Blueprint, abort, current_app, redirect, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, redirect, request, session, url_for
 from flask_login import current_user, login_user
 from oauthlib.oauth2 import WebApplicationClient
 from sqlalchemy.exc import SQLAlchemyError
@@ -61,6 +61,13 @@ SESSION_NEXT_KEY = "_oauth_next"
 SESSION_STATE_KEY = "_oauth_state"
 
 google_auth = Blueprint("google_auth", __name__)
+
+
+class OAuthAccountConflict(Exception):
+    """Raised by ``_find_or_create_user`` when the email-matched local
+    account is already linked to a *different* Google identity. The
+    caller turns this into a user-facing flash + redirect rather than
+    a bare 409 page."""
 
 
 def is_configured() -> bool:
@@ -251,6 +258,19 @@ def callback():
 
     try:
         user = _find_or_create_user(google_sub, google_email, google_given_name)
+    except OAuthAccountConflict:
+        # User-friendly conflict path: the local account this Google
+        # email maps to is already linked to a *different* Google
+        # identity. Tell the user what to do (sign in with the original
+        # Google account, or use password / magic link) instead of
+        # showing a bare 409 page.
+        flash(
+            "An account with this email is already linked to a different "
+            "Google account. Please sign in using your original Google "
+            "account, your password, or request a magic-link email.",
+            "danger",
+        )
+        return redirect(url_for("auth.login"))
     except SQLAlchemyError:
         db.session.rollback()
         logger.exception("Database error during Google OAuth callback")
@@ -300,7 +320,7 @@ def _find_or_create_user(sub: str, email: str, given_name: str) -> User:
                 "(already linked to provider=%s subject=%s)",
                 sub, user.id, user.oauth_provider, user.oauth_provider_id,
             )
-            abort(409)
+            raise OAuthAccountConflict()
         user.oauth_provider = PROVIDER_KEY
         user.oauth_provider_id = sub
         db.session.commit()

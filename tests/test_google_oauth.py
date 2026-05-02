@@ -135,9 +135,9 @@ def test_find_or_create_refuses_to_relink_account_with_different_subject(db_sess
     """If a local account already linked to Google sub A tries to be
     relinked to Google sub B (because the user logged in with a
     different Google account that happens to share the email), refuse
-    rather than silently overwrite. Aborts with 409."""
-    from werkzeug.exceptions import Conflict
-
+    rather than silently overwrite. The callback turns this exception
+    into a user-facing flash + redirect to /auth/login -- see the
+    callback handler."""
     u = User(
         username="already_linked",
         email="conflict@example.com",
@@ -147,7 +147,7 @@ def test_find_or_create_refuses_to_relink_account_with_different_subject(db_sess
     db.session.add(u)
     db.session.commit()
 
-    with pytest.raises(Conflict):
+    with pytest.raises(ga.OAuthAccountConflict):
         ga._find_or_create_user("sub-B", "conflict@example.com", "X")
 
 
