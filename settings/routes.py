@@ -3,7 +3,19 @@ from flask_login import login_required, current_user, logout_user
 from sqlalchemy.exc import SQLAlchemyError
 import io
 import logging
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
+
+# Cap total decoded pixels to ~24 megapixels (~ a 6000x4000 photo). Pillow
+# will raise DecompressionBombError above this, which gives us defence in
+# depth against compression-bomb uploads beyond the MAX_CONTENT_LENGTH
+# byte cap (a small ZIP-like file can decode to gigabytes of pixels).
+Image.MAX_IMAGE_PIXELS = 24_000_000
+
+try:
+    from PIL.Image import DecompressionBombError
+except ImportError:  # pragma: no cover - very old Pillow
+    class DecompressionBombError(Exception):
+        pass
 from app import db
 from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem, NotificationSettings
 from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm, NotificationSettingsForm, DeadlineAlertSettingsForm
@@ -79,44 +91,91 @@ def invoice_template():
     
     form = InvoiceTemplateForm()
     
+    # Hard guards against decompression-bomb / oversized images. The
+    # MAX_CONTENT_LENGTH cap rejects anything larger than 4 MB *on the
+    # wire*, but a tiny PNG can declare 50000x50000 pixels and explode
+    # on decode — Pillow's DecompressionBombError + an explicit dim
+    # check stop that before we touch the pixel buffer.
+    _MAX_RAW_BYTES = 4 * 1024 * 1024
+    _MAX_PIXEL_DIM = 8000
+    # Whitelist of decoded formats we'll persist. Extension is already
+    # checked by FileAllowed; this re-checks the actual decoded format
+    # so a renamed .exe-as-.png can't sneak through.
+    _ALLOWED_FORMATS = {'PNG', 'JPEG', 'GIF'}
+
+    def _process_image_upload(file_storage, max_width):
+        """Resize an uploaded image to ``max_width`` (preserving aspect
+        ratio) and return ``(bytes, mimetype)`` or ``(None, None)`` on
+        error. The caller is responsible for flashing user-facing
+        messages."""
+        try:
+            raw = file_storage.read()
+            if len(raw) > _MAX_RAW_BYTES:
+                logger.warning("Rejecting oversized upload: %s bytes", len(raw))
+                return None, None
+            img = Image.open(io.BytesIO(raw))
+            # Reject before decoding pixels if the declared dimensions
+            # are absurd. Cheap check that runs on the header only.
+            if img.width > _MAX_PIXEL_DIM or img.height > _MAX_PIXEL_DIM:
+                logger.warning(
+                    "Rejecting image with extreme dimensions: %sx%s",
+                    img.width, img.height,
+                )
+                return None, None
+            img_format = (img.format or 'PNG').upper()
+            if img_format not in _ALLOWED_FORMATS:
+                logger.warning("Rejecting upload with disallowed format: %s", img_format)
+                return None, None
+            # Force pixel decode now so DecompressionBombError fires
+            # inside our try/except rather than at .save() time.
+            img.load()
+            if img.width > max_width:
+                ratio = max_width / float(img.width)
+                new_height = int(float(img.height) * ratio)
+                img = img.resize((max_width, new_height), Image.Resampling.LANCZOS)
+            out = io.BytesIO()
+            img.save(out, format=img_format)
+            return out.getvalue(), f'image/{img_format.lower()}'
+        except DecompressionBombError:
+            logger.warning("Rejecting decompression-bomb image upload")
+            return None, None
+        except (OSError, ValueError, UnidentifiedImageError):
+            logger.exception("Error processing uploaded image")
+            return None, None
+
     if form.validate_on_submit():
         try:
             # Process logo upload if provided
             if form.invoice_logo.data:
-                # Read and process the image
-                logo_data = form.invoice_logo.data.read()
-                
-                try:
-                    # Resize if needed to prevent huge file sizes
-                    img = Image.open(io.BytesIO(logo_data))
-                    
-                    # Maintain aspect ratio, but ensure reasonable size
-                    max_width = 400
-                    if img.width > max_width:
-                        ratio = max_width / float(img.width)
-                        height = int(float(img.height) * ratio)
-                        img = img.resize((max_width, height), Image.Resampling.LANCZOS)
-                    
-                    # Save to bytes
-                    output_buffer = io.BytesIO()
-                    img_format = img.format if img.format else 'PNG'
-                    img.save(output_buffer, format=img_format)
-                    logo_data = output_buffer.getvalue()
-                    
-                    # Store in database
-                    settings.invoice_logo = logo_data
-                    settings.invoice_logo_mimetype = f'image/{img_format.lower()}'
-                except (OSError, ValueError) as e:
-                    logger.exception("Error processing logo image")
+                data, mimetype = _process_image_upload(form.invoice_logo.data, max_width=400)
+                if data:
+                    settings.invoice_logo = data
+                    settings.invoice_logo_mimetype = mimetype
+                else:
                     flash('Error processing logo image. Please try a different image.', 'warning')
-            
+
             # Check if logo should be removed
             if form.remove_logo.data == '1':
                 settings.invoice_logo = None
                 settings.invoice_logo_mimetype = None
-            
+
+            # Process signature upload if provided
+            if form.invoice_signature.data:
+                data, mimetype = _process_image_upload(form.invoice_signature.data, max_width=600)
+                if data:
+                    settings.invoice_signature = data
+                    settings.invoice_signature_mimetype = mimetype
+                else:
+                    flash('Error processing signature image. Please try a different image.', 'warning')
+
+            # Check if signature should be removed
+            if form.remove_signature.data == '1':
+                settings.invoice_signature = None
+                settings.invoice_signature_mimetype = None
+
             # Update other template settings
             settings.invoice_template = form.invoice_template.data
+            settings.invoice_font = form.invoice_font.data
             settings.invoice_color_primary = form.invoice_color_primary.data
             settings.invoice_color_secondary = form.invoice_color_secondary.data
             settings.invoice_footer_text = form.invoice_footer_text.data
@@ -134,14 +193,22 @@ def invoice_template():
     # Populate form with existing data
     if request.method == 'GET':
         form.invoice_template.data = settings.invoice_template
+        form.invoice_font.data = settings.invoice_font or 'helvetica'
         form.invoice_color_primary.data = settings.invoice_color_primary
         form.invoice_color_secondary.data = settings.invoice_color_secondary
         form.invoice_footer_text.data = settings.invoice_footer_text
     
-    # Pass logo data to template
+    # Pass logo + signature data to template
     logo_data_uri = settings.get_logo_data_uri() if settings.invoice_logo else None
-    
-    return render_template('invoice_template.html', form=form, settings=settings, logo_data_uri=logo_data_uri)
+    signature_data_uri = settings.get_signature_data_uri() if settings.invoice_signature else None
+
+    return render_template(
+        'invoice_template.html',
+        form=form,
+        settings=settings,
+        logo_data_uri=logo_data_uri,
+        signature_data_uri=signature_data_uri,
+    )
 
 @settings_bp.route('/notifications', methods=['GET', 'POST'])
 @login_required

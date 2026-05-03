@@ -423,9 +423,12 @@ class UserSettings(db.Model):
     company_website = db.Column(db.String(120))
     invoice_logo = db.Column(db.LargeBinary)
     invoice_logo_mimetype = db.Column(db.String(30))
+    invoice_signature = db.Column(db.LargeBinary)
+    invoice_signature_mimetype = db.Column(db.String(30))
     invoice_template = db.Column(db.String(20), default='default')
-    invoice_color_primary = db.Column(db.String(10), default='#3498db')
-    invoice_color_secondary = db.Column(db.String(10), default='#f8f9fa')
+    invoice_color_primary = db.Column(db.String(10), default='#1d1d1f')
+    invoice_color_secondary = db.Column(db.String(10), default='#f7f7f7')
+    invoice_font = db.Column(db.String(20), default='helvetica')
     invoice_footer_text = db.Column(db.Text)
     
     deadline_alert_enabled = db.Column(db.Boolean, default=True)
@@ -461,6 +464,15 @@ class UserSettings(db.Model):
         import base64
         encoded = base64.b64encode(self.invoice_logo).decode('utf-8')
         return f"data:{self.invoice_logo_mimetype};base64,{encoded}"
+
+    def get_signature_data_uri(self):
+        """Return the signature image as a data URI for embedding in HTML."""
+        if not self.invoice_signature:
+            return None
+
+        import base64
+        encoded = base64.b64encode(self.invoice_signature).decode('utf-8')
+        return f"data:{self.invoice_signature_mimetype};base64,{encoded}"
 
 
 class EmailDeliveryLog(db.Model):

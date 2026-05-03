@@ -36,11 +36,21 @@ class InvoiceTemplateForm(FlaskForm):
         FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Images only!')
     ])
     remove_logo = HiddenField('Remove Logo')
+    invoice_signature = FileField('Signature Image', validators=[
+        Optional(),
+        FileAllowed(['jpg', 'jpeg', 'png', 'gif'], 'Images only!')
+    ])
+    remove_signature = HiddenField('Remove Signature')
     invoice_template = SelectField('Invoice Template', choices=[
         ('default', 'Default - Professional'),
         ('modern', 'Modern - Clean & Minimal'),
         ('classic', 'Classic - Traditional Business'),
         ('creative', 'Creative - Bold & Colorful')
+    ])
+    invoice_font = SelectField('Font Family', choices=[
+        ('helvetica', 'Helvetica - Sans-serif'),
+        ('times', 'Times - Serif'),
+        ('courier', 'Courier - Monospace'),
     ])
     invoice_color_primary = StringField('Primary Color', validators=[
         Optional(),

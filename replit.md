@@ -1,5 +1,41 @@
 # Freelancer Suite - Replit Configuration
 
+## 2026-05-03 — Invoice PDF branding upgrade (Option C)
+
+Full branding control over generated invoice PDFs. Users can now upload a
+company logo *and* a signature image, pick a font family, and set primary
++ secondary brand colors that actually drive every template.
+
+* **`UserSettings`**: new `invoice_signature` (BYTEA), `invoice_signature_mimetype`,
+  and `invoice_font` (default `'helvetica'`) columns. Default colors flipped
+  from blue to neutral (`#1d1d1f` / `#f7f7f7`). Added
+  `get_signature_data_uri()` helper for template previews.
+* **`app.py`**: `MAX_CONTENT_LENGTH=4MB` + a 413 handler that flashes a
+  friendly message and redirects to the referrer (no raw "Request Entity
+  Too Large" page). Idempotent, **dialect-aware** ALTER bootstrap after
+  `db.create_all()` — runs one ALTER per missing column, picks `BYTEA`
+  on Postgres / `BLOB` on SQLite, and logs each outcome individually
+  rather than swallowing batch failures.
+* **`settings/forms.py` + `templates/settings/invoice_template.html`**:
+  added signature `FileField`, `remove_signature` hidden flag, and a
+  font select (Helvetica / Times / Courier — all built into ReportLab,
+  no font files to ship). CSP-clean (no new inline `style=""`).
+* **`settings/routes.py`**: extracted `_process_image_upload()` for both
+  logo and signature. Hardened against decompression-bomb DoS:
+  `Image.MAX_IMAGE_PIXELS = 24M`, explicit `DecompressionBombError`
+  catch, raw-byte cap, max-dimension cap (8000×8000), and a decoded-
+  format whitelist (`PNG/JPEG/GIF`) so a renamed binary can't sneak
+  past the FileAllowed extension check.
+* **`invoices/routes.py`**: rewrote `generate_pdf` around three helpers
+  (`_FONT_MAP`, `_hex_to_rgb`, `_draw_image_box`). All four templates
+  now consistently apply primary color (header band, FROM/TO labels,
+  table header bar fill, total rule + label, NOTES label) and secondary
+  color (alternating row fill — previously only Modern/Creative had it).
+  Logos preserve aspect ratio. Optional signature drawn above the
+  footer with an "Authorised signature" caption; a dynamic page-break
+  guard pushes the signature/footer to a fresh page when long notes
+  would otherwise collide with the bottom band.
+
 ## 2026-05-03 — Code-review hardening: Decimal money, tenant defense, tighter excepts
 
 Addressed the top three findings from the post-NATS-Phase-1 architect

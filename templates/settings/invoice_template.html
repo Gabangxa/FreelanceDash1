@@ -61,19 +61,59 @@
                                     {% endfor %}
                                 </div>
                             {% endif %}
-                            <small class="form-text text-muted">For best results, upload a square or rectangular image with a transparent background (PNG). Max size: 2MB.</small>
+                            <small class="form-text text-muted">For best results, upload a square or rectangular image with a transparent background (PNG). Max size: 4MB.</small>
                         </div>
-                        
-                        <div class="mb-3">
-                            {{ form.invoice_template.label(class="form-label") }}
-                            {{ form.invoice_template(class="form-select") }}
-                            {% if form.invoice_template.errors %}
+
+                        <div class="mb-4">
+                            <label class="form-label">Current Signature</label>
+                            <div class="mb-2">
+                                {% if signature_data_uri %}
+                                    <img src="{{ signature_data_uri }}" alt="Authorised signature" class="img-thumbnail mb-2 logo-thumb-100">
+                                    <div class="form-check mb-3">
+                                        <input type="checkbox" class="form-check-input" id="remove_signature">
+                                        <label class="form-check-label" for="remove_signature">Remove signature</label>
+                                        {{ form.remove_signature(id="remove_signature_hidden", value="0") }}
+                                    </div>
+                                {% else %}
+                                    <p class="text-muted">No signature uploaded</p>
+                                {% endif %}
+                            </div>
+
+                            {{ form.invoice_signature.label(class="form-label") }}
+                            {{ form.invoice_signature(class="form-control") }}
+                            {% if form.invoice_signature.errors %}
                                 <div class="invalid-feedback d-block">
-                                    {% for error in form.invoice_template.errors %}
+                                    {% for error in form.invoice_signature.errors %}
                                         {{ error }}
                                     {% endfor %}
                                 </div>
                             {% endif %}
+                            <small class="form-text text-muted">Optional. A scanned or drawn signature image (PNG with transparent background works best). Printed beneath the invoice items above the footer.</small>
+                        </div>
+
+                        <div class="row mb-3">
+                            <div class="col-md-6">
+                                {{ form.invoice_template.label(class="form-label") }}
+                                {{ form.invoice_template(class="form-select") }}
+                                {% if form.invoice_template.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.invoice_template.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-6">
+                                {{ form.invoice_font.label(class="form-label") }}
+                                {{ form.invoice_font(class="form-select") }}
+                                {% if form.invoice_font.errors %}
+                                    <div class="invalid-feedback d-block">
+                                        {% for error in form.invoice_font.errors %}
+                                            {{ error }}
+                                        {% endfor %}
+                                    </div>
+                                {% endif %}
+                            </div>
                         </div>
                         
                         <div class="row mb-3">
@@ -199,6 +239,15 @@ document.addEventListener('DOMContentLoaded', function() {
     if (removeLogoCheckbox && removeLogoHidden) {
         removeLogoCheckbox.addEventListener('change', function() {
             removeLogoHidden.value = this.checked ? '1' : '0';
+        });
+    }
+
+    // Wire up the "Remove signature" checkbox -> hidden form field
+    const removeSignatureCheckbox = document.getElementById('remove_signature');
+    const removeSignatureHidden = document.getElementById('remove_signature_hidden');
+    if (removeSignatureCheckbox && removeSignatureHidden) {
+        removeSignatureCheckbox.addEventListener('change', function() {
+            removeSignatureHidden.value = this.checked ? '1' : '0';
         });
     }
 

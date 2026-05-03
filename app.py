@@ -2,7 +2,7 @@ import os
 import logging
 import time
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, g, session
+from flask import Flask, render_template, request, g, session, flash, redirect, url_for
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
@@ -122,6 +122,11 @@ if not _is_sqlite:
         "max_overflow": 20,
     })
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Disable to improve performance
+
+# Cap inbound request body size at 4 MB. The largest legitimate uploads are
+# the invoice logo and signature images on Settings -> Invoice Templates;
+# anything bigger is rejected by Werkzeug with HTTP 413 before the view runs.
+app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 
 # Initialize extensions with app
 db.init_app(app)
@@ -279,6 +284,18 @@ def add_security_headers_and_log_timing(response):
 register_error_handlers(app)
 register_user_friendly_error_handler(app)
 
+
+@app.errorhandler(413)
+def _request_entity_too_large(_e):
+    """Friendly handler for uploads that exceed MAX_CONTENT_LENGTH."""
+    flash(
+        'That file is too large. The maximum upload size is 4 MB. '
+        'Please choose a smaller image.',
+        'warning',
+    )
+    referrer = request.referrer or url_for('settings.invoice_template')
+    return redirect(referrer)
+
 # Add root route for landing page
 @app.route('/')
 def index():
@@ -367,6 +384,49 @@ with app.app_context():
     
     # Create all tables that don't exist
     db.create_all()
+
+    # db.create_all() does NOT ALTER existing tables, so add any new
+    # UserSettings branding columns to a previously-provisioned database.
+    # Idempotent (skips columns that already exist) and dialect-aware:
+    # Postgres uses BYTEA, SQLite uses BLOB. Each column is added in its
+    # own statement so a single failure can't strand the others, and we
+    # log per-column outcomes rather than swallowing a batch failure.
+    try:
+        _fresh_inspector = inspect(db.engine)
+        if 'user_settings' in _fresh_inspector.get_table_names():
+            _existing_cols = {c['name'] for c in _fresh_inspector.get_columns('user_settings')}
+            _dialect = db.engine.dialect.name  # 'postgresql' / 'sqlite' / 'mysql' / ...
+            _binary_type = 'BLOB' if _dialect == 'sqlite' else 'BYTEA'
+            _column_defs = [
+                ('invoice_signature',          _binary_type),
+                ('invoice_signature_mimetype', 'VARCHAR(30)'),
+                ('invoice_font',               "VARCHAR(20) DEFAULT 'helvetica'"),
+            ]
+            _missing = [(name, sql_type) for name, sql_type in _column_defs
+                        if name not in _existing_cols]
+            if _missing:
+                from sqlalchemy import text as _sa_text
+                for _name, _sql_type in _missing:
+                    try:
+                        with db.engine.begin() as _conn:
+                            _conn.execute(_sa_text(
+                                f"ALTER TABLE user_settings ADD COLUMN {_name} {_sql_type}"
+                            ))
+                        logger.info(
+                            "user_settings: added column %s %s (dialect=%s)",
+                            _name, _sql_type, _dialect,
+                        )
+                    except Exception:  # noqa: BLE001 - per-column safety
+                        logger.exception(
+                            "Failed to ADD COLUMN %s on user_settings; the "
+                            "settings/invoice pages will fall back to "
+                            "defaults until this is resolved.",
+                            _name,
+                        )
+    except Exception:  # noqa: BLE001 - top-level safety net
+        logger.exception(
+            "Schema bootstrap for user_settings branding columns failed"
+        )
 
     # Initialise the webhook security storage backend (Redis if
     # ``REDIS_URL`` is set, otherwise the DB fallback) and prime the
