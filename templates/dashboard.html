@@ -294,9 +294,11 @@
             }
             
             const ctx = chartEl.getContext('2d');
+            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            const chartFg = isDark ? '245, 245, 247' : '29, 29, 31';
             const gradient = ctx.createLinearGradient(0, 0, 0, 300);
-            gradient.addColorStop(0, 'rgba(0, 102, 255, 0.4)');
-            gradient.addColorStop(1, 'rgba(0, 102, 255, 0.05)');
+            gradient.addColorStop(0, `rgba(${chartFg}, 0.35)`);
+            gradient.addColorStop(1, `rgba(${chartFg}, 0.05)`);
             
             window.timeTrackingChart = new Chart(ctx, {
                 type: 'bar',
@@ -306,7 +308,7 @@
                         label: 'Hours Worked',
                         data: chartData,
                         backgroundColor: gradient,
-                        borderColor: 'rgb(0, 102, 255)',
+                        borderColor: `rgb(${chartFg})`,
                         borderWidth: 2,
                         borderRadius: 8,
                         borderSkipped: false,
