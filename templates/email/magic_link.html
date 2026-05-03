@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Your Freelance sign-in link</title>
+    <title>Your SoloDolo sign-in link</title>
     <style type="text/css">
         body {
             font-family: Arial, sans-serif;
@@ -64,15 +64,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Sign in to Freelance</h1>
+            <h1>Sign in to SoloDolo</h1>
         </div>
         <div class="content">
             <p>Hi {{ user.username }},</p>
 
-            <p>You asked for a one-click sign-in link for your Freelance account. Click the button below to sign in:</p>
+            <p>You asked for a one-click sign-in link for your SoloDolo account. Click the button below to sign in:</p>
 
             <p style="text-align: center;">
-                <a href="{{ magic_link_url }}" class="button">Sign in to Freelance</a>
+                <a href="{{ magic_link_url }}" class="button">Sign in to SoloDolo</a>
             </p>
 
             <p class="fallback-link">If the button doesn't work, copy and paste this URL into your browser:<br>{{ magic_link_url }}</p>
@@ -82,7 +82,7 @@
             <p class="expire-note">This sign-in link expires in {{ expiry_minutes }} minutes and can only be used once.</p>
         </div>
         <div class="footer">
-            <p>© {{ current_year }} Freelance. All rights reserved.</p>
+            <p>© {{ current_year }} SoloDolo. All rights reserved.</p>
             <p>This is an automated message, please do not reply to this email.</p>
         </div>
     </div>

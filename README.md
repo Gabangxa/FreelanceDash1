@@ -1,4 +1,4 @@
-# Freelancer Suite
+# SoloDolo
 
 A comprehensive SaaS platform designed to streamline freelance project management and time tracking workflows. This application provides end-to-end solutions for freelancers to manage professional tasks, monitor project progress, and optimize their productivity.
 

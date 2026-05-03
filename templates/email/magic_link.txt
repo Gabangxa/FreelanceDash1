@@ -1,6 +1,6 @@
 Hi {{ user.username }},
 
-You asked for a one-click sign-in link for your Freelance account.
+You asked for a one-click sign-in link for your SoloDolo account.
 
 To sign in, open this link in your browser:
 {{ magic_link_url }}
@@ -9,5 +9,5 @@ If you didn't request this, you can safely ignore this email -- the link won't s
 
 This sign-in link expires in {{ expiry_minutes }} minutes and can only be used once.
 
-© {{ current_year }} Freelance. All rights reserved.
+© {{ current_year }} SoloDolo. All rights reserved.
 This is an automated message, please do not reply to this email.

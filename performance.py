@@ -1,5 +1,5 @@
 """
-Performance monitoring and logging module for the Freelancer Suite application.
+Performance monitoring and logging module for the SoloDolo application.
 """
 import time
 import logging

@@ -12,6 +12,6 @@ Additional Details:
 Received: {{ notification.created_at.strftime('%B %d, %Y at %I:%M %p UTC') }}
 
 ---
-This notification was sent by Freelancer Suite
+This notification was sent by SoloDolo
 Manage notification preferences: {{ app_url }}/settings
 View Dashboard: {{ app_url }}

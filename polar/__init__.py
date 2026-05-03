@@ -1,5 +1,5 @@
 """
-Polar.sh integration module for Freelancer Suite.
+Polar.sh integration module for SoloDolo.
 Provides subscription management and payment processing functionality.
 """
 

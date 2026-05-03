@@ -1,5 +1,5 @@
 """
-Polar.sh API integration for Freelancer Suite.
+Polar.sh API integration for SoloDolo.
 Handles subscription management and payment processing.
 """
 import os

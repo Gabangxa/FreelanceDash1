@@ -1,4 +1,4 @@
-# Freelancer Suite - Replit Configuration
+# SoloDolo - Replit Configuration
 
 ## 2026-05-03 — Invoice PDF branding upgrade (Option C)
 
@@ -101,7 +101,7 @@ delivery off the web request path.
 
 ## Overview
 
-Freelancer Suite is a comprehensive SaaS platform built with Flask that provides end-to-end project management and business solutions for freelancers. The application offers client management, project tracking, time management, invoicing, and subscription services through a clean, responsive web interface.
+SoloDolo is a comprehensive SaaS platform built with Flask that provides end-to-end project management and business solutions for freelancers. The application offers client management, project tracking, time management, invoicing, and subscription services through a clean, responsive web interface.
 
 ## System Architecture
 

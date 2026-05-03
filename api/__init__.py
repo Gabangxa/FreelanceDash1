@@ -1,5 +1,5 @@
 """
-API module for Freelance.
+API module for SoloDolo.
 
 This module provides RESTful API endpoints for programmatic access to the application.
 """

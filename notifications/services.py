@@ -1,5 +1,5 @@
 """
-Notification delivery service for the Freelancer Suite application.
+Notification delivery service for the SoloDolo application.
 """
 import logging
 import smtplib

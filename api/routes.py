@@ -1,5 +1,5 @@
 """
-API routes for Freelance.
+API routes for SoloDolo.
 """
 from flask import jsonify, request, g, current_app
 from flask_login import login_required, current_user
@@ -50,7 +50,7 @@ def api_status():
     return api_response(data={
         'status': 'operational',
         'version': '1.0.0',
-        'app_name': 'Freelance',
+        'app_name': 'SoloDolo',
         'timestamp': datetime.utcnow().isoformat()
     })
 

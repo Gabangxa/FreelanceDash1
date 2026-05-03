@@ -760,7 +760,7 @@ def export_data_csv():
             zf.writestr('settings.csv', settings_output.getvalue())
             
             # ----- README file -----
-            readme_content = f"""Freelance Data Export
+            readme_content = f"""SoloDolo Data Export
 Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 User: {current_user.username}
 

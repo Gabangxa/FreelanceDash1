@@ -1,5 +1,5 @@
 """
-Asset bundling and minification for the Freelance application.
+Asset bundling and minification for the SoloDolo application.
 """
 import os
 import re

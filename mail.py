@@ -1,5 +1,5 @@
 """
-Email functionality for the Freelance application.
+Email functionality for the SoloDolo application.
 
 Outbound email is sent on a background thread so it doesn't block the
 request handler. Every send attempt is recorded in the ``EmailDeliveryLog``
@@ -65,7 +65,7 @@ def init_app(app):
 
         # Format the sender display name if it's just an email
         if mail_default_sender and '@' in mail_default_sender and '<' not in mail_default_sender:
-            mail_default_sender = f"Freelance <{mail_default_sender}>"
+            mail_default_sender = f"SoloDolo <{mail_default_sender}>"
 
         # Log the configured sender for debugging
         logger.info(f"Configured mail sender: {mail_default_sender}")
@@ -264,7 +264,7 @@ def send_welcome_email(user):
     """Send a welcome email to a newly registered user."""
     from datetime import datetime
 
-    subject = "Welcome to Freelance!"
+    subject = "Welcome to SoloDolo!"
 
     # Prepare context data for templates
     context = {
@@ -323,7 +323,7 @@ def send_magic_link_email(user, magic_link_url, expiry_minutes=15):
     """
     from datetime import datetime
 
-    subject = "Your Freelance sign-in link"
+    subject = "Your SoloDolo sign-in link"
 
     context = {
         'user': user,
@@ -347,7 +347,7 @@ def send_notification_email(user, notification):
     """Send a notification email to a user."""
     from datetime import datetime
 
-    subject = f"[Freelancer Suite] {notification.title}"
+    subject = f"[SoloDolo] {notification.title}"
 
     # Build the app URL
     app_url = os.environ.get('APP_URL', 'http://localhost:5000')

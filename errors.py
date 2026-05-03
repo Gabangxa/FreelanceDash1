@@ -1,5 +1,5 @@
 """
-Centralized error handling and logging module for the Freelancer Suite application.
+Centralized error handling and logging module for the SoloDolo application.
 """
 import os
 import logging
