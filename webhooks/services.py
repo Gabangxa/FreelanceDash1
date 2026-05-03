@@ -5,6 +5,7 @@ import json
 import logging
 from datetime import datetime
 from typing import Optional, Dict, Any
+from sqlalchemy import or_
 from sqlalchemy.exc import SQLAlchemyError
 from app import db
 from models import WebhookEvent, Notification, User, NotificationSettings
@@ -337,30 +338,45 @@ class WebhookProcessor:
                                   action_url: Optional[str] = None) -> bool:
         """Create notifications for all users (system-wide notification)"""
         try:
-            # Get all users who want webhook notifications
-            users = User.query.all()
-            notifications_created = 0
-            
-            for user in users:
-                # Check user's notification preferences
-                settings = NotificationSettings.get_or_create_for_user(user.id)
-                if not settings.inapp_webhook_events:
-                    continue
-                
-                # Create notification
+            # Single query for the recipient set: users with
+            # ``inapp_webhook_events`` enabled, OR users with no
+            # NotificationSettings row yet (the column default is True, so
+            # absent settings == opted in). Replaces the previous
+            # User.query.all() + per-user get_or_create_for_user, which was
+            # 1 + 2N queries; now it's one JOIN and one bulk commit.
+            recipient_ids = [
+                row[0]
+                for row in (
+                    db.session.query(User.id)
+                    .outerjoin(
+                        NotificationSettings,
+                        NotificationSettings.user_id == User.id,
+                    )
+                    .filter(
+                        or_(
+                            NotificationSettings.inapp_webhook_events.is_(True),
+                            NotificationSettings.id.is_(None),
+                        )
+                    )
+                    .all()
+                )
+            ]
+
+            new_notifications = []
+            for user_id in recipient_ids:
                 notification = Notification()
-                notification.user_id = user.id
+                notification.user_id = user_id
                 notification.title = title
                 notification.message = message
                 notification.notification_type = notification_type
                 notification.priority = priority
                 notification.webhook_event_id = webhook_event.id
                 notification.action_url = action_url
-                
-                db.session.add(notification)
-                notifications_created += 1
-            
+                new_notifications.append(notification)
+
+            db.session.add_all(new_notifications)
             db.session.commit()
+            notifications_created = len(new_notifications)
             
             # Deliver notifications for all users who have them
             from notifications.services import NotificationDeliveryService

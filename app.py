@@ -6,6 +6,7 @@ from flask import Flask, render_template, request, g, session, flash, redirect, 
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
+from flask_wtf.csrf import CSRFProtect
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 import secrets
@@ -59,6 +60,7 @@ class Base(DeclarativeBase):
 db = SQLAlchemy(model_class=Base)
 migrate = Migrate()
 login_manager = LoginManager()
+csrf = CSRFProtect()
 
 # Create Flask app
 app = Flask(__name__)
@@ -132,6 +134,12 @@ app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 db.init_app(app)
 migrate.init_app(app, db)
 login_manager.init_app(app)
+# Global CSRF protection for all browser-form POST/PUT/DELETE/PATCH routes.
+# Templates already use ``form.hidden_tag()`` which embeds the token, so this
+# is defense-in-depth against any route that ever forgets to validate a form.
+# The API blueprint (token auth) and webhook ingest blueprint (signed by
+# external services) are explicitly exempted below after they're registered.
+csrf.init_app(app)
 login_manager.login_view = 'auth.login'
 login_manager.login_message_category = 'info'  # Bootstrap message styling
 
@@ -342,6 +350,12 @@ app.register_blueprint(api_bp)
 
 # Register webhook blueprint
 app.register_blueprint(webhooks_bp)
+
+# CSRF exemptions: the API uses session/token auth (no browser forms) and
+# the webhook blueprint receives signed requests from external services
+# (Stripe, GitHub, etc.) which can't carry a Flask-WTF CSRF token.
+csrf.exempt(api_bp)
+csrf.exempt(webhooks_bp)
 
 # Google OAuth blueprint (Task #17). Registered conditionally so the
 # app boots fine in environments without Google OAuth credentials

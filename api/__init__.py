@@ -5,6 +5,7 @@ This module provides RESTful API endpoints for programmatic access to the applic
 """
 from flask import Blueprint, jsonify, request, current_app, g
 from flask_login import current_user, login_required
+from functools import wraps
 import time
 import logging
 
@@ -12,6 +13,33 @@ logger = logging.getLogger('api')
 
 # Create Blueprint
 api_bp = Blueprint('api', __name__, url_prefix='/api/v1')
+
+
+def require_api_access(f):
+    """Gate an API endpoint behind the ``api_access`` paid feature flag.
+
+    Returns 401 if the caller is not authenticated and 403 if authenticated
+    but on a tier without ``api_access`` (the default for free users). Apply
+    *below* ``@login_required`` so the auth check fires first and unauthenticated
+    requests get a clean 401 instead of a misleading 403.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        if not current_user.is_authenticated:
+            return jsonify({
+                'status': 'error',
+                'message': 'Authentication required',
+            }), 401
+        if not current_user.has_feature('api_access'):
+            return jsonify({
+                'status': 'error',
+                'message': (
+                    'API access requires a paid plan. Upgrade your subscription '
+                    'to enable programmatic access to your data.'
+                ),
+            }), 403
+        return f(*args, **kwargs)
+    return wrapper
 
 # Import routes after blueprint creation to avoid circular imports
 from api.routes import *  # noqa

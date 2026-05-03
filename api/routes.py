@@ -7,7 +7,7 @@ from sqlalchemy.orm import joinedload
 import logging
 from datetime import datetime
 
-from api import api_bp
+from api import api_bp, require_api_access
 from app import db
 from models import Project, Client, Task, TimeEntry, Invoice, InvoiceItem, User
 
@@ -57,6 +57,7 @@ def api_status():
 # Projects endpoints
 @api_bp.route('/projects', methods=['GET'])
 @login_required
+@require_api_access
 def get_projects():
     """Get list of user's projects with optional filtering."""
     # Get query parameters for filtering
@@ -91,6 +92,7 @@ def get_projects():
 
 @api_bp.route('/projects/<int:project_id>', methods=['GET'])
 @login_required
+@require_api_access
 def get_project(project_id):
     """Get detailed information about a specific project."""
     project = Project.query.filter_by(id=project_id, user_id=current_user.id).first()
@@ -134,6 +136,7 @@ def get_project(project_id):
 # Clients endpoints
 @api_bp.route('/clients', methods=['GET'])
 @login_required
+@require_api_access
 def get_clients():
     """Get list of user's clients."""
     clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
@@ -151,6 +154,7 @@ def get_clients():
 # Time entries endpoints
 @api_bp.route('/time-entries', methods=['GET'])
 @login_required
+@require_api_access
 def get_time_entries():
     """Get time entries with filtering and pagination."""
     # Get query parameters
@@ -220,6 +224,7 @@ def get_time_entries():
 # Invoices endpoints
 @api_bp.route('/invoices', methods=['GET'])
 @login_required
+@require_api_access
 def get_invoices():
     """Get list of user's invoices with optional filtering."""
     # Get query parameters
@@ -259,6 +264,7 @@ def get_invoices():
 # User account and profile endpoints
 @api_bp.route('/profile', methods=['GET'])
 @login_required
+@require_api_access
 def get_user_profile():
     """Get current user's profile information."""
     user = current_user
