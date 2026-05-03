@@ -361,6 +361,21 @@ class TimeEntry(db.Model):
     project_id = db.Column(db.Integer, db.ForeignKey('project.id'), nullable=False, index=True)
     task_id = db.Column(db.Integer, db.ForeignKey('task.id'), index=True)
     billable = db.Column(db.Boolean, default=True, index=True)  # Flag for billable time
+    # When this entry was rolled into an invoice (Task #28). NULL means
+    # the entry has not been invoiced yet. Decoupled from ``billable``
+    # so the chargeable-vs-already-billed signals stay independent:
+    # ``billable`` answers "is this work chargeable to the client?",
+    # ``invoiced_at`` answers "has the chargeable work already been
+    # billed?". The "From Time Entries" flow filters on
+    # ``billable=True AND invoiced_at IS NULL``.
+    invoiced_at = db.Column(db.DateTime, index=True)
+    # FK to the Invoice this entry was rolled into. Nullable; cleared
+    # when the draft invoice is deleted so the entry becomes
+    # invoiceable again. No ORM relationship/cascade is configured on
+    # purpose -- deleting an Invoice must NOT delete the underlying
+    # time entries; the delete_invoice route clears these columns
+    # manually instead.
+    invoice_id = db.Column(db.Integer, db.ForeignKey('invoice.id'), index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     # Composite indexes for reporting queries

@@ -431,6 +431,56 @@ with app.app_context():
             "Schema bootstrap for user_settings branding columns failed"
         )
 
+    # Add the Task #28 columns on time_entry that record which entries
+    # have already been rolled into an invoice. Idempotent ALTER block
+    # mirroring the user_settings one above so previously-provisioned
+    # databases pick up ``invoiced_at`` / ``invoice_id`` without
+    # operators having to run a manual migration. Each column is
+    # added in its own statement so a single failure can't strand the
+    # other.
+    #
+    # Legacy note: time entries that the v1 "From Time Entries" flow
+    # marked as invoiced by flipping ``billable`` to FALSE are NOT
+    # backfilled here -- we cannot reliably tell them apart from
+    # entries the user genuinely marked non-chargeable. Those rows
+    # remain invisible to the new query (``billable=True AND
+    # invoiced_at IS NULL``), which preserves the v1 behaviour.
+    try:
+        _fresh_inspector = inspect(db.engine)
+        if 'time_entry' in _fresh_inspector.get_table_names():
+            _existing_cols = {
+                c['name'] for c in _fresh_inspector.get_columns('time_entry')
+            }
+            _te_columns = [
+                ('invoiced_at', 'TIMESTAMP'),
+                ('invoice_id', 'INTEGER REFERENCES invoice(id)'),
+            ]
+            _missing = [(name, sql_type) for name, sql_type in _te_columns
+                        if name not in _existing_cols]
+            if _missing:
+                from sqlalchemy import text as _sa_text
+                for _name, _sql_type in _missing:
+                    try:
+                        with db.engine.begin() as _conn:
+                            _conn.execute(_sa_text(
+                                f"ALTER TABLE time_entry ADD COLUMN {_name} {_sql_type}"
+                            ))
+                        logger.info(
+                            "time_entry: added column %s %s",
+                            _name, _sql_type,
+                        )
+                    except Exception:  # noqa: BLE001 - per-column safety
+                        logger.exception(
+                            "Failed to ADD COLUMN %s on time_entry; the "
+                            "From-Time-Entries flow may misbehave until "
+                            "this is resolved.",
+                            _name,
+                        )
+    except Exception:  # noqa: BLE001 - top-level safety net
+        logger.exception(
+            "Schema bootstrap for time_entry invoiced columns failed"
+        )
+
     # Initialise the webhook security storage backend (Redis if
     # ``REDIS_URL`` is set, otherwise the DB fallback) and prime the
     # dynamic IP allowlist cache. This logs one line for the chosen

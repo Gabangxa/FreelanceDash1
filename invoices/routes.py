@@ -552,6 +552,20 @@ def delete_invoice(id):
 
         invoice_number = invoice.invoice_number  # Store for logging
 
+        # Clear the Task #28 invoiced markers on any time entries that
+        # were rolled into this invoice so they become invoiceable
+        # again. Done explicitly (not via DB-level ON DELETE SET NULL)
+        # because the bootstrap ALTER block has to stay portable
+        # across SQLite/Postgres -- the cascade behaviour is not
+        # guaranteed once the column is added at runtime. The
+        # ``billable`` flag is left untouched: it represents the
+        # user's "is this work chargeable?" intent, which is
+        # independent of whether it was invoiced.
+        TimeEntry.query.filter_by(invoice_id=invoice.id).update(
+            {'invoice_id': None, 'invoiced_at': None},
+            synchronize_session=False,
+        )
+
         db.session.delete(invoice)
         db.session.commit()
         logger.info(f"Invoice #{invoice_number} deleted by user {current_user.id}")
@@ -613,7 +627,10 @@ def invoice_from_time_entries():
     form.project_id.choices = project_choices
 
     # Load the unbilled, completed time entries for the chosen project.
-    # Only entries with end_time set (no running timers) and billable=True.
+    # Only entries with end_time set (no running timers), billable=True,
+    # and not already rolled into an invoice (Task #28: ``invoiced_at``
+    # stays NULL until the entry is invoiced; the v1 flow that flipped
+    # ``billable`` to FALSE is no longer in use).
     entries = []
     if selected_project_id:
         entries = (
@@ -623,6 +640,7 @@ def invoice_from_time_entries():
                 TimeEntry.project_id == selected_project_id,
                 Project.user_id == current_user.id,
                 TimeEntry.billable.is_(True),
+                TimeEntry.invoiced_at.is_(None),
                 TimeEntry.end_time.isnot(None),
             )
             .order_by(TimeEntry.start_time.asc())
@@ -650,6 +668,7 @@ def invoice_from_time_entries():
                 TimeEntry.project_id == form.project_id.data,
                 Project.user_id == current_user.id,
                 TimeEntry.billable.is_(True),
+                TimeEntry.invoiced_at.is_(None),
                 TimeEntry.end_time.isnot(None),
             )
             .all()
@@ -741,10 +760,14 @@ def invoice_from_time_entries():
                 total_amount += amount
                 total_hours += hours
 
-                # Flip the existing billable flag to mark this entry as
-                # already invoiced. See task plan for why we reuse this
-                # column instead of adding a new one.
-                entry.billable = False
+                # Mark this entry as invoiced (Task #28). We set both
+                # the timestamp and the FK to the new invoice so the
+                # entry is hidden from future "From Time Entries"
+                # picks and so deleting the invoice can clear the
+                # marker. ``billable`` is intentionally left alone --
+                # it tracks chargeability, not billed-status.
+                entry.invoiced_at = datetime.utcnow()
+                entry.invoice_id = invoice.id
 
             if total_hours <= 0:
                 db.session.rollback()
