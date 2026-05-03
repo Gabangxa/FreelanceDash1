@@ -700,14 +700,29 @@ def invoice_from_time_entries():
             db.session.add(invoice)
             db.session.flush()
 
+            # Reject the whole submission if any selected entry has
+            # zero/negative duration so the flash message and billed-flag
+            # mutations always match the user's selection exactly (one
+            # InvoiceItem per selected entry, no silent skips).
+            zero_duration = [e for e in chosen_entries
+                             if _format_minutes_as_hours(e.duration or 0) <= 0]
+            if zero_duration:
+                db.session.rollback()
+                flash(
+                    'One or more selected entries have zero duration. '
+                    'Edit or deselect them and try again.',
+                    'danger',
+                )
+                return render_template(
+                    'from_time_entries.html', form=form, entries=entries,
+                    selected_client_id=selected_client_id,
+                    selected_project_id=selected_project_id,
+                )
+
             total_amount = Decimal('0')
             total_hours = Decimal('0')
             for entry in chosen_entries:
                 hours = _format_minutes_as_hours(entry.duration or 0)
-                if hours <= 0:
-                    # Skip zero-duration entries silently; they'd produce
-                    # noise items with $0.00 amounts.
-                    continue
                 amount = _to_money(hours * rate)
                 description = (entry.description or '').strip()
                 if not description:
