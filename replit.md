@@ -196,7 +196,16 @@ SoloDolo is a comprehensive SaaS platform built with Flask that provides end-to-
   would silently invalidate sessions/CSRF on every gunicorn worker reload).
 - `DATABASE_URL`: Database connection string.
 - `MAIL_SERVER`, `MAIL_USERNAME`, `MAIL_PASSWORD`: Email configuration.
-- `POLAR_API_KEY`: Subscription service API key.
+- `POLAR_API_KEY`: Polar.sh API key (production: `https://api.polar.sh`).
+- `POLAR_WEBHOOK_SECRET`: standard-webhooks signing secret for
+  `/subscriptions/webhook`. Format is `whsec_<base64>` (the verifier also
+  accepts a raw string for tenants whose dashboard hands one out).
+- `POLAR_PROFESSIONAL_PRODUCT_ID`: Polar product id for the Professional tier.
+- `POLAR_PROFESSIONAL_MONTHLY_PRICE_ID`,
+  `POLAR_PROFESSIONAL_YEARLY_PRICE_ID`: Polar `product_price_id` values used
+  to start a checkout. The subscription page renders without these (the
+  Subscribe buttons just no-op with a flash) so the app boots fine while
+  pricing is being set up in the dashboard.
 - `FLASK_ENV`: `development` | `test` | (anything else = production).
 - `PRODUCTION`: Optional explicit production flag (`true`/`1`/`yes`).
   When either `PRODUCTION=true` or `FLASK_ENV` is unset/non-development,
@@ -388,6 +397,36 @@ go through Alembic so production deployments don't silently drop data.
     (including None / negative / garbage input), the round-trip
     `hours → minutes → hours` invariant, and verify the Jinja filters
     are wired up. Suite is now 71 passing.
+- May 03, 2026. Task #30: Polar.sh subscriptions enabled (Free + Professional only):
+  - `polar/polar_api.py` rewritten against the real Polar v1 API at
+    `https://api.polar.sh`: `POST /v1/checkouts/`, `GET /v1/checkouts/{id}`,
+    `GET /v1/subscriptions/{id}`, `PATCH /v1/subscriptions/{id}` (graceful
+    cancel via `cancel_at_period_end=true`). Removed the previous fictional
+    endpoints (`subscription/tiers`, `checkout/session`,
+    `subscriptions/{id}/cancel`, `subscriptions/{id}/upgrade`).
+  - Webhook signature verification implemented per the standard-webhooks
+    spec (`webhook-id` / `webhook-timestamp` / `webhook-signature`,
+    HMAC-SHA256, base64, 5-minute replay window). `whsec_<base64>` secrets
+    are decoded; raw secrets also accepted.
+  - `polar/routes.py` rewritten: two-tier catalog (Free $0, Professional
+    $13/mo or $130/yr — exclusive of taxes; Polar is merchant of record
+    and adds VAT/sales tax at checkout). `?billing=monthly|annual` selects
+    the price id. Checkout stamps `metadata={user_id, tier_id, billing_interval}`
+    so the subsequent webhook can attach the Subscription row to the right
+    user. Webhook handles `subscription.created/updated/active/uncanceled/
+    canceled/revoked`; manual cancel button still works against the API.
+  - `app.py`: `import polar` re-enabled and `polar.init_app(app)` called.
+    Only the webhook view function is CSRF-exempted (not the whole
+    blueprint), so the Cancel form keeps its Flask-WTF token.
+  - `templates/base.html`: account dropdown link to Subscription is back.
+  - `templates/polar/subscription.html`: Business tier removed; copy is
+    Free + Professional only; tax disclaimer added; Subscribe monthly /
+    Subscribe annually buttons render even when Polar isn't yet configured
+    (disabled with a warning banner) so the page is browseable.
+  - `tests/test_polar_webhook.py` (6 tests): missing-sig → 401, wrong-sig
+    → 401, missing secret → 503, valid `subscription.created` upserts a
+    row + log, `subscription.canceled` flips status, unhandled event
+    types are no-ops. Suite is now 19 passing on the Polar slice.
 - May 02, 2026. Feature gating split into `has_feature` + `get_feature_limit`:
   - New `polar/features.py` is the single source of truth for the feature
     schema (`FEATURE_SCHEMA` + per-tier overrides). `Subscription.get_features`

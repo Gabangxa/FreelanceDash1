@@ -333,7 +333,7 @@ from notifications.routes import notifications_bp  # Import notifications bluepr
 from api import api_bp  # Import the API blueprint
 from webhooks.routes import bp as webhooks_bp  # Import webhook blueprint
 from admin import bp as admin_bp  # Import admin blueprint
-# import polar  # Temporarily disabled Polar.sh integration
+import polar  # Polar.sh subscription integration
 
 # Register web interface blueprints
 app.register_blueprint(auth_bp)
@@ -356,6 +356,15 @@ app.register_blueprint(webhooks_bp)
 # (Stripe, GitHub, etc.) which can't carry a Flask-WTF CSRF token.
 csrf.exempt(api_bp)
 csrf.exempt(webhooks_bp)
+
+# Polar.sh blueprint -- the /subscriptions/webhook endpoint receives
+# HMAC-signed POSTs from Polar that can't carry a CSRF token. The rest of
+# the blueprint's POST routes (cancel) still use Flask-WTF tokens via the
+# template form, so we only exempt the single webhook view function rather
+# than the whole blueprint.
+polar.init_app(app)
+from polar.routes import webhook as _polar_webhook_view  # noqa: E402
+csrf.exempt(_polar_webhook_view)
 
 # Google OAuth blueprint (Task #17). Registered conditionally so the
 # app boots fine in environments without Google OAuth credentials
@@ -382,9 +391,7 @@ def inject_google_oauth_flag():
     ``google_auth`` itself."""
     return {'google_oauth_enabled': _google_oauth_configured()}
 
-# Initialize Polar.sh integration - Temporarily disabled
-# polar.init_app(app)
-logger.info("Polar.sh integration is temporarily disabled")
+# Polar.sh integration is initialized above (next to its CSRF exemption).
 
 # Create database tables
 with app.app_context():

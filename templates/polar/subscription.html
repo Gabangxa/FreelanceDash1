@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 
-{% block title %}Subscription Management{% endblock %}
+{% block title %}Subscription{% endblock %}
 
 {% block content %}
 <div class="container py-5">
@@ -8,31 +8,27 @@
     <div class="row mb-5">
         <div class="col-12 text-center">
             <h1 class="display-5 fw-bold">Subscription Plans</h1>
-            <p class="lead text-muted">Choose the plan that works best for your freelance business</p>
+            <p class="lead text-muted">Pick the plan that fits how you work today.</p>
         </div>
     </div>
-    
-    <!-- API Configuration Alert -->
+
     {% if not api_configured %}
     <div class="row mb-5">
         <div class="col-12">
             <div class="alert alert-warning" role="alert">
-                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> API Configuration Required</h4>
-                <p>The subscription service requires API configuration to enable payments. Please contact the administrator to configure the Polar API keys.</p>
-                <hr>
-                <p class="mb-0">You can still explore the available subscription plans, but you won't be able to subscribe until the API is properly configured.</p>
+                <h4 class="alert-heading"><i class="fas fa-exclamation-triangle me-2"></i> Subscription service unavailable</h4>
+                <p class="mb-0">Subscriptions aren't configured yet. You can still browse the plans below, but the Subscribe buttons are disabled until setup is complete.</p>
             </div>
         </div>
     </div>
     {% endif %}
-    
-    <!-- Current Subscription Status -->
+
     {% if subscription and subscription.is_active() %}
     <div class="row mb-5">
         <div class="col-12">
             <div class="card border-primary">
                 <div class="card-body">
-                    <div class="d-flex align-items-center justify-content-between">
+                    <div class="d-flex align-items-center justify-content-between flex-wrap gap-3">
                         <div>
                             <h5 class="card-title mb-1">Current Plan: <span class="text-primary">{{ subscription.tier_name }}</span></h5>
                             <p class="card-text text-muted mb-0">
@@ -42,9 +38,7 @@
                                 Billed annually at {{ subscription.currency }} {{ "%.2f"|format(subscription.amount) }}
                                 {% endif %}
                             </p>
-                            <p class="card-text">
-                                <small class="text-muted">Active since {{ subscription.start_date.strftime('%B %d, %Y') }}</small>
-                            </p>
+                            <p class="card-text"><small class="text-muted">Active since {{ subscription.start_date.strftime('%B %d, %Y') }}</small></p>
                         </div>
                         <div>
                             <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#cancelModal" {% if not api_configured %}disabled{% endif %}>
@@ -57,22 +51,22 @@
         </div>
     </div>
     {% endif %}
-    
+
     <!-- Pricing Plans -->
-    <div class="row row-cols-1 row-cols-md-3 g-4 mb-5">
+    <div class="row row-cols-1 row-cols-md-2 g-4 mb-3 justify-content-center">
         {% for tier in subscription_tiers %}
-        <div class="col">
+        <div class="col" style="max-width: 420px;">
             <div class="card h-100 {% if subscription and subscription.is_active() and subscription.tier_id == tier.id %}border-primary{% else %}border{% endif %}">
-                <div class="card-body">
+                <div class="card-body d-flex flex-column">
                     <h5 class="card-title text-center">{{ tier.name }}</h5>
-                    <div class="text-center mb-4 pt-3">
-                        <h2 class="display-6 fw-bold">
+                    <div class="text-center mb-3 pt-3">
+                        <h2 class="display-6 fw-bold mb-0">
                             ${{ tier.price_monthly }}
                             <small class="text-muted fs-6">/month</small>
                         </h2>
                         {% if tier.id != 'free' %}
-                        <p class="text-muted small mb-0">Or ${{ tier.price_annually }} billed annually</p>
-                        <p class="text-muted small">Save {{ ((tier.price_monthly * 12 - tier.price_annually) / (tier.price_monthly * 12) * 100) | int }}%</p>
+                        <p class="text-muted small mb-0 mt-2">Or ${{ tier.price_annually }} billed annually</p>
+                        <p class="text-muted small mb-0">Save {{ ((tier.price_monthly * 12 - tier.price_annually) / (tier.price_monthly * 12) * 100) | int }}% with annual billing</p>
                         {% endif %}
                     </div>
                     <p class="text-muted text-center mb-4">{{ tier.description }}</p>
@@ -83,18 +77,17 @@
                         </li>
                         {% endfor %}
                     </ul>
-                    <div class="d-grid">
+                    <div class="mt-auto d-grid gap-2">
                         {% if subscription and subscription.is_active() and subscription.tier_id == tier.id %}
                             <button class="btn btn-outline-primary" disabled>Current Plan</button>
                         {% elif tier.id == 'free' %}
                             <button class="btn btn-outline-secondary" disabled>Free Tier</button>
                         {% else %}
-                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id) }}" class="btn btn-primary" {% if not api_configured %}disabled{% endif %}>
-                                {% if subscription and subscription.is_active() %}
-                                    Upgrade
-                                {% else %}
-                                    Subscribe
-                                {% endif %}
+                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id, billing='monthly') }}" class="btn btn-primary" {% if not api_configured %}disabled aria-disabled="true"{% endif %}>
+                                Subscribe monthly
+                            </a>
+                            <a href="{{ url_for('subscriptions.checkout', tier_id=tier.id, billing='annual') }}" class="btn btn-outline-primary" {% if not api_configured %}disabled aria-disabled="true"{% endif %}>
+                                Subscribe annually
                             </a>
                         {% endif %}
                     </div>
@@ -103,7 +96,9 @@
         </div>
         {% endfor %}
     </div>
-    
+
+    <p class="text-center text-muted small mb-5">All prices are exclusive of applicable taxes. Polar acts as merchant of record and adds VAT/sales tax at checkout where required.</p>
+
     <!-- Subscription FAQs -->
     <div class="row mb-5">
         <div class="col-12">
@@ -112,16 +107,16 @@
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingOne">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
-                            Can I change my subscription plan later?
+                            Can I change my subscription later?
                         </button>
                     </h2>
                     <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#subscriptionFAQ">
                         <div class="accordion-body">
-                            Yes, you can upgrade or downgrade your plan at any time. When upgrading, you'll be billed the prorated amount for the remainder of your billing cycle. When downgrading, the changes will take effect at the end of your current billing cycle.
+                            Yes. You can cancel any time from this page; your Professional features stay active until the end of the current billing period, then your account converts back to the Free tier.
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingTwo">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo" aria-expanded="false" aria-controls="collapseTwo">
@@ -130,24 +125,24 @@
                     </h2>
                     <div id="collapseTwo" class="accordion-collapse collapse" aria-labelledby="headingTwo" data-bs-parent="#subscriptionFAQ">
                         <div class="accordion-body">
-                            We accept all major credit cards (Visa, Mastercard, American Express) through our secure payment processor. We do not store your credit card information on our servers.
+                            All major credit cards (Visa, Mastercard, American Express) plus the local payment methods Polar supports in your country. Card details are handled by Polar &mdash; SoloDolo never stores them.
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingThree">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree" aria-expanded="false" aria-controls="collapseThree">
-                            How do I cancel my subscription?
+                            How are taxes handled?
                         </button>
                     </h2>
                     <div id="collapseThree" class="accordion-collapse collapse" aria-labelledby="headingThree" data-bs-parent="#subscriptionFAQ">
                         <div class="accordion-body">
-                            You can cancel your subscription at any time from this page. After cancellation, your premium features will remain active until the end of your current billing cycle. After that, your account will automatically be converted to the free tier.
+                            Prices on this page are exclusive of taxes. Polar is the merchant of record and will add the correct VAT or sales tax at checkout based on your billing address.
                         </div>
                     </div>
                 </div>
-                
+
                 <div class="accordion-item">
                     <h2 class="accordion-header" id="headingFour">
                         <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseFour" aria-expanded="false" aria-controls="collapseFour">
@@ -156,29 +151,8 @@
                     </h2>
                     <div id="collapseFour" class="accordion-collapse collapse" aria-labelledby="headingFour" data-bs-parent="#subscriptionFAQ">
                         <div class="accordion-body">
-                            We don't currently offer a free trial, but our free tier provides access to the core features so you can try the platform before upgrading. If you're not satisfied with your paid subscription within the first 14 days, contact our support team for a full refund.
+                            Not yet &mdash; the Free tier lets you try the core features (up to 3 clients and 5 projects) for as long as you like before deciding to upgrade.
                         </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Admin Section -->
-<div class="container mt-5 mb-5">
-    <div class="row">
-        <div class="col-12">
-            <div class="card">
-                <div class="card-header bg-secondary text-white">
-                    <h5 class="mb-0">Administration</h5>
-                </div>
-                <div class="card-body">
-                    <p class="card-text">Configure Polar.sh integration settings:</p>
-                    <div class="d-flex flex-wrap gap-2">
-                        <a href="{{ url_for('subscriptions.webhook_url') }}" class="btn btn-outline-secondary">
-                            <i class="fas fa-link"></i> Webhook Configuration
-                        </a>
                     </div>
                 </div>
             </div>
@@ -198,19 +172,15 @@
             <div class="modal-body">
                 <p>Are you sure you want to cancel your {{ subscription.tier_name }} subscription?</p>
                 <ul>
-                    <li>Your subscription will remain active until the end of the current billing period.</li>
-                    <li>After that, your account will be converted to the free tier.</li>
-                    <li>You may lose access to premium features and data associated with those features.</li>
+                    <li>Your subscription stays active until the end of the current billing period.</li>
+                    <li>After that, your account converts back to the Free tier.</li>
+                    <li>You may lose access to features that aren't included in the Free plan.</li>
                 </ul>
-                {% if not api_configured %}
-                <div class="alert alert-warning mt-3" role="alert">
-                    <small>The API is not currently configured. Please contact the administrator to enable subscription management.</small>
-                </div>
-                {% endif %}
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Keep Subscription</button>
                 <form action="{{ url_for('subscriptions.cancel_subscription') }}" method="post">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"/>
                     <button type="submit" class="btn btn-danger" {% if not api_configured %}disabled{% endif %}>Cancel Subscription</button>
                 </form>
             </div>

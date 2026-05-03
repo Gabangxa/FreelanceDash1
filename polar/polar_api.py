@@ -1,320 +1,286 @@
 """
-Polar.sh API integration for SoloDolo.
-Handles subscription management and payment processing.
+Polar.sh API client for SoloDolo.
+
+Targets the real production Polar v1 API at ``https://api.polar.sh``.
+The previous version of this file used guessed endpoint names
+(``subscription/tiers``, ``checkout/session``, ``subscriptions/{id}/cancel``,
+``subscriptions/{id}/upgrade``) that do not exist in Polar's real API
+surface -- those have been removed. The supported operations are:
+
+* ``create_checkout``   -- POST /v1/checkouts/
+* ``get_checkout``      -- GET  /v1/checkouts/{id}
+* ``get_subscription``  -- GET  /v1/subscriptions/{id}
+* ``cancel_subscription`` -- PATCH /v1/subscriptions/{id}
+                            (cancel_at_period_end=true; graceful cancel)
+
+Webhook signature verification (standard-webhooks spec) lives in
+:func:`verify_webhook_signature`.
 """
-import os
-import requests
+import base64
+import hashlib
+import hmac
 import logging
+import os
 import time
-from datetime import datetime
+from typing import Any, Dict, Mapping, Optional
 from urllib.parse import urljoin
-from flask import current_app
+
+import requests
 
 logger = logging.getLogger(__name__)
 
+
+BASE_URL = "https://api.polar.sh/"
+DEFAULT_TIMEOUT = 10  # seconds
+
+
+class PolarAPIError(Exception):
+    """Raised for any error talking to Polar (network, HTTP, parsing)."""
+
+
 class PolarAPI:
-    """Client for the Polar.sh API."""
-    
-    BASE_URL = "https://api.polar.sh/v1/"
-    
-    def __init__(self, api_key=None):
-        """
-        Initialize the Polar API client.
-        
-        Args:
-            api_key: The Polar API key. If None, it will be loaded from environment.
-        """
+    """Thin wrapper over Polar's v1 REST API."""
+
+    def __init__(self, api_key: Optional[str] = None) -> None:
         self.api_key = api_key or os.environ.get("POLAR_API_KEY")
         if not self.api_key:
-            raise ValueError("Polar API key is required")
-        
+            raise PolarAPIError("POLAR_API_KEY is not configured")
+
         self.session = requests.Session()
         self.session.headers.update({
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "User-Agent": "SoloDolo/1.0 (+https://solodolo.xyz)",
         })
-    
-    def _make_request(self, method, endpoint, **kwargs):
-        """
-        Make a request to the Polar API.
-        
-        Args:
-            method: HTTP method (get, post, etc.)
-            endpoint: API endpoint to call
-            **kwargs: Additional arguments to pass to requests
-            
-        Returns:
-            Response data as JSON
-            
-        Raises:
-            PolarAPIError: If the API returns an error
-        """
-        url = urljoin(self.BASE_URL, endpoint)
-        
-        # Check if API key is present
-        if not self.api_key:
-            logger.error("No Polar API key available")
-            raise PolarAPIError("Polar API key is missing. Please configure it in the environment variables.")
-        
+
+    # ------------------------------------------------------------------ #
+    # internal
+    # ------------------------------------------------------------------ #
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        json: Optional[Mapping[str, Any]] = None,
+        timeout: int = DEFAULT_TIMEOUT,
+    ) -> Dict[str, Any]:
+        url = urljoin(BASE_URL, endpoint.lstrip("/"))
+        logger.info("Polar API %s %s", method.upper(), endpoint)
         try:
-            # Add timeout to prevent hanging requests
-            timeout = kwargs.pop('timeout', 10)
-            
-            # Log the request being made (without sensitive data)
-            masked_kwargs = kwargs.copy()
-            if 'json' in masked_kwargs and isinstance(masked_kwargs['json'], dict):
-                if 'user' in masked_kwargs['json']:
-                    masked_kwargs['json']['user'] = "***REDACTED***"
-            
-            logger.info(f"Making Polar API request: {method.upper()} {endpoint}")
-            
-            # Make the actual request
-            response = self.session.request(method, url, timeout=timeout, **kwargs)
-            response.raise_for_status()
+            response = self.session.request(
+                method, url, json=json, timeout=timeout
+            )
+        except requests.exceptions.Timeout as exc:
+            logger.error("Polar API timeout: %s %s", method.upper(), endpoint)
+            raise PolarAPIError("Polar API request timed out") from exc
+        except requests.exceptions.ConnectionError as exc:
+            logger.error(
+                "Polar API connection error: %s %s", method.upper(), endpoint
+            )
+            raise PolarAPIError("Could not reach Polar API") from exc
+
+        if not response.ok:
+            # Try to surface Polar's error body for debuggability, without
+            # leaking the request payload (which may contain customer email).
+            body_excerpt = response.text[:500] if response.text else ""
+            logger.error(
+                "Polar API error %s on %s %s: %s",
+                response.status_code, method.upper(), endpoint, body_excerpt,
+            )
+            if response.status_code in (401, 403):
+                raise PolarAPIError(
+                    "Polar API rejected our credentials. Check POLAR_API_KEY."
+                )
+            raise PolarAPIError(
+                f"Polar API returned HTTP {response.status_code}"
+            )
+
+        # Some endpoints (DELETE, etc.) return empty bodies on success.
+        if not response.content:
+            return {}
+        try:
             return response.json()
-            
-        except requests.exceptions.Timeout:
-            logger.error(f"Polar API timeout: {method.upper()} {endpoint}")
-            raise PolarAPIError("The request to Polar API timed out. Please try again later.")
-            
-        except requests.exceptions.ConnectionError:
-            logger.error(f"Polar API connection error: {method.upper()} {endpoint}")
-            raise PolarAPIError("Could not connect to Polar API. Please check your internet connection.")
-            
-        except requests.exceptions.RequestException as e:
-            logger.exception("Polar API error")
-            
-            # Try to extract more details from the response
-            if hasattr(e, 'response') and e.response is not None:
-                try:
-                    error_data = e.response.json()
-                    error_message = error_data.get('message', str(e))
-                    logger.error(f"Polar API error details: {error_data}")
-                    raise PolarAPIError(f"Polar API error: {error_message}")
-                except ValueError:
-                    status_code = e.response.status_code
-                    logger.error(f"Polar API error status: {status_code}")
-                    
-                    if status_code == 401:
-                        raise PolarAPIError("Authentication failed. Please check your Polar API key.")
-                    elif status_code == 403:
-                        raise PolarAPIError("You don't have permission to access this resource.")
-                    elif status_code >= 500:
-                        raise PolarAPIError("Polar API is currently experiencing issues. Please try again later.")
-                    
-            raise PolarAPIError(f"Error communicating with Polar API: {str(e)}") from e
-    
-    # Subscription Management
-    
-    def get_subscription_tiers(self):
+        except ValueError as exc:
+            raise PolarAPIError("Polar API returned non-JSON body") from exc
+
+    # ------------------------------------------------------------------ #
+    # checkouts
+    # ------------------------------------------------------------------ #
+    def create_checkout(
+        self,
+        *,
+        product_price_id: str,
+        success_url: str,
+        customer_email: Optional[str] = None,
+        metadata: Optional[Mapping[str, Any]] = None,
+    ) -> Dict[str, Any]:
+        """Create a Polar hosted-checkout session.
+
+        Returns the raw checkout object; the caller redirects the user to
+        ``response["url"]``. ``metadata`` is round-tripped on the resulting
+        Subscription object, which is how we recover the SoloDolo user_id
+        when webhooks come back.
         """
-        Get available subscription tiers.
-        
-        Returns:
-            List of subscription tiers
-        """
-        return self._make_request("get", "subscription/tiers")
-    
-    def create_subscription(self, user_data, tier_id, payment_method_id=None):
-        """
-        Create a new subscription for a user.
-        
-        Args:
-            user_data: User information dictionary
-            tier_id: ID of the subscription tier
-            payment_method_id: Optional payment method ID
-            
-        Returns:
-            Subscription details
-        """
-        data = {
-            "user": user_data,
-            "tier_id": tier_id
-        }
-        if payment_method_id:
-            data["payment_method_id"] = payment_method_id
-            
-        return self._make_request("post", "subscriptions", json=data)
-    
-    def get_subscription(self, subscription_id):
-        """
-        Get subscription details.
-        
-        Args:
-            subscription_id: ID of the subscription
-            
-        Returns:
-            Subscription details
-        """
-        return self._make_request("get", f"subscriptions/{subscription_id}")
-    
-    def cancel_subscription(self, subscription_id):
-        """
-        Cancel a subscription.
-        
-        Args:
-            subscription_id: ID of the subscription
-            
-        Returns:
-            Cancellation confirmation
-        """
-        logger.info(f"Cancelling subscription: {subscription_id}")
-        return self._make_request("post", f"subscriptions/{subscription_id}/cancel")
-    
-    def upgrade_subscription(self, subscription_id, new_tier_id):
-        """
-        Upgrade a subscription to a new tier.
-        
-        Args:
-            subscription_id: ID of the subscription
-            new_tier_id: ID of the new subscription tier
-            
-        Returns:
-            Updated subscription details
-        """
-        data = {"tier_id": new_tier_id}
-        return self._make_request("post", f"subscriptions/{subscription_id}/upgrade", json=data)
-    
-    # Payment Processing
-    
-    def create_checkout_session(self, user_data, tier_id, success_url, cancel_url):
-        """
-        Create a checkout session for subscription payment.
-        
-        Args:
-            user_data: User information dictionary
-            tier_id: ID of the subscription tier
-            success_url: URL to redirect after successful payment
-            cancel_url: URL to redirect if payment is cancelled
-            
-        Returns:
-            Checkout session details with redirect URL
-        """
-        # Log the API request for debugging
-        logger.info(f"Creating checkout session for tier {tier_id}")
-        
-        # Prepare the request data for the Polar.sh API
-        data = {
-            "user": user_data,
-            "tier_id": tier_id,
+        body: Dict[str, Any] = {
+            "product_price_id": product_price_id,
             "success_url": success_url,
-            "cancel_url": cancel_url,
-            "mode": "subscription"
         }
-        
-        # Make the actual API request to Polar's checkout endpoint
-        try:
-            response = self._make_request("post", "checkout/session", json=data)
-            logger.info(f"Successfully created checkout session: {response.get('id')}")
-            return response
-        except (PolarAPIError, requests.RequestException, ValueError, KeyError) as e:
-            logger.exception("Failed to create checkout session")
-            raise PolarAPIError(f"Unable to create checkout session: {str(e)}")
-    
-    def get_payment_methods(self, user_id):
-        """
-        Get available payment methods for a user.
-        
-        Args:
-            user_id: ID of the user
-            
-        Returns:
-            List of payment methods
-        """
-        return self._make_request("get", f"users/{user_id}/payment-methods")
-        
-    def get_checkout_session(self, session_id):
-        """
-        Get details of a checkout session.
-        
-        Args:
-            session_id: ID of the checkout session
-            
-        Returns:
-            Checkout session details
-        """
-        logger.info(f"Getting checkout session details for: {session_id}")
-        
-        try:
-            # Call the Polar.sh API to get session details
-            return self._make_request("get", f"checkout/session/{session_id}")
-        except (PolarAPIError, requests.RequestException, ValueError, KeyError) as e:
-            logger.exception("Error getting checkout session")
-            raise PolarAPIError(f"Unable to retrieve checkout session information: {str(e)}")
+        if customer_email:
+            body["customer_email"] = customer_email
+        if metadata:
+            # Polar requires metadata values to be strings.
+            body["metadata"] = {k: str(v) for k, v in metadata.items()}
+        return self._request("post", "/v1/checkouts/", json=body)
+
+    def get_checkout(self, checkout_id: str) -> Dict[str, Any]:
+        return self._request("get", f"/v1/checkouts/{checkout_id}")
+
+    # ------------------------------------------------------------------ #
+    # subscriptions
+    # ------------------------------------------------------------------ #
+    def get_subscription(self, subscription_id: str) -> Dict[str, Any]:
+        return self._request("get", f"/v1/subscriptions/{subscription_id}")
+
+    def cancel_subscription(self, subscription_id: str) -> Dict[str, Any]:
+        """Cancel at the end of the current billing period (graceful)."""
+        return self._request(
+            "patch",
+            f"/v1/subscriptions/{subscription_id}",
+            json={"cancel_at_period_end": True},
+        )
 
 
-class PolarAPIError(Exception):
-    """Exception raised for Polar API errors."""
-    pass
+# ---------------------------------------------------------------------- #
+# Module-level helpers
+# ---------------------------------------------------------------------- #
+_polar_api_instance: Optional[PolarAPI] = None
 
 
-# Singleton instance
-_polar_api_instance = None
-
-def get_polar_api():
-    """
-    Get or create the Polar API client singleton.
-    
-    Returns:
-        PolarAPI instance
-        
-    Raises:
-        PolarAPIError: If the API key is missing or invalid
-    """
+def get_polar_api() -> PolarAPI:
+    """Return a process-wide PolarAPI client, creating it on first use."""
     global _polar_api_instance
-    
     if _polar_api_instance is None:
-        # Check for API key
-        api_key = os.environ.get("POLAR_API_KEY")
-        
-        # Require a valid API key
-        if not api_key:
-            logger.error("No POLAR_API_KEY found in environment. Please configure this API key.")
-            raise PolarAPIError("Polar API key is required. Please contact the administrator to set up your API key.")
-            
-        try:
-            _polar_api_instance = PolarAPI()
-        except ValueError as e:
-            # Convert ValueError to PolarAPIError for consistent error handling
-            logger.exception("Failed to initialize Polar API client")
-            raise PolarAPIError(f"Failed to initialize Polar API: {str(e)}")
-            
+        _polar_api_instance = PolarAPI()
     return _polar_api_instance
 
-def is_polar_api_configured():
-    """
-    Check if the Polar API is properly configured with the required API key.
-    
-    Returns:
-        bool: True if the API is configured, False otherwise
-    """
-    try:
-        # Check if the POLAR_API_KEY exists in environment
-        api_key = os.environ.get("POLAR_API_KEY")
-        return bool(api_key)
-    except OSError:
-        logger.exception("Error checking Polar API configuration")
-        return False
 
-def get_webhook_url():
-    """
-    Get the webhook URL for Polar.sh subscription events.
-    
-    This is the URL that Polar will send webhook events to.
-    When configuring your Polar.sh webhook, you should use this URL.
-    
-    Returns:
-        str: The full webhook URL
-    """
+def reset_polar_api_for_tests() -> None:
+    """Forget the cached client. Used by tests that monkeypatch the env."""
+    global _polar_api_instance
+    _polar_api_instance = None
+
+
+def is_polar_api_configured() -> bool:
+    """True if POLAR_API_KEY is set in the environment."""
+    return bool(os.environ.get("POLAR_API_KEY"))
+
+
+def get_webhook_url() -> str:
+    """Build the absolute URL Polar should POST webhooks to."""
+    from flask import url_for
     try:
-        # Get the application's external URL from configuration or build it
-        from flask import url_for, current_app
-        
-        # Generate the webhook URL using url_for
-        webhook_url = url_for('subscriptions.webhook', _external=True)
-        return webhook_url
-    except RuntimeError as e:
-        logger.exception("Error generating Polar webhook URL")
-        # Fallback to a placeholder - this should be replaced with actual URL
-        return "https://yourapp.replit.app/subscriptions/webhook"
+        return url_for("subscriptions.webhook", _external=True)
+    except RuntimeError:
+        # Outside of a request context (CLI / docs page during boot test).
+        return "https://solodolo.xyz/subscriptions/webhook"
+
+
+# ---------------------------------------------------------------------- #
+# Webhook signature verification (standard-webhooks spec)
+# ---------------------------------------------------------------------- #
+# Polar publishes webhooks per https://www.standardwebhooks.com/. The signing
+# secret is delivered as ``whsec_<base64-encoded-key>``. Each request carries:
+#
+#   webhook-id        -- unique ID per delivery
+#   webhook-timestamp -- unix seconds of when Polar sent the event
+#   webhook-signature -- "v1,<base64(hmac_sha256(signed_payload))>"
+#                        (multiple sigs separated by spaces during key rotation)
+#
+# signed_payload = f"{webhook_id}.{webhook_timestamp}.{raw_body}"
+
+WEBHOOK_TOLERANCE_SECONDS = 5 * 60  # reject events older/newer than 5 min
+
+
+class WebhookVerificationError(Exception):
+    """Raised when a webhook signature fails verification."""
+
+
+def _decode_secret(secret: str) -> bytes:
+    """Decode a standard-webhooks ``whsec_<base64>`` secret to raw bytes.
+
+    Falls back to treating the secret as a raw UTF-8 string if it doesn't
+    match the prefixed format -- some Polar-compatible providers (and the
+    Polar dashboard's "plain string" fallback for legacy tenants) hand out
+    a non-prefixed secret.
+    """
+    if secret.startswith("whsec_"):
+        try:
+            return base64.b64decode(secret[len("whsec_"):])
+        except (ValueError, base64.binascii.Error) as exc:
+            raise WebhookVerificationError(
+                "Malformed webhook secret (not valid base64 after whsec_)"
+            ) from exc
+    return secret.encode("utf-8")
+
+
+def verify_webhook_signature(
+    *,
+    payload: bytes,
+    headers: Mapping[str, str],
+    secret: str,
+    tolerance_seconds: int = WEBHOOK_TOLERANCE_SECONDS,
+    now: Optional[float] = None,
+) -> None:
+    """Validate a Polar webhook per the standard-webhooks spec.
+
+    Raises :class:`WebhookVerificationError` on any failure and returns
+    ``None`` on success. Header names are matched case-insensitively
+    because Flask preserves the original casing the client sent.
+    """
+    # Case-insensitive header lookup.
+    lower = {k.lower(): v for k, v in headers.items()}
+    msg_id = lower.get("webhook-id")
+    msg_ts = lower.get("webhook-timestamp")
+    msg_sig = lower.get("webhook-signature")
+
+    if not (msg_id and msg_ts and msg_sig):
+        raise WebhookVerificationError(
+            "Missing required webhook headers (webhook-id / -timestamp / "
+            "-signature)"
+        )
+
+    # Replay protection.
+    try:
+        ts = int(msg_ts)
+    except (TypeError, ValueError) as exc:
+        raise WebhookVerificationError(
+            "webhook-timestamp is not an integer"
+        ) from exc
+
+    current = int(now if now is not None else time.time())
+    if abs(current - ts) > tolerance_seconds:
+        raise WebhookVerificationError(
+            "Webhook timestamp outside tolerance (possible replay)"
+        )
+
+    key = _decode_secret(secret)
+    signed_payload = f"{msg_id}.{msg_ts}.".encode("utf-8") + payload
+    expected = base64.b64encode(
+        hmac.new(key, signed_payload, hashlib.sha256).digest()
+    ).decode("utf-8")
+
+    # Header may carry multiple sigs ("v1,sigA v1,sigB") during key rotation.
+    candidates = []
+    for token in msg_sig.split():
+        if "," in token:
+            version, value = token.split(",", 1)
+            if version == "v1":
+                candidates.append(value)
+    if not candidates:
+        raise WebhookVerificationError("No v1 signatures found in header")
+
+    for candidate in candidates:
+        if hmac.compare_digest(candidate, expected):
+            return
+    raise WebhookVerificationError("No webhook signature matched")
