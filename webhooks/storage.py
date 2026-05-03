@@ -738,7 +738,7 @@ def get_storage() -> WebhookStorageBackend:
     if nats_url:
         try:
             _storage = JetStreamKVStorage()
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - nats client raises varied concrete types; we re-raise unconditionally
             # Refuse to silently degrade when the operator explicitly
             # asked for NATS -- same policy as the Redis branch below.
             logger.error(
@@ -751,7 +751,7 @@ def get_storage() -> WebhookStorageBackend:
     elif redis_url:
         try:
             _storage = RedisWebhookStorage(redis_url)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - redis client raises varied concrete types; we re-raise unconditionally
             # Refuse to silently degrade to in-memory or to the DB fallback
             # when REDIS_URL was explicitly configured -- the operator
             # almost certainly wants Redis specifically.

@@ -1,5 +1,36 @@
 # Freelancer Suite - Replit Configuration
 
+## 2026-05-03 — Code-review hardening: Decimal money, tenant defense, tighter excepts
+
+Addressed the top three findings from the post-NATS-Phase-1 architect
+review. All changes are non-functional from the user's point of view but
+close real correctness/security gaps.
+
+* **Decimal end-to-end for money**: `Invoice.amount`,
+  `InvoiceItem.{quantity,rate,amount}`, and `Subscription.amount` are
+  now `Numeric(precision=12, scale=2)` (or `scale=4` for quantity, so
+  fractional hours like `1.25h` round-trip exactly). `invoices/forms.py`
+  uses `DecimalField`; `invoices/routes.py` threads `Decimal` through
+  the totaling loop with a `_to_money()` quantizer (`ROUND_HALF_UP`),
+  killing the long-standing `0.10 + 0.20 == 0.30000000000000004` drift.
+  Data-export JSON now emits `Decimal` as a string (was `float`) so
+  exact values round-trip for users who re-import or reconcile.
+* **Migration `0006_money_to_numeric`**: idempotent (inspects existing
+  column type before altering) and reversible. Uses `batch_alter_table`
+  so the SQLite test DB and any dev installs survive. Verified
+  upgrade → downgrade → re-upgrade cleanly against a fresh SQLite DB.
+* **Tenant scoping defense-in-depth**: every cross-table lookup in
+  `clients/`, `invoices/`, and `projects/` now carries
+  `user_id=current_user.id` even when the parent row was already
+  tenant-scoped. New `tests/test_tenant_isolation.py` proves user A
+  asking for user B's ids gets a 404 across all protected routes.
+* **Tightened excepts**: bare `except:` in `admin/routes.py` table-stats
+  loop narrowed to `SQLAlchemyError`; the four rollback-and-reraise
+  blocks in `webhooks/storage.py` are now annotated `# noqa: BLE001`
+  with rationale (vendor-specific connect-time errors that re-raise
+  unconditionally).
+* Full suite: 217 passed, 10 skipped.
+
 ## 2026-05-02 — NATS Phase 1 (subscriber + Reserved VM)
 
 Shipped the first long-lived NATS consumer to take notification

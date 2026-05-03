@@ -308,11 +308,13 @@ def export_data_json():
 
         def _json_default(obj):
             # ``Decimal`` (used for invoice money / quantity columns) is
-            # not JSON-serializable by default. Render as a plain float
-            # so consumers see a number rather than a string -- precision
-            # is preserved at 2dp / 4dp by the column type itself.
+            # not JSON-serializable by default. Emit as a string so the
+            # exact decimal value (and trailing zeros like "10.00") round-
+            # trips without binary-float drift -- this is user data they
+            # may re-import or reconcile against, so exactness wins over
+            # the slight inconvenience of a quoted number.
             if isinstance(obj, Decimal):
-                return float(obj)
+                return str(obj)
             raise TypeError(f"Object of type {type(obj).__name__} is not JSON serializable")
         
         # Get user data

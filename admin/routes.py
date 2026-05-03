@@ -125,6 +125,9 @@ def dashboard():
         ).scalar() or 0
         revenue_chart.append({
             'date': date.strftime('%Y-%m-%d'),
+            # Chart.js consumes JS numbers, so float() is intentional
+            # here -- this is a display-only aggregate, not a money value
+            # that gets reconciled or stored back to the DB.
             'amount': float(daily_revenue)
         })
     
