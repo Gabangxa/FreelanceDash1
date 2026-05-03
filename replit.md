@@ -319,7 +319,7 @@ go through Alembic so production deployments don't silently drop data.
     programming errors surface instead of getting swallowed and
     re-raised as opaque DB failures.
 - May 02, 2026. Landing page redesign — Jony-Ive-inspired minimalist
-  ("Freelance.") brand:
+  ("SoloDolo.") brand:
   - Replaced `templates/index.html` (was 965-line Bootstrap landing) with
     a clean Apple-style page following the uploaded `freelance-dash` UI
     design and using its copy verbatim ("Focus on the work. We'll handle
@@ -336,8 +336,8 @@ go through Alembic so production deployments don't silently drop data.
     section bands (off-white hero / white features / white footer) span
     the full viewport, with `overflow-x:hidden` to suppress sidescroll.
   - Auth-aware CTAs preserved: unauth → register / login, auth →
-    dashboard. Brand label kept as "Freelance." per the uploaded design;
-    rest of the app continues to brand as Freelancer Suite / WorkVista.
+    dashboard. Brand label kept as "SoloDolo." per the uploaded design;
+    rest of the app continues to brand as SoloDolo / WorkVista.
   - Two CSS gotchas solved during implementation, documented inline:
     1. `.lp-root a { color: inherit }` (specificity 0,1,1) was beating
        `.lp-cta-primary` (0,1,0) and rendering the "Start building"
