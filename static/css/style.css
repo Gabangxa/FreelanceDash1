@@ -2843,3 +2843,457 @@ code {
 }
 [data-bs-theme="dark"] .lp-auth .lp-pw-hints li.is-valid { color: #6ee7a4; }
 [data-bs-theme="dark"] .lp-auth .lp-pw-hints li.is-valid::before { background: #6ee7a4; }
+
+/* ==========================================================================
+   App shell — landing-page design language for authenticated pages.
+   Scoped to body.lp-app so it never leaks to the marketing pages.
+   Mirrors .lp-root tokens: Inter, off-white canvas, soft borders,
+   monochrome accents, black pill CTAs. Includes dark-mode parity.
+   ========================================================================== */
+
+body.lp-app {
+    --lp-bg: #fbfbfd;
+    --lp-bg-alt: #ffffff;
+    --lp-text: #1d1d1f;
+    --lp-text-muted: #6e6e73;
+    --lp-text-muted-soft: #86868b;
+    --lp-border: rgba(0, 0, 0, 0.08);
+    --lp-border-soft: rgba(0, 0, 0, 0.05);
+    --lp-border-strong: rgba(0, 0, 0, 0.10);
+    --lp-surface: #ffffff;
+
+    background: var(--lp-bg);
+    color: var(--lp-text);
+    font-family: "Inter Variable", "Inter", -apple-system, BlinkMacSystemFont,
+                 "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
+}
+
+[data-bs-theme="dark"] body.lp-app,
+body.lp-app[data-bs-theme="dark"] {
+    --lp-bg: #0a0a0c;
+    --lp-bg-alt: #111114;
+    --lp-text: #f5f5f7;
+    --lp-text-muted: #a1a1a6;
+    --lp-text-muted-soft: #86868b;
+    --lp-border: rgba(255, 255, 255, 0.10);
+    --lp-border-soft: rgba(255, 255, 255, 0.06);
+    --lp-border-strong: rgba(255, 255, 255, 0.14);
+    --lp-surface: #15151a;
+}
+
+/* Top navigation -------------------------------------------------------- */
+body.lp-app .lp-app-nav {
+    background: rgba(251, 251, 253, 0.85);
+    backdrop-filter: saturate(180%) blur(20px);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    border-bottom: 1px solid var(--lp-border-soft);
+    padding-block: 14px;
+    box-shadow: none;
+}
+[data-bs-theme="dark"] body.lp-app .lp-app-nav {
+    background: rgba(10, 10, 12, 0.85);
+}
+body.lp-app .lp-app-nav .navbar-brand {
+    font-weight: 600;
+    font-size: 20px;
+    letter-spacing: -0.02em;
+    color: var(--lp-text);
+}
+/* The legacy `.navbar-nav .nav-link` rule earlier in this file uses
+   !important on color/padding/background — we have to match that here
+   to win the specificity fight. */
+body.lp-app .lp-app-nav .navbar-nav .nav-link {
+    color: var(--lp-text) !important;
+    font-weight: 500;
+    font-size: 15px;
+    padding: 8px 12px !important;
+    background-color: transparent !important;
+    margin: 0 4px;
+    border-radius: 8px;
+    transition: opacity 0.2s ease, background-color 0.2s ease;
+    opacity: 0.7;
+}
+body.lp-app .lp-app-nav .navbar-nav .nav-link:hover,
+body.lp-app .lp-app-nav .navbar-nav .nav-link:focus {
+    opacity: 1;
+    color: var(--lp-text) !important;
+    background-color: rgba(0, 0, 0, 0.04) !important;
+}
+[data-bs-theme="dark"] body.lp-app .lp-app-nav .navbar-nav .nav-link:hover,
+[data-bs-theme="dark"] body.lp-app .lp-app-nav .navbar-nav .nav-link:focus {
+    background-color: rgba(255, 255, 255, 0.06) !important;
+}
+body.lp-app .lp-app-nav .navbar-nav .nav-link.active {
+    opacity: 1;
+    color: var(--lp-text) !important;
+    background-color: rgba(0, 0, 0, 0.05) !important;
+}
+[data-bs-theme="dark"] body.lp-app .lp-app-nav .navbar-nav .nav-link.active {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+}
+body.lp-app .lp-app-nav .navbar-nav .nav-link i { opacity: 0.7; }
+
+/* Keyboard focus-visible rings (accessibility) */
+body.lp-app .lp-app-nav .navbar-nav .nav-link:focus-visible,
+body.lp-app .quick-action-btn:focus-visible,
+body.lp-app .btn:focus-visible {
+    outline: 2px solid var(--lp-text);
+    outline-offset: 2px;
+}
+body.lp-app .lp-app-nav .navbar-toggler {
+    border: 1px solid var(--lp-border);
+    color: var(--lp-text);
+}
+body.lp-app .lp-app-nav .navbar-toggler-icon {
+    background-image: none;
+    position: relative;
+    width: 18px;
+    height: 14px;
+}
+body.lp-app .lp-app-nav .navbar-toggler-icon::before,
+body.lp-app .lp-app-nav .navbar-toggler-icon::after {
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1.5px;
+    background: var(--lp-text);
+}
+body.lp-app .lp-app-nav .navbar-toggler-icon::before { top: 2px; }
+body.lp-app .lp-app-nav .navbar-toggler-icon::after { bottom: 2px; }
+body.lp-app .lp-app-nav .form-check-label { color: var(--lp-text); }
+
+/* Dropdown menus -------------------------------------------------------- */
+body.lp-app .dropdown-menu {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 14px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08);
+    padding: 8px;
+}
+body.lp-app .dropdown-item {
+    border-radius: 8px;
+    color: var(--lp-text);
+    font-weight: 500;
+    font-size: 14px;
+}
+body.lp-app .dropdown-item:hover,
+body.lp-app .dropdown-item:focus {
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--lp-text);
+}
+[data-bs-theme="dark"] body.lp-app .dropdown-item:hover,
+[data-bs-theme="dark"] body.lp-app .dropdown-item:focus {
+    background: rgba(255, 255, 255, 0.06);
+}
+body.lp-app .dropdown-divider { border-color: var(--lp-border-soft); }
+body.lp-app .dropdown-header { color: var(--lp-text-muted); font-weight: 600; }
+
+/* Cards ----------------------------------------------------------------- */
+body.lp-app .card {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-radius: 16px;
+    box-shadow: none;
+}
+body.lp-app .card-header {
+    background: transparent;
+    border-bottom: 1px solid var(--lp-border-soft);
+    padding: 20px 24px;
+    font-weight: 600;
+    color: var(--lp-text);
+}
+body.lp-app .card-header h5 { font-weight: 600; letter-spacing: -0.01em; }
+body.lp-app .card-body { color: var(--lp-text); }
+
+/* Welcome banner — quiet down the gradient + colored left border --------- */
+body.lp-app .welcome-banner {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    border-left: 1px solid var(--lp-border);
+    border-radius: 20px;
+    padding: 28px 32px;
+    box-shadow: none;
+}
+body.lp-app .welcome-banner::before { display: none; }
+body.lp-app .welcome-banner h2 {
+    font-size: clamp(24px, 3vw, 32px);
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    color: var(--lp-text);
+}
+body.lp-app .welcome-banner p { color: var(--lp-text-muted); }
+body.lp-app .gradient-text {
+    background: none;
+    -webkit-text-fill-color: var(--lp-text);
+    color: var(--lp-text);
+}
+
+/* Section badge — neutral pill ----------------------------------------- */
+body.lp-app .section-badge {
+    background: rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--lp-border-soft);
+    color: var(--lp-text-muted);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+}
+[data-bs-theme="dark"] body.lp-app .section-badge {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--lp-text-muted);
+}
+
+/* Stat cards — flat monochrome, color used as a small accent dot only --- */
+body.lp-app .stat-card-gradient {
+    background: var(--lp-surface) !important;
+    border: 1px solid var(--lp-border);
+    border-radius: 18px;
+    color: var(--lp-text);
+    padding: 22px 24px;
+    box-shadow: none;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+body.lp-app .stat-card-gradient::before { display: none; }
+body.lp-app .stat-card-gradient:hover {
+    border-color: var(--lp-border-strong);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+}
+body.lp-app .stat-card-gradient .stat-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.04);
+    color: var(--lp-text);
+    margin-bottom: 16px;
+}
+[data-bs-theme="dark"] body.lp-app .stat-card-gradient .stat-icon {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--lp-text);
+}
+body.lp-app .stat-card-gradient.blue  .stat-icon { color: #0066ff; }
+body.lp-app .stat-card-gradient.green .stat-icon { color: #00a870; }
+body.lp-app .stat-card-gradient.cyan  .stat-icon { color: #00b8d9; }
+body.lp-app .stat-card-gradient.orange .stat-icon { color: #f5a623; }
+body.lp-app .stat-card-gradient .stat-value {
+    color: var(--lp-text);
+    font-weight: 600;
+    font-size: 32px;
+    letter-spacing: -0.02em;
+}
+body.lp-app .stat-card-gradient .stat-label {
+    color: var(--lp-text-muted);
+    font-weight: 500;
+}
+
+/* Quick action buttons — black pill primary, outline secondary ---------- */
+body.lp-app .quick-action-btn {
+    border-radius: 9999px;
+    padding: 10px 18px;
+    font-weight: 500;
+    font-size: 14px;
+    letter-spacing: -0.005em;
+    transition: background 0.2s ease, color 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
+}
+body.lp-app .quick-action-btn.primary {
+    background: var(--lp-text);
+    color: var(--lp-bg);
+    border: 1px solid var(--lp-text);
+    box-shadow: none;
+}
+body.lp-app .quick-action-btn.primary:hover {
+    background: #000;
+    color: #fff;
+    transform: translateY(-1px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+[data-bs-theme="dark"] body.lp-app .quick-action-btn.primary:hover {
+    background: #fff;
+    color: #000;
+}
+body.lp-app .quick-action-btn.secondary {
+    background: transparent;
+    border: 1px solid var(--lp-border-strong);
+    color: var(--lp-text);
+}
+body.lp-app .quick-action-btn.secondary:hover {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: var(--lp-text);
+    color: var(--lp-text);
+}
+[data-bs-theme="dark"] body.lp-app .quick-action-btn.secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: var(--lp-text);
+}
+
+/* List items ------------------------------------------------------------ */
+body.lp-app .list-item-card {
+    background: transparent;
+    border: 0;
+    border-bottom: 1px solid var(--lp-border-soft);
+    border-radius: 0;
+    margin-bottom: 0;
+    padding: 16px 24px;
+    transition: background 0.15s ease;
+}
+body.lp-app .list-item-card:hover {
+    background: rgba(0, 0, 0, 0.025);
+    transform: none;
+    box-shadow: none;
+}
+[data-bs-theme="dark"] body.lp-app .list-item-card:hover {
+    background: rgba(255, 255, 255, 0.04);
+}
+body.lp-app .list-item-card .item-title { color: var(--lp-text); font-weight: 500; }
+body.lp-app .list-item-card .item-subtitle { color: var(--lp-text-muted); }
+body.lp-app .item-icon-bg-project,
+body.lp-app .item-icon-bg-task,
+body.lp-app .item-icon-bg-client,
+body.lp-app .item-icon-bg-invoice {
+    background: rgba(0, 0, 0, 0.04);
+}
+[data-bs-theme="dark"] body.lp-app .item-icon-bg-project,
+[data-bs-theme="dark"] body.lp-app .item-icon-bg-task,
+[data-bs-theme="dark"] body.lp-app .item-icon-bg-client,
+[data-bs-theme="dark"] body.lp-app .item-icon-bg-invoice {
+    background: rgba(255, 255, 255, 0.06);
+}
+body.lp-app .item-icon i { color: var(--lp-text-muted) !important; }
+
+/* Empty state ----------------------------------------------------------- */
+body.lp-app .empty-state-modern .empty-icon {
+    background: rgba(0, 0, 0, 0.04);
+}
+[data-bs-theme="dark"] body.lp-app .empty-state-modern .empty-icon {
+    background: rgba(255, 255, 255, 0.06);
+}
+body.lp-app .empty-state-modern .empty-icon i { color: var(--lp-text-muted); }
+body.lp-app .empty-state-modern h3 {
+    color: var(--lp-text);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+body.lp-app .empty-state-modern p { color: var(--lp-text-muted); }
+
+/* Bootstrap button overrides — primary becomes black pill --------------- */
+body.lp-app .btn {
+    border-radius: 9999px;
+    font-weight: 500;
+    letter-spacing: -0.005em;
+    padding: 8px 18px;
+}
+body.lp-app .btn-primary {
+    background: var(--lp-text);
+    border-color: var(--lp-text);
+    color: var(--lp-bg);
+}
+body.lp-app .btn-primary:hover,
+body.lp-app .btn-primary:focus,
+body.lp-app .btn-primary:active {
+    background: #000;
+    border-color: #000;
+    color: #fff;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+}
+[data-bs-theme="dark"] body.lp-app .btn-primary:hover,
+[data-bs-theme="dark"] body.lp-app .btn-primary:focus,
+[data-bs-theme="dark"] body.lp-app .btn-primary:active {
+    background: #fff;
+    border-color: #fff;
+    color: #000;
+}
+body.lp-app .btn-outline-primary {
+    border-color: var(--lp-border-strong);
+    color: var(--lp-text);
+    background: transparent;
+}
+body.lp-app .btn-outline-primary:hover,
+body.lp-app .btn-outline-primary:focus {
+    background: var(--lp-text);
+    border-color: var(--lp-text);
+    color: var(--lp-bg);
+}
+body.lp-app .btn-link { color: var(--lp-text); }
+
+/* Form controls --------------------------------------------------------- */
+body.lp-app .form-control,
+body.lp-app .form-select {
+    background: var(--lp-surface);
+    border: 1px solid var(--lp-border);
+    color: var(--lp-text);
+    border-radius: 12px;
+    padding: 10px 14px;
+}
+body.lp-app .form-control:focus,
+body.lp-app .form-select:focus {
+    border-color: var(--lp-text);
+    box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+    background: var(--lp-surface);
+    color: var(--lp-text);
+}
+[data-bs-theme="dark"] body.lp-app .form-control:focus,
+[data-bs-theme="dark"] body.lp-app .form-select:focus {
+    border-color: var(--lp-text);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.10);
+}
+body.lp-app .form-label { color: var(--lp-text); font-weight: 500; }
+
+/* Breadcrumb ----------------------------------------------------------- */
+body.lp-app .breadcrumb {
+    background: transparent;
+    padding: 0;
+    margin-bottom: 24px;
+    font-size: 13px;
+}
+body.lp-app .breadcrumb-item,
+body.lp-app .breadcrumb-item a { color: var(--lp-text-muted); }
+body.lp-app .breadcrumb-item.active { color: var(--lp-text); }
+
+/* Tables --------------------------------------------------------------- */
+body.lp-app .table { color: var(--lp-text); }
+body.lp-app .table > :not(caption) > * > * {
+    border-bottom-color: var(--lp-border-soft);
+    background: transparent;
+}
+body.lp-app .table thead th {
+    color: var(--lp-text-muted);
+    font-weight: 600;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom-color: var(--lp-border);
+}
+
+/* Badges — softer, monochrome-leaning -------------------------------- */
+body.lp-app .badge {
+    font-weight: 500;
+    border-radius: 9999px;
+    padding: 4px 10px;
+    letter-spacing: 0.01em;
+}
+
+/* Footer --------------------------------------------------------------- */
+body.lp-app .footer {
+    border-top: 1px solid var(--lp-border-soft);
+    background: transparent;
+    color: var(--lp-text-muted);
+}
+body.lp-app .footer a { color: var(--lp-text-muted); }
+body.lp-app .footer a:hover { color: var(--lp-text); }
+
+/* Alerts — flatten Bootstrap colors but keep semantic tint ------------- */
+body.lp-app .alert {
+    border-radius: 14px;
+    border: 1px solid var(--lp-border);
+    background: var(--lp-surface);
+    color: var(--lp-text);
+}
+
+/* Headings ------------------------------------------------------------- */
+body.lp-app h1, body.lp-app h2, body.lp-app h3,
+body.lp-app h4, body.lp-app h5, body.lp-app h6 {
+    color: var(--lp-text);
+    letter-spacing: -0.015em;
+}
