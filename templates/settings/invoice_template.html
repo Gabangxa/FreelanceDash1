@@ -163,7 +163,15 @@
                             {% endif %}
                             <small class="form-text text-muted">This text will appear at the bottom of your invoices. You can include payment terms, thank you messages, etc.</small>
                         </div>
-                        
+
+                        <div class="mb-4">
+                            <div class="form-check">
+                                {{ form.time_to_invoice_enabled(class="form-check-input") }}
+                                {{ form.time_to_invoice_enabled.label(class="form-check-label") }}
+                            </div>
+                            <small class="form-text text-muted">When enabled, the Invoices page shows a "From Time Entries" shortcut that converts unbilled hours into a draft invoice in one click.</small>
+                        </div>
+
                         <div class="d-grid gap-2 d-md-flex justify-content-md-end">
                             {{ form.submit(class="btn btn-primary") }}
                         </div>

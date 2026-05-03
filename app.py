@@ -401,6 +401,9 @@ with app.app_context():
                 ('invoice_signature',          _binary_type),
                 ('invoice_signature_mimetype', 'VARCHAR(30)'),
                 ('invoice_font',               "VARCHAR(20) DEFAULT 'helvetica'"),
+                # Feature flag for the "Invoice from time entries" shortcut.
+                # Default TRUE so existing users get the feature on by default.
+                ('time_to_invoice_enabled',    'BOOLEAN DEFAULT TRUE NOT NULL'),
             ]
             _missing = [(name, sql_type) for name, sql_type in _column_defs
                         if name not in _existing_cols]

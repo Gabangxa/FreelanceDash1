@@ -179,7 +179,8 @@ def invoice_template():
             settings.invoice_color_primary = form.invoice_color_primary.data
             settings.invoice_color_secondary = form.invoice_color_secondary.data
             settings.invoice_footer_text = form.invoice_footer_text.data
-            
+            settings.time_to_invoice_enabled = bool(form.time_to_invoice_enabled.data)
+
             db.session.commit()
             flash('Invoice template settings updated successfully', 'success')
             
@@ -197,6 +198,12 @@ def invoice_template():
         form.invoice_color_primary.data = settings.invoice_color_primary
         form.invoice_color_secondary.data = settings.invoice_color_secondary
         form.invoice_footer_text.data = settings.invoice_footer_text
+        # Treat a missing/None value as enabled (the column default), so
+        # users created before this column existed see the feature on.
+        form.time_to_invoice_enabled.data = (
+            True if settings.time_to_invoice_enabled is None
+            else settings.time_to_invoice_enabled
+        )
     
     # Pass logo + signature data to template
     logo_data_uri = settings.get_logo_data_uri() if settings.invoice_logo else None

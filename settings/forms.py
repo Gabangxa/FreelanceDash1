@@ -64,6 +64,9 @@ class InvoiceTemplateForm(FlaskForm):
         Optional(),
         Length(max=500, message="Footer text must be less than 500 characters")
     ])
+    time_to_invoice_enabled = BooleanField(
+        "Enable 'From Time Entries' shortcut on the Invoices tab"
+    )
     submit = SubmitField('Save Invoice Settings')
 
 class DeleteAccountForm(FlaskForm):

@@ -10,6 +10,8 @@ from wtforms import (
     SubmitField,
     FieldList,
     FormField,
+    SelectMultipleField,
+    widgets,
 )
 from wtforms.validators import DataRequired, NumberRange, Length, Optional, ValidationError
 from datetime import datetime
@@ -99,3 +101,67 @@ class InvoiceForm(FlaskForm):
 
         if valid_items < 1:
             raise ValidationError('At least one valid invoice item with description, quantity and rate is required')
+
+
+class _MultiCheckboxField(SelectMultipleField):
+    """SelectMultipleField rendered as a list of checkboxes (not a <select>)."""
+    widget = widgets.ListWidget(prefix_label=False)
+    option_widget = widgets.CheckboxInput()
+
+
+class TimeEntryToInvoiceForm(FlaskForm):
+    """Convert unbilled time entries for one project into a draft invoice."""
+    client_id = SelectField('Client', coerce=int, validators=[
+        DataRequired(message="Client selection is required"),
+    ])
+    project_id = SelectField('Project', coerce=int, validators=[
+        DataRequired(message="Project selection is required"),
+    ])
+    # Choices populated from server-side TimeEntry query in the route.
+    entry_ids = _MultiCheckboxField('Time Entries', coerce=int, validators=[
+        DataRequired(message="Select at least one time entry to invoice"),
+    ])
+    rate = DecimalField('Hourly Rate', places=2, validators=[
+        DataRequired(message="Hourly rate is required"),
+        NumberRange(min=Decimal('0.01'), message="Rate must be greater than 0"),
+    ])
+    currency = SelectField('Currency', choices=[
+        ('USD', 'USD - US Dollar'),
+        ('EUR', 'EUR - Euro'),
+        ('GBP', 'GBP - British Pound'),
+        ('JPY', 'JPY - Japanese Yen'),
+        ('CAD', 'CAD - Canadian Dollar'),
+        ('AUD', 'AUD - Australian Dollar'),
+        ('ZAR', 'ZAR - South African Rand'),
+        ('NGN', 'NGN - Nigerian Naira'),
+        ('KES', 'KES - Kenyan Shilling'),
+        ('GHS', 'GHS - Ghanaian Cedi'),
+        ('BRL', 'BRL - Brazilian Real'),
+        ('MXN', 'MXN - Mexican Peso'),
+        ('SGD', 'SGD - Singapore Dollar'),
+        ('AED', 'AED - United Arab Emirates Dirham'),
+    ], default='USD')
+    status = SelectField('Status', choices=[
+        ('draft', 'Draft'),
+        ('pending', 'Pending'),
+    ], default='draft')
+    due_date = DateTimeField('Due Date', validators=[
+        DataRequired(message="Due date is required"),
+    ], format='%Y-%m-%d')
+    notes = TextAreaField('Notes', validators=[
+        Optional(),
+        Length(max=1000, message="Notes must be less than 1000 characters"),
+    ])
+    submit = SubmitField('Create Invoice')
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Populated server-side once a project is selected.
+        self.project_id.choices = []
+        self.entry_ids.choices = []
+
+    def validate_due_date(self, field):
+        if field.data and field.data < datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0,
+        ):
+            raise ValidationError('Due date cannot be in the past')

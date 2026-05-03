@@ -430,7 +430,14 @@ class UserSettings(db.Model):
     invoice_color_secondary = db.Column(db.String(10), default='#f7f7f7')
     invoice_font = db.Column(db.String(20), default='helvetica')
     invoice_footer_text = db.Column(db.Text)
-    
+
+    # Feature flag: when True, the "From Time Entries" shortcut on the
+    # invoices list is shown and the conversion route is reachable. When
+    # False, the button is hidden and the route returns 404 (so the
+    # feature's existence isn't leaked). Default True keeps behaviour
+    # consistent for users created before the column existed.
+    time_to_invoice_enabled = db.Column(db.Boolean, default=True, nullable=False)
+
     deadline_alert_enabled = db.Column(db.Boolean, default=True)
     deadline_alert_7_days = db.Column(db.Boolean, default=True)
     deadline_alert_3_days = db.Column(db.Boolean, default=True)

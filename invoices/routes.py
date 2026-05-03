@@ -2,8 +2,8 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app import db, logger
-from models import Invoice, InvoiceItem, Client, Project
-from invoices.forms import InvoiceForm, InvoiceItemForm
+from models import Invoice, InvoiceItem, Client, Project, TimeEntry
+from invoices.forms import InvoiceForm, InvoiceItemForm, TimeEntryToInvoiceForm
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
@@ -562,3 +562,209 @@ def delete_invoice(id):
         flash('Error deleting invoice. Please try again.', 'danger')
 
     return redirect(url_for('invoices.list_invoices'))
+
+# ---------------------------------------------------------------------------
+# Invoice from time entries
+# ---------------------------------------------------------------------------
+def _format_minutes_as_hours(minutes: int) -> Decimal:
+    """Convert duration in minutes to a Decimal hours value rounded to 2dp."""
+    if not minutes:
+        return Decimal('0.00')
+    hours = (Decimal(int(minutes)) / Decimal(60)).quantize(
+        _MONEY_QUANTUM, rounding=ROUND_HALF_UP,
+    )
+    return hours
+
+
+def _time_to_invoice_enabled() -> bool:
+    """Return True if the current user has the feature flag enabled."""
+    settings = current_user.get_or_create_settings()
+    return False if settings.time_to_invoice_enabled is False else True
+
+
+@invoices_bp.route('/from-time-entries', methods=['GET', 'POST'])
+@login_required
+@handle_db_errors
+def invoice_from_time_entries():
+    # Hide feature behind 404 when toggled off so its existence isn't
+    # leaked. Users can re-enable it from Settings -> Invoice Templates.
+    if not _time_to_invoice_enabled():
+        abort(404)
+
+    form = TimeEntryToInvoiceForm()
+
+    # Always populate the client choices so validation works on POST too.
+    clients = Client.query.filter_by(user_id=current_user.id).order_by(Client.name).all()
+    form.client_id.choices = [(0, '— Select a client —')] + [(c.id, c.name) for c in clients]
+
+    # Resolve the chosen client/project (form data on POST, query string on GET).
+    selected_client_id = form.client_id.data or request.args.get('client_id', type=int) or 0
+    selected_project_id = form.project_id.data or request.args.get('project_id', type=int) or 0
+
+    project_choices = [(0, '— Select a project —')]
+    if selected_client_id:
+        # Tenant-scope: filter by user_id even though the client lookup
+        # already proves ownership, matching the rest of this blueprint.
+        projects = Project.query.filter_by(
+            client_id=selected_client_id,
+            user_id=current_user.id,
+        ).order_by(Project.name).all()
+        project_choices += [(p.id, p.name) for p in projects]
+    form.project_id.choices = project_choices
+
+    # Load the unbilled, completed time entries for the chosen project.
+    # Only entries with end_time set (no running timers) and billable=True.
+    entries = []
+    if selected_project_id:
+        entries = (
+            TimeEntry.query
+            .join(Project, TimeEntry.project_id == Project.id)
+            .filter(
+                TimeEntry.project_id == selected_project_id,
+                Project.user_id == current_user.id,
+                TimeEntry.billable.is_(True),
+                TimeEntry.end_time.isnot(None),
+            )
+            .order_by(TimeEntry.start_time.asc())
+            .all()
+        )
+    form.entry_ids.choices = [(e.id, str(e.id)) for e in entries]
+
+    if request.method == 'POST' and form.validate_on_submit():
+        # Re-fetch entries inside a tenant-scoped query so a tampered
+        # entry_ids list can't pull rows from other projects/users.
+        chosen_ids = set(form.entry_ids.data or [])
+        if not chosen_ids:
+            flash('Select at least one time entry to invoice.', 'danger')
+            return render_template(
+                'from_time_entries.html', form=form, entries=entries,
+                selected_client_id=selected_client_id,
+                selected_project_id=selected_project_id,
+            )
+
+        chosen_entries = (
+            TimeEntry.query
+            .join(Project, TimeEntry.project_id == Project.id)
+            .filter(
+                TimeEntry.id.in_(chosen_ids),
+                TimeEntry.project_id == form.project_id.data,
+                Project.user_id == current_user.id,
+                TimeEntry.billable.is_(True),
+                TimeEntry.end_time.isnot(None),
+            )
+            .all()
+        )
+        if len(chosen_entries) != len(chosen_ids):
+            flash(
+                'Some selected entries are no longer eligible. Please reload and try again.',
+                'warning',
+            )
+            return render_template(
+                'from_time_entries.html', form=form, entries=entries,
+                selected_client_id=selected_client_id,
+                selected_project_id=selected_project_id,
+            )
+
+        # Verify the selected project really belongs to the chosen client.
+        project = Project.query.filter_by(
+            id=form.project_id.data, user_id=current_user.id,
+        ).first()
+        if not project or project.client_id != form.client_id.data:
+            flash('Invalid project selection.', 'danger')
+            return redirect(url_for('invoices.invoice_from_time_entries'))
+
+        rate = form.rate.data
+        if rate is None or rate <= 0:
+            flash('Hourly rate must be greater than zero.', 'danger')
+            return render_template(
+                'from_time_entries.html', form=form, entries=entries,
+                selected_client_id=selected_client_id,
+                selected_project_id=selected_project_id,
+            )
+
+        try:
+            invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+            if Invoice.query.filter_by(invoice_number=invoice_number).first():
+                invoice_number = f"INV-{uuid.uuid4().hex[:8].upper()}"
+
+            invoice = Invoice(
+                invoice_number=invoice_number,
+                amount=Decimal('0'),
+                currency=form.currency.data,
+                due_date=form.due_date.data,
+                notes=form.notes.data,
+                client_id=form.client_id.data,
+                project_id=form.project_id.data,
+                status=form.status.data,
+            )
+            db.session.add(invoice)
+            db.session.flush()
+
+            total_amount = Decimal('0')
+            total_hours = Decimal('0')
+            for entry in chosen_entries:
+                hours = _format_minutes_as_hours(entry.duration or 0)
+                if hours <= 0:
+                    # Skip zero-duration entries silently; they'd produce
+                    # noise items with $0.00 amounts.
+                    continue
+                amount = _to_money(hours * rate)
+                description = (entry.description or '').strip()
+                if not description:
+                    description = f"Work on {entry.start_time.strftime('%Y-%m-%d')}"
+                # Truncate to the InvoiceItem column safety: description is
+                # Text so no hard cap, but keep it sane.
+                description = description[:500]
+
+                db.session.add(InvoiceItem(
+                    description=description,
+                    quantity=hours,
+                    rate=rate,
+                    amount=amount,
+                    invoice_id=invoice.id,
+                ))
+                total_amount += amount
+                total_hours += hours
+
+                # Flip the existing billable flag to mark this entry as
+                # already invoiced. See task plan for why we reuse this
+                # column instead of adding a new one.
+                entry.billable = False
+
+            if total_hours <= 0:
+                db.session.rollback()
+                flash('Selected entries have zero billable duration.', 'danger')
+                return render_template(
+                    'from_time_entries.html', form=form, entries=entries,
+                    selected_client_id=selected_client_id,
+                    selected_project_id=selected_project_id,
+                )
+
+            invoice.amount = _to_money(total_amount)
+            db.session.commit()
+            logger.info(
+                "Invoice %s created from %s time entries (%s hours) by user %s",
+                invoice.invoice_number, len(chosen_entries), total_hours, current_user.id,
+            )
+            flash(
+                f"Created invoice from {total_hours} hours across "
+                f"{len(chosen_entries)} time entries.",
+                'success',
+            )
+            return redirect(url_for('invoices.view_invoice', id=invoice.id))
+
+        except IntegrityError:
+            db.session.rollback()
+            logger.exception("Integrity error creating invoice from time entries")
+            flash('Error creating invoice: duplicate invoice number. Please try again.', 'danger')
+        except SQLAlchemyError:
+            db.session.rollback()
+            logger.exception("Database error creating invoice from time entries")
+            flash('Error creating invoice. Please try again.', 'danger')
+
+    # GET (or invalid POST) — render the form.
+    return render_template(
+        'from_time_entries.html', form=form, entries=entries,
+        selected_client_id=selected_client_id,
+        selected_project_id=selected_project_id,
+    )

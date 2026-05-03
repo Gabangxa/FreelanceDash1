@@ -1,0 +1,204 @@
+{% extends "base.html" %}
+
+{% block title %}Invoice from Time Entries - Freelance{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <h4 class="mb-0">Invoice from Time Entries</h4>
+                <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-sm btn-outline-secondary">Back to invoices</a>
+            </div>
+            <div class="card-body">
+                <p class="text-muted">Pick a client and project, then choose which unbilled hours to roll into a single draft invoice. Selected entries will be marked as billed once the invoice is created.</p>
+
+                <form method="GET" class="row g-3 mb-4" id="picker-form">
+                    <div class="col-md-6">
+                        <label for="client_id" class="form-label">Client</label>
+                        <select name="client_id" id="client_id" class="form-select">
+                            {% for value, label in form.client_id.choices %}
+                                <option value="{{ value }}" {% if value == selected_client_id %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label for="project_id" class="form-label">Project</label>
+                        <select name="project_id" id="project_id" class="form-select" {% if not selected_client_id %}disabled{% endif %}>
+                            {% for value, label in form.project_id.choices %}
+                                <option value="{{ value }}" {% if value == selected_project_id %}selected{% endif %}>{{ label }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+
+                {% if selected_project_id and not entries %}
+                    <div class="alert alert-info">No unbilled time entries for this project. Try a different project, or log some billable time first.</div>
+                {% endif %}
+
+                {% if entries %}
+                <form method="POST" id="convert-form">
+                    {{ form.hidden_tag() }}
+                    <input type="hidden" name="client_id" value="{{ selected_client_id }}">
+                    <input type="hidden" name="project_id" value="{{ selected_project_id }}">
+
+                    <div class="table-responsive mb-3">
+                        <table class="table table-sm align-middle">
+                            <thead>
+                                <tr>
+                                    <th class="text-center" style="width: 3rem;">
+                                        <input type="checkbox" id="select-all" class="form-check-input" checked>
+                                    </th>
+                                    <th>Date</th>
+                                    <th>Description</th>
+                                    <th class="text-end">Hours</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for entry in entries %}
+                                {% set hours = (entry.duration or 0) / 60.0 %}
+                                <tr>
+                                    <td class="text-center">
+                                        <input type="checkbox"
+                                               name="entry_ids"
+                                               value="{{ entry.id }}"
+                                               class="form-check-input entry-checkbox"
+                                               data-hours="{{ '%.2f' % hours }}"
+                                               checked>
+                                    </td>
+                                    <td>{{ entry.start_time.strftime('%Y-%m-%d') }}</td>
+                                    <td>{{ entry.description or 'Work on ' + entry.start_time.strftime('%Y-%m-%d') }}</td>
+                                    <td class="text-end">{{ '%.2f' % hours }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Selected hours</strong></td>
+                                    <td class="text-end"><strong id="selected-hours">0.00</strong></td>
+                                </tr>
+                                <tr>
+                                    <td colspan="3" class="text-end"><strong>Estimated total</strong></td>
+                                    <td class="text-end"><strong id="estimated-total">—</strong></td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    {% if form.entry_ids.errors %}
+                        <div class="invalid-feedback d-block mb-3">
+                            {% for error in form.entry_ids.errors %}{{ error }}{% endfor %}
+                        </div>
+                    {% endif %}
+
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            {{ form.rate.label(class_="form-label") }}
+                            {{ form.rate(class_="form-control" + (" is-invalid" if form.rate.errors else ""), id="rate") }}
+                            {% for error in form.rate.errors %}<div class="invalid-feedback">{{ error }}</div>{% endfor %}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.currency.label(class_="form-label") }}
+                            {{ form.currency(class_="form-select", id="currency") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.status.label(class_="form-label") }}
+                            {{ form.status(class_="form-select") }}
+                        </div>
+                        <div class="col-md-3">
+                            {{ form.due_date.label(class_="form-label") }}
+                            {{ form.due_date(class_="form-control", type="date") }}
+                            {% for error in form.due_date.errors %}<div class="invalid-feedback d-block">{{ error }}</div>{% endfor %}
+                        </div>
+                    </div>
+
+                    <div class="mt-3">
+                        {{ form.notes.label(class_="form-label") }}
+                        {{ form.notes(class_="form-control", rows=3) }}
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-4 gap-2">
+                        <a href="{{ url_for('invoices.list_invoices') }}" class="btn btn-secondary">Cancel</a>
+                        {{ form.submit(class_="btn btn-primary") }}
+                    </div>
+                </form>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    // Auto-submit the picker form when client or project changes so the
+    // server can re-render the matching time entries (keeps logic on the
+    // server side; no JSON endpoint needed for the entry list).
+    const clientSelect = document.getElementById('client_id');
+    const projectSelect = document.getElementById('project_id');
+    const pickerForm = document.getElementById('picker-form');
+
+    if (clientSelect && pickerForm) {
+        clientSelect.addEventListener('change', function() {
+            // Reset project on client change so we don't carry stale ids.
+            if (projectSelect) {
+                projectSelect.value = '0';
+            }
+            pickerForm.submit();
+        });
+    }
+    if (projectSelect && pickerForm) {
+        projectSelect.addEventListener('change', function() {
+            pickerForm.submit();
+        });
+    }
+
+    // Live total: sum hours of checked entries * rate.
+    const checkboxes = document.querySelectorAll('.entry-checkbox');
+    const selectedHoursEl = document.getElementById('selected-hours');
+    const estimatedTotalEl = document.getElementById('estimated-total');
+    const rateInput = document.getElementById('rate');
+    const currencySelect = document.getElementById('currency');
+    const selectAll = document.getElementById('select-all');
+
+    function currencySymbol(code) {
+        const map = {USD:'$',EUR:'€',GBP:'£',JPY:'¥',CAD:'CAD$',AUD:'A$',
+                     ZAR:'R',NGN:'₦',KES:'KSh',GHS:'₵',BRL:'R$',MXN:'MX$',
+                     SGD:'S$',AED:'AED'};
+        return map[code] || (code + ' ');
+    }
+
+    function recompute() {
+        let totalHours = 0;
+        checkboxes.forEach(function(cb) {
+            if (cb.checked) {
+                totalHours += parseFloat(cb.dataset.hours || '0');
+            }
+        });
+        if (selectedHoursEl) selectedHoursEl.textContent = totalHours.toFixed(2);
+        if (estimatedTotalEl) {
+            const rate = parseFloat((rateInput && rateInput.value) || '0');
+            if (rate > 0) {
+                const sym = currencySymbol((currencySelect && currencySelect.value) || 'USD');
+                estimatedTotalEl.textContent = sym + (totalHours * rate).toFixed(2);
+            } else {
+                estimatedTotalEl.textContent = '—';
+            }
+        }
+    }
+
+    checkboxes.forEach(function(cb) { cb.addEventListener('change', recompute); });
+    if (rateInput) rateInput.addEventListener('input', recompute);
+    if (currencySelect) currencySelect.addEventListener('change', recompute);
+    if (selectAll) {
+        selectAll.addEventListener('change', function() {
+            checkboxes.forEach(function(cb) { cb.checked = selectAll.checked; });
+            recompute();
+        });
+    }
+    recompute();
+});
+</script>
+{% endblock %}
