@@ -223,6 +223,7 @@ def create_project():
                     start_date=form.start_date.data,
                     end_date=form.end_date.data,
                     client_id=form.client_id.data,
+                    default_hourly_rate=form.default_hourly_rate.data,
                     user_id=current_user.id
                 )
                 db.session.add(project)
@@ -277,7 +278,8 @@ def edit_project(id):
                 project.start_date = form.start_date.data
                 project.end_date = form.end_date.data
                 project.client_id = form.client_id.data
-                
+                project.default_hourly_rate = form.default_hourly_rate.data
+
                 db.session.commit()
                 flash('Project updated successfully', 'success')
                 return redirect(url_for('projects.view_project', id=project.id))

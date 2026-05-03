@@ -481,6 +481,48 @@ with app.app_context():
             "Schema bootstrap for time_entry invoiced columns failed"
         )
 
+    # Add the Task #27 column on project that stores the per-project
+    # default hourly rate used to pre-fill the "From Time Entries"
+    # invoice flow. Idempotent ALTER block mirroring the user_settings
+    # / time_entry ones above so previously-provisioned databases pick
+    # up ``default_hourly_rate`` without operators having to run a
+    # manual migration. Numeric maps to NUMERIC on Postgres and to the
+    # affinity-equivalent on SQLite.
+    try:
+        _fresh_inspector = inspect(db.engine)
+        if 'project' in _fresh_inspector.get_table_names():
+            _existing_cols = {
+                c['name'] for c in _fresh_inspector.get_columns('project')
+            }
+            _proj_columns = [
+                ('default_hourly_rate', 'NUMERIC(12, 2)'),
+            ]
+            _missing = [(name, sql_type) for name, sql_type in _proj_columns
+                        if name not in _existing_cols]
+            if _missing:
+                from sqlalchemy import text as _sa_text
+                for _name, _sql_type in _missing:
+                    try:
+                        with db.engine.begin() as _conn:
+                            _conn.execute(_sa_text(
+                                f"ALTER TABLE project ADD COLUMN {_name} {_sql_type}"
+                            ))
+                        logger.info(
+                            "project: added column %s %s",
+                            _name, _sql_type,
+                        )
+                    except Exception:  # noqa: BLE001 - per-column safety
+                        logger.exception(
+                            "Failed to ADD COLUMN %s on project; the "
+                            "default-hourly-rate prefill will fall back "
+                            "to empty until this is resolved.",
+                            _name,
+                        )
+    except Exception:  # noqa: BLE001 - top-level safety net
+        logger.exception(
+            "Schema bootstrap for project default_hourly_rate column failed"
+        )
+
     # Initialise the webhook security storage backend (Redis if
     # ``REDIS_URL`` is set, otherwise the DB fallback) and prime the
     # dynamic IP allowlist cache. This logs one line for the chosen

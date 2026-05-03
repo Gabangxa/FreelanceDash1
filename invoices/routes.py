@@ -648,6 +648,22 @@ def invoice_from_time_entries():
         )
     form.entry_ids.choices = [(e.id, str(e.id)) for e in entries]
 
+    # Pre-fill the hourly rate from the chosen project's saved default
+    # (Task #27). Only on GET and only when the user hasn't typed
+    # something into the field yet, so we never clobber an in-progress
+    # edit. Projects without a saved default behave as before -- the
+    # field stays empty and the user types a rate in.
+    if (
+        request.method == 'GET'
+        and selected_project_id
+        and not form.rate.data
+    ):
+        _project_for_rate = Project.query.filter_by(
+            id=selected_project_id, user_id=current_user.id,
+        ).first()
+        if _project_for_rate and _project_for_rate.default_hourly_rate is not None:
+            form.rate.data = _project_for_rate.default_hourly_rate
+
     if request.method == 'POST' and form.validate_on_submit():
         # Re-fetch entries inside a tenant-scoped query so a tampered
         # entry_ids list can't pull rows from other projects/users.

@@ -323,6 +323,10 @@ class Project(db.Model):
     status = db.Column(db.String(20), default='active', index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
     client_id = db.Column(db.Integer, db.ForeignKey('client.id'), nullable=False, index=True)
+    # Default hourly rate pre-filled on the "From Time Entries" invoice
+    # flow when this project is selected. Optional -- existing projects
+    # without a saved rate behave as before (empty rate field).
+    default_hourly_rate = db.Column(db.Numeric(precision=12, scale=2), nullable=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     # Relationships

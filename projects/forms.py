@@ -1,5 +1,7 @@
+from decimal import Decimal
+
 from flask_wtf import FlaskForm
-from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField, FieldList, FormField, FloatField, Form
+from wtforms import StringField, TextAreaField, DateTimeField, SelectField, SubmitField, BooleanField, IntegerField, FieldList, FormField, FloatField, DecimalField, Form
 from wtforms.validators import DataRequired, Optional, NumberRange, ValidationError
 from datetime import datetime, timedelta
 
@@ -13,6 +15,17 @@ class ProjectForm(FlaskForm):
     start_date = DateTimeField('Start Date', validators=[DataRequired()], format='%Y-%m-%d')
     end_date = DateTimeField('End Date', format='%Y-%m-%d')
     client_id = SelectField('Client', coerce=int, validators=[DataRequired()])
+    # Optional default hourly rate that pre-fills the "From Time
+    # Entries" invoice flow when this project is selected. DecimalField
+    # (not FloatField) to keep money math binary-rounding-safe.
+    default_hourly_rate = DecimalField(
+        'Default Hourly Rate',
+        places=2,
+        validators=[
+            Optional(),
+            NumberRange(min=Decimal('0.01'), message='Rate must be greater than 0'),
+        ],
+    )
     submit = SubmitField('Save Project')
     
     def __init__(self, *args, **kwargs):

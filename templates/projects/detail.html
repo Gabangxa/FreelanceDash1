@@ -393,6 +393,14 @@
                         {{ form.client_id.label(class="form-label") }}
                         {{ form.client_id(class="form-select") }}
                     </div>
+                    <div class="mb-3">
+                        {{ form.default_hourly_rate.label(class="form-label") }}
+                        {{ form.default_hourly_rate(class="form-control" + (" is-invalid" if form.default_hourly_rate.errors else ""), step="0.01", min="0") }}
+                        <small class="text-muted">Pre-fills the rate when invoicing this project from time entries. Optional.</small>
+                        {% for error in form.default_hourly_rate.errors %}
+                            <div class="invalid-feedback">{{ error }}</div>
+                        {% endfor %}
+                    </div>
                     <div class="text-end">
                         <a href="{{ url_for('projects.list_projects') }}" class="btn btn-secondary me-2">Cancel</a>
                         {{ form.submit(class="btn btn-primary") }}
