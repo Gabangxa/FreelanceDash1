@@ -12,6 +12,12 @@
                     <a href="{{ url_for('invoices.generate_pdf', id=invoice.id) }}" class="btn btn-outline-primary">
                         <i class="fas fa-file-pdf me-2"></i>Download PDF
                     </a>
+                    <a href="{{ url_for('settings.invoice_template') }}"
+                       class="btn btn-outline-secondary"
+                       title="Customise your invoice PDF branding"
+                       aria-label="Customise invoice PDF branding">
+                        <i class="fas fa-paint-brush me-2"></i>Customise PDF
+                    </a>
                 </div>
             </div>
             <div class="card-body">
