@@ -95,7 +95,7 @@
                aria-label="Customise invoice PDF branding">
                 <i class="fas fa-paint-brush"></i>Customise PDF
             </a>
-            {% if current_user.get_or_create_settings().time_to_invoice_enabled %}
+            {% if current_user.get_or_create_settings().time_to_invoice_enabled is not false %}
             <a href="{{ url_for('invoices.invoice_from_time_entries') }}"
                class="quick-action-btn secondary"
                title="Convert unbilled time entries into a draft invoice"
