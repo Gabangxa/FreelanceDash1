@@ -17,18 +17,33 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision = '0001_add_event_metadata'
-down_revision = None
+down_revision = '0000_baseline'
 branch_labels = None
 depends_on = None
 
 
+def _existing_columns(table_name):
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if not inspector.has_table(table_name):
+        return set()
+    return {c['name'] for c in inspector.get_columns(table_name)}
+
+
 def upgrade():
-    # Use batch_alter_table so the migration also works on SQLite (used by
-    # the test suite). On PostgreSQL this is a plain ALTER TABLE ADD COLUMN.
+    # Idempotent: on a fresh DB the baseline (0000) already created
+    # webhook_event with event_metadata in its final shape, so this is
+    # a no-op. On a database that pre-dated the baseline, the column
+    # is genuinely missing and we add it. Use batch_alter_table so the
+    # migration also works on SQLite (used by the test suite).
+    if 'event_metadata' in _existing_columns('webhook_event'):
+        return
     with op.batch_alter_table('webhook_event') as batch_op:
         batch_op.add_column(sa.Column('event_metadata', sa.Text(), nullable=True))
 
 
 def downgrade():
+    if 'event_metadata' not in _existing_columns('webhook_event'):
+        return
     with op.batch_alter_table('webhook_event') as batch_op:
         batch_op.drop_column('event_metadata')

@@ -51,7 +51,7 @@ SoloDolo is a comprehensive SaaS platform for freelancers, offering end-to-end p
 - **Strict CSP Implementation**: Employs per-request nonces for `script-src` and `style-src` to enhance security and prevent XSS, avoiding `unsafe-inline`.
 - **Centralized Duration Conversion**: All time-related math (minutes ↔ hours ↔ timedelta) is consolidated into `utils/duration.py` to ensure consistency and prevent conversion bugs.
 - **Image Upload Hardening**: Implemented robust checks against decompression bombs, size limits, and format whitelisting for user-uploaded images.
-- **Alembic-Only Schema Management**: Migrations in `migrations/versions/` are the single source of truth. The previous inline-`ALTER TABLE`-at-boot escape hatch in `app.py` has been removed (consolidated into `0007_consolidate_startup_alters`). Operators must run `flask db upgrade` before serving traffic; a stderr WARNING fires at boot if not.
+- **Alembic-Only Schema Management**: Migrations in `migrations/versions/` are the single source of truth. The inline-`ALTER TABLE`-at-boot escape hatch in `app.py` has been removed (consolidated into `0007_consolidate_startup_alters`), and `0000_baseline` materializes the whole schema from `db.metadata` so a brand-new database can bootstrap from `flask db upgrade` alone. Every migration is idempotent (existence-guarded), so fresh installs and existing DBs converge to head safely. A stderr WARNING fires at boot if `current` ≠ `head`.
 
 ## Product
 - **User Management**: Registration, login, password reset, OAuth (Google).
@@ -70,7 +70,7 @@ I prefer to receive detailed explanations about complex technical concepts.
 - **Image Upload Limits**: User-uploaded images are subject to `MAX_CONTENT_LENGTH=4MB`, 8000x8000 pixel dimensions, and `PNG/JPEG/GIF` format whitelist.
 - **NATS Health**: If NATS JetStream is configured but unhealthy, the application falls back to inline notification delivery.
 - **Alembic Migrations**: Every schema change MUST go through Alembic — there is no `db.create_all()` or inline `ALTER TABLE` fallback at boot anymore. Run `flask db upgrade` after pulling new migrations; if you skip it, the app still boots but logs a high-visibility WARNING to stderr.
-- **Fresh DB Bootstrap**: There is no baseline migration yet — migrations 0001–0006 each `ALTER` tables that pre-existed via the old `db.create_all()` call. To bootstrap a brand-new database, run `python -c "from app import app, db; app.app_context().push(); import models; db.create_all()"` once, then `flask db stamp head`. (TODO: replace with a real `0000_baseline` migration so `flask db upgrade` works from empty.)
+- **Fresh DB Bootstrap**: A brand-new empty database is provisioned by a single command: `flask db upgrade`. The `0000_baseline` migration creates every table from `db.metadata` (`checkfirst=True`, so it's a no-op on existing DBs), then 0001–0007 layer on top — all idempotent. No manual `db.create_all() + flask db stamp` dance.
 - **Minifier Compatibility**: The custom CSS minifier might mangle CSS with `:where()` selectors if not carefully managed.
 
 ## Pointers
