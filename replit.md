@@ -51,6 +51,7 @@ SoloDolo is a comprehensive SaaS platform for freelancers, offering end-to-end p
 - **Strict CSP Implementation**: Employs per-request nonces for `script-src` and `style-src` to enhance security and prevent XSS, avoiding `unsafe-inline`.
 - **Centralized Duration Conversion**: All time-related math (minutes ↔ hours ↔ timedelta) is consolidated into `utils/duration.py` to ensure consistency and prevent conversion bugs.
 - **Image Upload Hardening**: Implemented robust checks against decompression bombs, size limits, and format whitelisting for user-uploaded images.
+- **Threaded PDF Rendering**: Invoice PDFs are rendered on a module-level `ThreadPoolExecutor(max_workers=2)` (see `invoices/__init__.py`) so a slow ReportLab render doesn't block a gunicorn worker. The render function (`invoices/pdf_generator.generate_invoice_pdf(invoice_id, user_id)`) opens its own `app.app_context()` and re-checks tenant ownership defensively. Route returns HTTP 503 on timeout (30 s budget) or worker failure.
 - **Alembic-Only Schema Management**: Migrations in `migrations/versions/` are the single source of truth. The inline-`ALTER TABLE`-at-boot escape hatch in `app.py` has been removed (consolidated into `0007_consolidate_startup_alters`), and `0000_baseline` materializes the whole schema from `db.metadata` so a brand-new database can bootstrap from `flask db upgrade` alone. Every migration is idempotent (existence-guarded), so fresh installs and existing DBs converge to head safely. A stderr WARNING fires at boot if `current` ≠ `head`.
 
 ## Product

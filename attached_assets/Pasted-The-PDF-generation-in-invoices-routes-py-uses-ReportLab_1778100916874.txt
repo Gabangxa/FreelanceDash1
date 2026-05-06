@@ -1,0 +1,24 @@
+The PDF generation in `invoices/routes.py` uses ReportLab synchronously on the
+  gunicorn request thread, blocking the worker for the full render duration.                                                                                                                                                                  
+                  
+  Fix this using Python's built-in `concurrent.futures.ThreadPoolExecutor` — do NOT                                                                                                                                                           
+  add Celery or any new dependency. This project already has NATS/Redis but those
+  are overkill for a single-worker Replit deployment.                                                                                                                                                                                         
+                  
+  Plan:                                                                                                                                                                                                                                       
+  1. Read `invoices/routes.py` and locate every call that produces a ReportLab PDF
+     (look for `canvas.Canvas`, `SimpleDocTemplate`, or any `.build()` / `.save()`                                                                                                                                                            
+     call that writes PDF bytes).                                                                                                                                                                                                             
+  2. Extract the PDF-generation logic into a standalone function                                                                                                                                                                              
+     `generate_invoice_pdf(invoice_id: int) -> bytes` in a new file                                                                                                                                                                           
+     `invoices/pdf_generator.py`. It must open its own DB session (do not pass                                                                                                                                                                
+     SQLAlchemy objects across threads).                                                                                                                                                                                                      
+  3. In the route, submit `generate_invoice_pdf` to a module-level                                                                                                                                                                            
+     `ThreadPoolExecutor(max_workers=2)` and call `.result(timeout=30)`.                                                                                                                                                                      
+     Return the bytes as a `send_file` response.                                                                                                                                                                                              
+  4. If the future times out or raises, return HTTP 503 with a user-facing message.                                                                                                                                                           
+  5. Update `invoices/__init__.py` to initialise the executor once at import time.                                                                                                                                                            
+  6. Write one test in `tests/test_invoice_pdf.py` that mocks the executor and                                                                                                                                                                
+     verifies the route returns 200 with `Content-Type: application/pdf`.                                                                                                                                                                     
+                                                                                                                                                                                                                                              
+  Do not change the PDF layout or ReportLab calls themselves — only move where they run.

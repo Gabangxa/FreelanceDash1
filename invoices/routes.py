@@ -1,18 +1,23 @@
-from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, jsonify, abort
+from concurrent.futures import TimeoutError as FuturesTimeoutError
+from flask import Blueprint, render_template, redirect, url_for, flash, request, make_response, jsonify, abort, send_file
 from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app import db, logger
 from models import Invoice, InvoiceItem, Client, Project, TimeEntry
 from invoices.forms import InvoiceForm, InvoiceItemForm, TimeEntryToInvoiceForm
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from reportlab.lib.units import inch
-from reportlab.lib.utils import ImageReader
+from invoices.pdf_generator import generate_invoice_pdf
+from invoices import get_pdf_executor
 from io import BytesIO
 import uuid
 from datetime import datetime
 from decimal import Decimal, ROUND_HALF_UP
 from errors import handle_db_errors, UserFriendlyError
+
+# Per-render wall-clock budget. Anything slower than this and the user
+# is better served by an immediate "try again in a moment" 503 than a
+# spinning browser tab. Tune in tandem with the gunicorn ``--timeout``
+# (currently 120s) -- this must stay well below it.
+_PDF_RENDER_TIMEOUT_SECONDS = 30
 
 # 2-decimal money quantum used to round invoice totals consistently.
 _MONEY_QUANTUM = Decimal('0.01')
@@ -33,51 +38,9 @@ invoices_bp = Blueprint('invoices', __name__, url_prefix='/invoices', template_f
 
 
 # ---------------------------------------------------------------------------
-# PDF branding helpers
+# PDF branding helpers were moved to ``invoices/pdf_generator.py`` when
+# the synchronous ReportLab render was off-loaded onto a thread pool.
 # ---------------------------------------------------------------------------
-# ReportLab built-in font triples: (regular, bold, italic). Keyed by the
-# value persisted in UserSettings.invoice_font. No font file shipping is
-# required for any of these — they're embedded in ReportLab itself.
-_FONT_MAP = {
-    'helvetica': ('Helvetica',   'Helvetica-Bold', 'Helvetica-Oblique'),
-    'times':     ('Times-Roman', 'Times-Bold',     'Times-Italic'),
-    'courier':   ('Courier',     'Courier-Bold',   'Courier-Oblique'),
-}
-
-
-def _hex_to_rgb(hex_str, default):
-    """Convert ``#RGB`` / ``#RRGGBB`` to a 0..1 RGB tuple. Falls back to
-    ``default`` (also a 0..1 tuple) on any malformed input — matches the
-    same defensive posture as the ``safe_color`` Jinja filter so a bad
-    DB value can't crash the PDF generator."""
-    try:
-        h = (hex_str or '').lstrip('#').strip()
-        if len(h) == 3:
-            h = ''.join(c * 2 for c in h)
-        if len(h) != 6:
-            return default
-        return tuple(int(h[i:i + 2], 16) / 255 for i in (0, 2, 4))
-    except (ValueError, TypeError):
-        return default
-
-
-def _draw_image_box(p, image_bytes, x, y, max_w, max_h):
-    """Draw an image inside an (max_w x max_h) box anchored at the
-    bottom-left corner ``(x, y)``, preserving aspect ratio so non-square
-    logos / signatures don't get squished."""
-    if not image_bytes:
-        return
-    try:
-        img = ImageReader(BytesIO(image_bytes))
-        iw, ih = img.getSize()
-        if iw <= 0 or ih <= 0:
-            return
-        scale = min(max_w / float(iw), max_h / float(ih))
-        w = iw * scale
-        h = ih * scale
-        p.drawImage(img, x, y, width=w, height=h, mask='auto', preserveAspectRatio=True)
-    except (OSError, ValueError):
-        logger.exception("Error adding image to PDF")
 
 @invoices_bp.route('/')
 @login_required
@@ -283,261 +246,85 @@ def get_projects(client_id):
 @handle_db_errors
 def generate_pdf(id):
     try:
-        # Secured query with joins
+        # Tenant ownership check stays on the request thread: we resolve
+        # the invoice (and 404 cross-tenant) BEFORE submitting anything
+        # to the executor. The worker thread has no current_user, so it
+        # cannot make this authorization decision itself -- it just
+        # trusts the id once we hand it over.
         invoice = (Invoice.query
                   .join(Client)
-                  .options(db.joinedload(Invoice.client), db.joinedload(Invoice.items), db.joinedload(Invoice.project))
                   .filter(Invoice.id == id, Client.user_id == current_user.id)
+                  .with_entities(Invoice.id, Invoice.invoice_number)
                   .first_or_404())
+        invoice_id = invoice.id
+        invoice_number = invoice.invoice_number
+        user_id = current_user.id
 
-        # Get user settings to apply the correct template
-        settings = current_user.get_or_create_settings()
+        # Off-load the ReportLab render onto the module-level thread
+        # pool so the gunicorn worker is free to serve the next request
+        # while the (CPU-bound, GIL-releasing during image decode) PDF
+        # is built. ``.result(timeout=...)`` blocks this thread but the
+        # worker can be re-used as soon as the future resolves.
+        #
+        # Submission itself can fail (e.g. executor shutdown during a
+        # graceful restart) so the submit + wait both live inside the
+        # same error boundary -- any failure short of a fresh DB error
+        # surfaces as a user-facing 503, never a stack-traced 500.
+        future = None
+        try:
+            future = get_pdf_executor().submit(
+                generate_invoice_pdf, invoice_id, user_id,
+            )
+            pdf_bytes = future.result(timeout=_PDF_RENDER_TIMEOUT_SECONDS)
+        except FuturesTimeoutError:
+            # Don't let the future keep running and steal a worker slot
+            # forever -- mark it cancelled (best-effort: cancel only
+            # works if it hasn't started; if it has, it will run to
+            # completion in the background but we no longer care).
+            if future is not None:
+                future.cancel()
+            logger.warning(
+                "PDF render for invoice %s exceeded %ss budget (user=%s)",
+                invoice_id, _PDF_RENDER_TIMEOUT_SECONDS, user_id,
+            )
+            return make_response(
+                "PDF generation is taking longer than expected. "
+                "Please try again in a moment.",
+                503,
+            )
+        except LookupError:
+            # Race: invoice was deleted (or ownership changed) between
+            # the route's ownership check and the worker's re-check.
+            # 404 mirrors the normal missing-row behaviour.
+            abort(404)
+        except Exception:
+            logger.exception(
+                "PDF render failed for invoice %s (user=%s)",
+                invoice_id, user_id,
+            )
+            return make_response(
+                "Could not generate the PDF right now. "
+                "Please try again in a moment.",
+                503,
+            )
 
-        buffer = BytesIO()
-        p = canvas.Canvas(buffer, pagesize=letter)
-        width, height = letter  # For easier positioning calculations
-
-        # ---- Resolve branding tokens (font, colors, template) -------------
-        primary_rgb   = _hex_to_rgb(settings.invoice_color_primary,   (0.114, 0.114, 0.122))   # #1d1d1f
-        secondary_rgb = _hex_to_rgb(settings.invoice_color_secondary, (0.97,  0.97,  0.97))    # #f7f7f7
-        font_key = (settings.invoice_font or 'helvetica').lower()
-        font_regular, font_bold, font_italic = _FONT_MAP.get(font_key, _FONT_MAP['helvetica'])
-        template_name = settings.invoice_template or 'default'
-
-        # ---- Header (template-specific) -----------------------------------
-        if template_name == 'modern':
-            # Solid primary header band, white text on top
-            p.setFillColorRGB(*primary_rgb)
-            p.rect(0, height - 100, width, 100, fill=1, stroke=0)
-            _draw_image_box(p, settings.invoice_logo, 50, height - 90, 120, 70)
-            p.setFillColorRGB(1, 1, 1)
-            p.setFont(font_bold, 16)
-            p.drawRightString(width - 50, height - 55, f"INVOICE #{invoice.invoice_number}")
-            p.setFillColorRGB(0.114, 0.114, 0.122)
-            p.setFont(font_regular, 10)
-            p.drawString(50, height - 120, f"Date: {invoice.created_at.strftime('%Y-%m-%d')}")
-            p.drawString(50, height - 135, f"Due Date: {invoice.due_date.strftime('%Y-%m-%d')}")
-            p.setFillColorRGB(*primary_rgb)
-            p.drawString(width - 200, height - 120, f"Status: {invoice.status.upper()}")
-            p.setFillColorRGB(0, 0, 0)
-
-        elif template_name == 'classic':
-            p.setFillColorRGB(*primary_rgb)
-            p.setFont(font_bold, 24)
-            p.drawString(50, height - 50, "INVOICE")
-            _draw_image_box(p, settings.invoice_logo, width - 170, height - 80, 120, 70)
-            # Double rule under the title
-            p.setStrokeColorRGB(*primary_rgb)
-            p.line(50, height - 80, width - 50, height - 80)
-            p.line(50, height - 82, width - 50, height - 82)
-            p.setFillColorRGB(0, 0, 0)
-            p.setFont(font_regular, 12)
-            p.drawString(50, height - 100, f"Invoice Number: {invoice.invoice_number}")
-            p.drawString(50, height - 115, f"Date: {invoice.created_at.strftime('%B %d, %Y')}")
-            p.drawString(50, height - 130, f"Due Date: {invoice.due_date.strftime('%B %d, %Y')}")
-            p.drawString(50, height - 145, f"Status: {invoice.status.capitalize()}")
-
-        elif template_name == 'creative':
-            # Bold full-bleed primary header
-            p.setFillColorRGB(*primary_rgb)
-            p.rect(0, height - 120, width, 120, fill=1, stroke=0)
-            _draw_image_box(p, settings.invoice_logo, 50, height - 105, 120, 80)
-            p.setFillColorRGB(1, 1, 1)
-            p.setFont(font_bold, 28)
-            p.drawCentredString(width / 2, height - 70, "INVOICE")
-            p.setFont(font_bold, 14)
-            p.drawCentredString(width / 2, height - 100, f"#{invoice.invoice_number}")
-            # Diagonal status banner (always dark for legibility on any primary)
-            p.saveState()
-            p.translate(width - 80, height - 40)
-            p.rotate(45)
-            p.setFillColorRGB(0.1, 0.1, 0.1)
-            p.rect(-20, -10, 100, 20, fill=1)
-            p.setFillColorRGB(1, 1, 1)
-            p.setFont(font_bold, 10)
-            p.drawCentredString(30, 0, invoice.status.upper())
-            p.restoreState()
-
-        else:
-            # Default - professional
-            p.setFillColorRGB(*primary_rgb)
-            p.setFont(font_bold, 18)
-            p.drawString(50, height - 50, "INVOICE")
-            _draw_image_box(p, settings.invoice_logo, width - 170, height - 80, 120, 70)
-            p.setFillColorRGB(0, 0, 0)
-            p.setFont(font_regular, 10)
-            p.drawString(50, height - 70, f"Invoice Number: {invoice.invoice_number}")
-            p.drawString(50, height - 85, f"Date: {invoice.created_at.strftime('%Y-%m-%d')}")
-            p.drawString(50, height - 100, f"Due Date: {invoice.due_date.strftime('%Y-%m-%d')}")
-            # Status keeps its semantic color (green/orange/red/gray) so users
-            # can still glance and tell paid/pending/cancelled apart at a glance.
-            status_palette = {
-                'paid':      (0, 0.6, 0.2),
-                'pending':   (0.9, 0.55, 0),
-                'cancelled': (0.85, 0.1, 0.1),
-            }
-            p.setFillColorRGB(*status_palette.get(invoice.status, (0.4, 0.4, 0.4)))
-            p.drawString(50, height - 115, f"Status: {invoice.status.upper()}")
-            p.setFillColorRGB(0, 0, 0)
-
-        # ---- FROM / TO blocks ---------------------------------------------
-        section_y = height - 200
-        p.setFillColorRGB(*primary_rgb)
-        p.setFont(font_bold, 12)
-        p.drawString(50, section_y, "FROM:")
-        p.drawString(300, section_y, "TO:")
-        p.setFillColorRGB(0, 0, 0)
-        p.setFont(font_regular, 10)
-
-        from_y = section_y - 15
-        if settings.company_name:
-            p.drawString(50, from_y, settings.company_name); from_y -= 15
-        if settings.company_address:
-            for line in settings.company_address.split('\n')[:3]:
-                p.drawString(50, from_y, line.strip()); from_y -= 15
-        if settings.company_email:
-            p.drawString(50, from_y, settings.company_email); from_y -= 15
-        if settings.company_phone:
-            p.drawString(50, from_y, settings.company_phone); from_y -= 15
-
-        to_y = section_y - 15
-        p.drawString(300, to_y, invoice.client.name); to_y -= 15
-        if invoice.client.company:
-            p.drawString(300, to_y, invoice.client.company); to_y -= 15
-        if invoice.client.email:
-            p.drawString(300, to_y, invoice.client.email); to_y -= 15
-        if invoice.client.address:
-            for line in invoice.client.address.split('\n')[:3]:
-                p.drawString(300, to_y, line.strip()); to_y -= 15
-
-        # ---- Project ------------------------------------------------------
-        y = min(from_y, to_y) - 10
-        if invoice.project:
-            p.setFont(font_bold, 11)
-            p.drawString(50, y, f"Project: {invoice.project.name}")
-            y -= 20
-
-        # ---- Line items: header bar in primary, alternating rows in
-        #      secondary so both color choices show up on every template.
-        p.setFillColorRGB(*primary_rgb)
-        p.rect(50, y - 5, width - 100, 22, fill=1, stroke=0)
-        p.setFillColorRGB(1, 1, 1)
-        p.setFont(font_bold, 11)
-        p.drawString(60, y + 3, "DESCRIPTION")
-        p.drawString(350, y + 3, "QUANTITY")
-        p.drawString(420, y + 3, "RATE")
-        p.drawString(500, y + 3, "AMOUNT")
-        p.setFillColorRGB(0, 0, 0)
-        y -= 25
-
-        p.setFont(font_regular, 10)
-        for idx, item in enumerate(invoice.items):
-            if idx % 2 == 0:
-                p.setFillColorRGB(*secondary_rgb)
-                p.rect(50, y - 5, width - 100, 20, fill=1, stroke=0)
-                p.setFillColorRGB(0, 0, 0)
-
-            description = item.description if len(item.description) <= 45 else item.description[:42] + "..."
-            p.drawString(60, y, description)
-            p.drawString(350, y, f"{item.quantity}")
-            p.drawString(420, y, f"{invoice.currency} {item.rate:.2f}")
-            p.drawString(500, y, f"{invoice.currency} {item.amount:.2f}")
-            y -= 20
-
-            # Page break check; leave room for total + signature + footer
-            if y < 160:
-                p.showPage()
-                p.setFont(font_regular, 10)
-                y = height - 50
-                p.drawString(50, y, "INVOICE CONTINUED")
-                y -= 30
-
-        # ---- Total --------------------------------------------------------
-        y -= 10
-        p.setStrokeColorRGB(*primary_rgb)
-        p.setLineWidth(1.5)
-        p.line(350, y + 5, width - 50, y + 5)
-        p.setLineWidth(1)
-        p.setFillColorRGB(*primary_rgb)
-        p.setFont(font_bold, 12)
-        p.drawString(420, y - 15, "TOTAL:")
-        p.drawString(500, y - 15, f"{invoice.currency} {invoice.amount:.2f}")
-        p.setFillColorRGB(0, 0, 0)
-
-        # ---- Notes --------------------------------------------------------
-        if invoice.notes:
-            y -= 50
-            p.setFillColorRGB(*primary_rgb)
-            p.setFont(font_bold, 11)
-            p.drawString(50, y, "NOTES:")
-            p.setFillColorRGB(0, 0, 0)
-            p.setFont(font_regular, 10)
-
-            notes_lines = []
-            current_line = ""
-            for word in invoice.notes.split():
-                if len(current_line + " " + word) > 80:
-                    notes_lines.append(current_line)
-                    current_line = word
-                else:
-                    current_line += " " + word if current_line else word
-            if current_line:
-                notes_lines.append(current_line)
-
-            y -= 15
-            for line in notes_lines[:5]:
-                p.drawString(50, y, line); y -= 15
-
-        # ---- Signature + footer ------------------------------------------
-        # Both anchor to fixed bottom positions; if the running ``y`` from
-        # notes/total has crept down into that band, push to a fresh page
-        # first so the signature/footer don't collide with the text above.
-        # Reserve: signature block (~110 incl. caption) + footer (~50) +
-        # safety buffer (20) when both present; otherwise just the footer.
-        needed_bottom = (110 if settings.invoice_signature else 0) \
-                        + (50 if settings.invoice_footer_text else 50) \
-                        + 20
-        if y < needed_bottom:
-            p.showPage()
-
-        if settings.invoice_signature:
-            sig_y = 80
-            _draw_image_box(p, settings.invoice_signature, 50, sig_y, 160, 50)
-            p.setStrokeColorRGB(0.5, 0.5, 0.5)
-            p.line(50, sig_y - 4, 210, sig_y - 4)
-            p.setFont(font_italic, 9)
-            p.setFillColorRGB(0.4, 0.4, 0.4)
-            p.drawString(50, sig_y - 16, "Authorised signature")
-            p.setFillColorRGB(0, 0, 0)
-
-        # Footer text from settings (always at the bottom of the final page)
-        if settings.invoice_footer_text:
-            p.setFont(font_regular, 9)
-            p.setFillColorRGB(0.5, 0.5, 0.5)
-            footer_y = 40
-            for line in settings.invoice_footer_text.split('\n')[:3]:
-                p.drawCentredString(width / 2, footer_y, line.strip())
-                footer_y -= 12
-
-        p.showPage()
-        p.save()
-
-        buffer.seek(0)
-        response = make_response(buffer.getvalue())
-        response.mimetype = 'application/pdf'
-        response.headers['Content-Disposition'] = f'attachment; filename=invoice_{invoice.invoice_number}.pdf'
-
-        logger.info(f"PDF generated for invoice #{invoice.invoice_number} by user {current_user.id}")
-        return response
+        logger.info(
+            "PDF generated for invoice #%s by user %s (%d bytes)",
+            invoice_number, user_id, len(pdf_bytes),
+        )
+        return send_file(
+            BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=f'invoice_{invoice_number}.pdf',
+        )
 
     except SQLAlchemyError as e:
-        logger.exception(f"Error generating PDF for invoice {id}")
+        logger.exception(f"Database error preparing PDF for invoice {id}")
         flash('Error generating PDF. Please try again.', 'danger')
         return redirect(url_for('invoices.view_invoice', id=id))
-    except (ValueError, OSError, KeyError, TypeError) as e:
-        logger.exception("Unexpected error generating PDF")
-        flash('An unexpected error occurred generating the PDF. Please try again.', 'danger')
-        return redirect(url_for('invoices.view_invoice', id=id))
+
+
 
 @invoices_bp.route('/<int:id>/delete', methods=['POST'])
 @login_required
