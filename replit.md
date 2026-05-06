@@ -1,509 +1,80 @@
-# SoloDolo - Replit Configuration
+# SoloDolo
+SoloDolo is a comprehensive SaaS platform for freelancers, offering end-to-end project management, client tracking, time management, invoicing, and subscription services.
 
-## 2026-05-03 — Invoice PDF branding upgrade (Option C)
+## Run & Operate
+- **Run**: `flask run`
+- **Build**: _Populate as you build_
+- **Typecheck**: _Populate as you build_
+- **Codegen**: _Populate as you build_
+- **DB Push**: `flask db upgrade` (for migrations); `db.create_all()` still creates new tables idempotently.
 
-Full branding control over generated invoice PDFs. Users can now upload a
-company logo *and* a signature image, pick a font family, and set primary
-+ secondary brand colors that actually drive every template.
-
-* **`UserSettings`**: new `invoice_signature` (BYTEA), `invoice_signature_mimetype`,
-  and `invoice_font` (default `'helvetica'`) columns. Default colors flipped
-  from blue to neutral (`#1d1d1f` / `#f7f7f7`). Added
-  `get_signature_data_uri()` helper for template previews.
-* **`app.py`**: `MAX_CONTENT_LENGTH=4MB` + a 413 handler that flashes a
-  friendly message and redirects to the referrer (no raw "Request Entity
-  Too Large" page). Idempotent, **dialect-aware** ALTER bootstrap after
-  `db.create_all()` — runs one ALTER per missing column, picks `BYTEA`
-  on Postgres / `BLOB` on SQLite, and logs each outcome individually
-  rather than swallowing batch failures.
-* **`settings/forms.py` + `templates/settings/invoice_template.html`**:
-  added signature `FileField`, `remove_signature` hidden flag, and a
-  font select (Helvetica / Times / Courier — all built into ReportLab,
-  no font files to ship). CSP-clean (no new inline `style=""`).
-* **`settings/routes.py`**: extracted `_process_image_upload()` for both
-  logo and signature. Hardened against decompression-bomb DoS:
-  `Image.MAX_IMAGE_PIXELS = 24M`, explicit `DecompressionBombError`
-  catch, raw-byte cap, max-dimension cap (8000×8000), and a decoded-
-  format whitelist (`PNG/JPEG/GIF`) so a renamed binary can't sneak
-  past the FileAllowed extension check.
-* **`invoices/routes.py`**: rewrote `generate_pdf` around three helpers
-  (`_FONT_MAP`, `_hex_to_rgb`, `_draw_image_box`). All four templates
-  now consistently apply primary color (header band, FROM/TO labels,
-  table header bar fill, total rule + label, NOTES label) and secondary
-  color (alternating row fill — previously only Modern/Creative had it).
-  Logos preserve aspect ratio. Optional signature drawn above the
-  footer with an "Authorised signature" caption; a dynamic page-break
-  guard pushes the signature/footer to a fresh page when long notes
-  would otherwise collide with the bottom band.
-
-## 2026-05-03 — Code-review hardening: Decimal money, tenant defense, tighter excepts
-
-Addressed the top three findings from the post-NATS-Phase-1 architect
-review. All changes are non-functional from the user's point of view but
-close real correctness/security gaps.
-
-* **Decimal end-to-end for money**: `Invoice.amount`,
-  `InvoiceItem.{quantity,rate,amount}`, and `Subscription.amount` are
-  now `Numeric(precision=12, scale=2)` (or `scale=4` for quantity, so
-  fractional hours like `1.25h` round-trip exactly). `invoices/forms.py`
-  uses `DecimalField`; `invoices/routes.py` threads `Decimal` through
-  the totaling loop with a `_to_money()` quantizer (`ROUND_HALF_UP`),
-  killing the long-standing `0.10 + 0.20 == 0.30000000000000004` drift.
-  Data-export JSON now emits `Decimal` as a string (was `float`) so
-  exact values round-trip for users who re-import or reconcile.
-* **Migration `0006_money_to_numeric`**: idempotent (inspects existing
-  column type before altering) and reversible. Uses `batch_alter_table`
-  so the SQLite test DB and any dev installs survive. Verified
-  upgrade → downgrade → re-upgrade cleanly against a fresh SQLite DB.
-* **Tenant scoping defense-in-depth**: every cross-table lookup in
-  `clients/`, `invoices/`, and `projects/` now carries
-  `user_id=current_user.id` even when the parent row was already
-  tenant-scoped. New `tests/test_tenant_isolation.py` proves user A
-  asking for user B's ids gets a 404 across all protected routes.
-* **Tightened excepts**: bare `except:` in `admin/routes.py` table-stats
-  loop narrowed to `SQLAlchemyError`; the four rollback-and-reraise
-  blocks in `webhooks/storage.py` are now annotated `# noqa: BLE001`
-  with rationale (vendor-specific connect-time errors that re-raise
-  unconditionally).
-* Full suite: 217 passed, 10 skipped.
-
-## 2026-05-02 — NATS Phase 1 (subscriber + Reserved VM)
-
-Shipped the first long-lived NATS consumer to take notification
-delivery off the web request path.
-
-* New `subscribers/` package + `worker.py` entry point. Worker runs
-  on a Reserved VM (separate from the Autoscale web tier so its
-  long-lived TCP connection survives between requests).
-* `nats_client.publish` upgraded to JetStream-persisted publish
-  (auto-creates `APP_EVENTS` stream covering `app.>`); falls back to
-  core NATS only when JetStream was never healthy at startup.
-* Cutover via `NATS_SUBSCRIBER_DELIVERS_NOTIFICATIONS` flag, read by
-  both web (skip inline `deliver_notification`) and worker (only
-  deliver when set). Default unset = no behavior change.
-* Three-layer safety against silent message loss:
-  - Startup interlock: web tier ignores the flag if JetStream
-    couldn't be ensured at boot → inline delivery.
-  - Runtime interlock: per-message JS publish failure flips the
-    flag off and the caller falls back to inline delivery for
-    THAT specific notification.
-  - Per-call interlock: web tier checks `events.publish()`'s
-    return value, not just the flag, before deciding to hand off.
-* Retry semantics: permanent failures (notification/user gone) ack;
-  transient (SMTP outage caught as `{"status": "error"}`, unknown
-  errors, exceptions) nak → JetStream retries up to `max_deliver=5`.
-* `worker.py` passes explicit `ConsumerConfig` to `js.subscribe` so
-  per-class `ack_wait` / `max_deliver` actually apply (otherwise
-  JetStream defaults to infinite redelivery on poison messages).
-* docs/nats.md: Reserved VM provisioning, cutover/rollback sequence,
-  safety-interlock + retry-semantics tables, monitoring guidance.
-* 213 tests pass (was 207). New: `tests/test_subscribers.py`.
-
-## Overview
-
-SoloDolo is a comprehensive SaaS platform built with Flask that provides end-to-end project management and business solutions for freelancers. The application offers client management, project tracking, time management, invoicing, and subscription services through a clean, responsive web interface.
-
-## System Architecture
-
-### Backend Architecture
-- **Framework**: Flask with SQLAlchemy ORM
-- **Database**: SQLite (development) with support for PostgreSQL (production)
-- **Authentication**: Flask-Login with session management
-- **Email Services**: Flask-Mail with SMTP configuration
-- **Error Handling**: Centralized error handling with logging and user-friendly messages
-- **Performance Monitoring**: Custom performance monitoring with slow query detection
-
-### Frontend Architecture
-- **Templates**: Jinja2 templating engine
-- **CSS Framework**: Bootstrap 5 with custom styling
-- **JavaScript**: Vanilla JavaScript with Bootstrap components
-- **Asset Management**: Custom asset bundling and minification system
-- **Responsive Design**: Mobile-first approach with dark/light mode support
-
-### Security Features
-- Password hashing with Werkzeug
-- CSRF protection via Flask-WTF
-- Input validation and sanitization
-- Secure session management
-- Password reset functionality with time-limited tokens
-- Content Security Policy (CSP) with per-request nonces for both `script-src`
-  and `style-src` (no `'unsafe-inline'`). All inline `<script>` and `<style>`
-  blocks must carry `nonce="{{ csp_nonce }}"`, and inline `style=""`
-  attributes are not used in templates — utility classes in
-  `static/css/style.css` and the `safe_color` Jinja filter (for hex-color
-  values injected into nonced `<style>` blocks) cover the equivalent needs.
-
-## Key Components
-
-### Core Modules
-1. **User Management** (`auth/`): Registration, login, password reset
-2. **Client Management** (`clients/`): Client profiles, contact information, project relationships
-3. **Project Management** (`projects/`): Project creation, task management, time tracking
-4. **Invoice System** (`invoices/`): Professional invoice generation with PDF support
-5. **Settings** (`settings/`): User preferences, company information, customization
-6. **Subscription System** (`polar/`): Polar.sh integration for payment processing
-
-### Database Models
-- **User**: Core user authentication and profile data
-- **Client**: Client information with one-to-many project relationships
-- **Project**: Project details linked to clients with task hierarchies
-- **Task**: Individual work items within projects
-- **TimeEntry**: Time tracking records for tasks and projects
-- **Invoice/InvoiceItem**: Billing system with line items and multiple currencies
-- **Subscription**: Polar.sh subscription management
-- **UserSettings**: Customizable user preferences and company branding
-
-### API Structure
-- RESTful API endpoints under `/api/v1/`
-- Standardized JSON response format
-- Authentication-protected endpoints
-- Performance monitoring and request logging
-
-## Data Flow
-
-### User Workflow
-1. User registration/authentication through Flask-Login
-2. Client creation with optional immediate project assignment
-3. Project creation with hierarchical task management
-4. Time tracking against specific tasks/projects
-5. Invoice generation with automated calculations
-6. PDF export and client communication
-
-### Database Relationships
-- Users → Clients (one-to-many)
-- Clients → Projects (one-to-many)
-- Projects → Tasks (one-to-many)
-- Tasks → TimeEntries (one-to-many)
-- Clients → Invoices (one-to-many)
-- Users → Subscriptions (one-to-one)
-
-## External Dependencies
-
-### Required Services
-- **SMTP Server**: Email delivery for password resets and notifications
-- **Polar.sh API**: Subscription management and payment processing
-- **File Storage**: Local storage for user uploads (logos, attachments)
-
-### Third-Party Integrations
-- **ReportLab**: PDF generation for invoices
-- **Pillow**: Image processing for user uploads
-- **Bootstrap**: Frontend framework via CDN
-- **Font Awesome**: Icon library via CDN
-
-### Environment Variables
-- `FLASK_SECRET_KEY`: Application secret key. **Required in production** — the
-  app refuses to start without it (no per-process generated fallback, which
-  would silently invalidate sessions/CSRF on every gunicorn worker reload).
+**Required Environment Variables**:
+- `FLASK_SECRET_KEY`: **Required in production**; app refuses to start without it.
 - `DATABASE_URL`: Database connection string.
 - `MAIL_SERVER`, `MAIL_USERNAME`, `MAIL_PASSWORD`: Email configuration.
-- `POLAR_API_KEY`: Polar.sh API key (production: `https://api.polar.sh`).
-- `POLAR_WEBHOOK_SECRET`: standard-webhooks signing secret for
-  `/subscriptions/webhook`. Format is `whsec_<base64>` (the verifier also
-  accepts a raw string for tenants whose dashboard hands one out).
-- `POLAR_PROFESSIONAL_PRODUCT_ID`: Polar product id for the Professional tier.
-- `POLAR_PROFESSIONAL_MONTHLY_PRICE_ID`,
-  `POLAR_PROFESSIONAL_YEARLY_PRICE_ID`: Polar `product_price_id` values used
-  to start a checkout. The subscription page renders without these (the
-  Subscribe buttons just no-op with a flash) so the app boots fine while
-  pricing is being set up in the dashboard.
+- `POLAR_API_KEY`: Polar.sh API key.
+- `POLAR_WEBHOOK_SECRET`: Standard-webhooks signing secret.
+- `POLAR_PROFESSIONAL_PRODUCT_ID`: Polar product ID for the Professional tier.
+- `POLAR_PROFESSIONAL_MONTHLY_PRICE_ID`, `POLAR_PROFESSIONAL_YEARLY_PRICE_ID`: Polar `product_price_id` values.
 - `FLASK_ENV`: `development` | `test` | (anything else = production).
 - `PRODUCTION`: Optional explicit production flag (`true`/`1`/`yes`).
-  When either `PRODUCTION=true` or `FLASK_ENV` is unset/non-development,
-  the app enables HTTPS-only Secure cookies and the strict secret-key check.
+- `NATS_URL`: NATS server connection string (optional, enables NATS).
+- `NATS_CREDS_PATH`: Path to NATS credentials file (optional).
+- `NATS_CLIENT_NAME`: NATS client name (optional).
+- `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`: Google OAuth credentials (optional, enables Google sign-in).
 
-### Database Migrations (Alembic / Flask-Migrate)
-The app now uses Flask-Migrate for schema changes. New tables continue to be
-created idempotently by `db.create_all()` at boot, but column changes must
-go through Alembic so production deployments don't silently drop data.
-- Run `flask db upgrade` after pulling new migrations.
-- Create a new migration with `flask db migrate -m "<description>"`.
-- Migrations live in `migrations/versions/`.
+## Stack
+- **Framework**: Flask, SQLAlchemy ORM
+- **Runtime**: Python (version not specified, assume latest stable for Flask)
+- **Database**: SQLite (dev), PostgreSQL (prod)
+- **ORM**: SQLAlchemy
+- **Validation**: Flask-WTF for forms, Pydantic for API schemas (inferred, not explicit)
+- **Build Tool**: Custom asset bundling and minification system, Flask-Migrate (Alembic) for DB migrations
+- **Frontend**: Jinja2, Bootstrap 5, Vanilla JavaScript, ReportLab (PDF generation), Pillow (image processing)
 
-## Deployment Strategy
+## Where things live
+- `auth/`: User authentication, registration, password reset.
+- `clients/`: Client management.
+- `projects/`: Project and task management, time tracking.
+- `invoices/`: Invoice generation, PDF export.
+- `settings/`: User and company settings, customization.
+- `polar/`: Polar.sh subscription integration.
+- `subscribers/`: NATS worker and notification delivery.
+- `static/css/style.css`: Main CSS, including landing page styles scoped under `.lp-root`.
+- `migrations/versions/`: Database migration scripts (Alembic).
+- `docs/nats.md`: NATS setup and operational documentation.
 
-### Production Configuration
-- Debug mode disabled in production
-- Secure session handling with proxy support
-- Rotating file logs with size limits
-- Database connection pooling
-- Asset minification and caching
+## Architecture decisions
+- **Decimal for Money**: All financial calculations use `Numeric` (Decimal) types end-to-end to prevent floating-point inaccuracies.
+- **Tenant Scoping Defense-in-Depth**: Every cross-table lookup includes `user_id` for enhanced data isolation, even if the parent row is already scoped.
+- **NATS for Async Notifications**: Utilizes NATS JetStream for asynchronous notification delivery, offloading from the web request path and providing retry semantics.
+- **Strict CSP Implementation**: Employs per-request nonces for `script-src` and `style-src` to enhance security and prevent XSS, avoiding `unsafe-inline`.
+- **Centralized Duration Conversion**: All time-related math (minutes ↔ hours ↔ timedelta) is consolidated into `utils/duration.py` to ensure consistency and prevent conversion bugs.
+- **Image Upload Hardening**: Implemented robust checks against decompression bombs, size limits, and format whitelisting for user-uploaded images.
 
-### Development Setup
-- SQLite database for local development
-- Debug mode enabled with detailed error pages
-- Console logging for development feedback
-- Hot reload for template and static file changes
+## Product
+- **User Management**: Registration, login, password reset, OAuth (Google).
+- **Client & Project Management**: Create and manage clients, projects, tasks, and time entries.
+- **Invoice System**: Generate professional invoices with PDF export, customizable branding (logo, signature, fonts, colors).
+- **Subscription Management**: Integration with Polar.sh for managing user subscriptions (Free, Professional tiers).
+- **Notification System**: Asynchronous notification delivery (via NATS).
+- **Reporting**: Time statistics, project completion tracking, deadline alerts.
 
-### Error Handling
-- Centralized error logging with rotation
-- User-friendly error pages (400, 403, 404, 500)
-- Database error handling with rollback
-- Performance monitoring with slow query detection
-
-## Changelog
-
-- May 02, 2026. NATS Phase 0 — message-bus foundation (no subscribers yet):
-  - **`nats_client.py`.** Owns one asyncio event loop in a daemon thread
-    that bridges sync Flask handlers to async `nats-py`. Module is a
-    pure no-op when `NATS_URL` is unset (existing dev / test
-    environments are unaffected, no `nats-py` server required). When
-    `NATS_URL` *is* set, `init()` connects once at app startup and
-    `publish(subject, payload)` is fire-and-log: failures are caught
-    and a wedged NATS server can never break webhook ingest, invoice
-    creation, or notification delivery. Exposes a `_SyncKV` wrapper
-    for JetStream KV buckets so the storage layer can use the bus
-    without touching asyncio.
-  - **`events.py`.** Standard envelope (`v`, `id`, `type`, `user_id`,
-    `timestamp`, `payload`) under the `app.<entity>.<verb>` subject
-    convention. Two publishers wired up: `webhook.received` (in
-    `webhooks/routes.py` after the event commits) and
-    `notification.created` (in `webhooks/services.py` for both the
-    user-targeted and system-wide creation paths). No PII on the bus —
-    IDs and metadata only.
-  - **`JetStreamKVStorage` (third storage backend).** Sits behind the
-    existing `WebhookStorageBackend` ABC alongside Redis and the DB
-    fallback. Three buckets (`webhook_rate_limit`,
-    `webhook_failed_attempt`, `webhook_cache`) with per-entry expiry
-    encoded inline (KV doesn't have sorted sets, so we serialise a
-    JSON list of timestamps and use `last_revision` CAS with a
-    bounded retry budget for atomic-ish increments). `get_storage()`
-    selection is now `NATS_URL > REDIS_URL > DB`, with the same
-    fail-fast policy as Redis: a configured-but-unreachable backend
-    aborts boot rather than silently degrading.
-  - **Operator visibility.** Admin → Webhooks page now surfaces NATS
-    state (connected / connecting / error / disabled), the configured
-    server URL, and the timestamp of the last successfully-published
-    event. The status panel never crashes the events list.
-  - **Tests.** 12 new unit tests pinning the no-op stub semantics and
-    envelope shape (`tests/test_nats_client.py`). Storage contract
-    extracted into `tests/storage_contract.py` so the same behaviour
-    suite can run against any backend; live JetStream contract tests
-    in `tests/test_storage_contract_nats.py` skip cleanly unless
-    `NATS_TEST_URL` is set. Existing 174 tests stay green.
-  - **Docs.** `docs/nats.md` covers Synadia hosting choice, env vars
-    (`NATS_URL`, `NATS_CREDS_PATH`, `NATS_CLIENT_NAME`), subject
-    naming, the envelope contract, local-dev `nats-server -js`
-    commands, and the one-line rollback (`unset NATS_URL`).
-- May 02, 2026. Code-review fixes — money precision, IDOR hardening,
-  narrowed exception handling:
-  - **Money to Decimal end-to-end.** `Invoice.amount`,
-    `InvoiceItem.{quantity, rate, amount}` and `Subscription.amount`
-    converted from `Float` to `Numeric` (precision 12 / scale 2 for
-    money, scale 4 for quantity so fractional hours like 1.25h
-    round-trip exactly). `invoices/forms.py` switched from
-    `FloatField` to `DecimalField`, and `invoices/routes.py` now uses
-    `Decimal` arithmetic throughout the totaling loop with a
-    `_to_money()` helper that quantizes to 2dp using `ROUND_HALF_UP`.
-    Removes the binary-rounding drift that made `0.10 + 0.20` render
-    as `0.30000000000000004` in invoice totals.
-    `settings/routes.py:export_data_json` got a `default=` JSON
-    encoder so Decimal columns serialize cleanly.
-  - **Migration `0006_money_to_numeric`.** Idempotent (inspects each
-    column type before altering, skips when already `Numeric`),
-    SQLite-safe (`batch_alter_table`), reversible (`downgrade` flips
-    columns back to `Float`). Tested round-trip on SQLite:
-    NUMERIC → FLOAT → NUMERIC.
-  - **Belt-and-suspenders tenant scoping.** Every cross-table lookup
-    now carries `user_id=current_user.id` even when the parent row
-    was already scoped, so a future refactor can't silently leak
-    another tenant's data. Touched routes:
-    `clients/routes.py:view_client` + `delete_client` (project lookups),
-    `invoices/routes.py:create_invoice` (project lookup + dropdown
-    population) and `get_projects` (JSON helper),
-    `projects/routes.py:view_task` + `edit_task` (TimeEntry queries
-    via Project join) and `get_project_tasks` (Task query via Project
-    join).
-  - **IDOR regression tests.** New `tests/test_tenant_isolation.py`
-    creates two tenants per test (uuid-suffixed to dodge UNIQUE
-    collisions) and asserts that user A asking for any of user B's
-    row ids — client, project, task, invoice, invoice PDF, JSON
-    project-list helper, JSON task-list helper — gets a 404 / refusal,
-    never the data. 12 new tests, full suite now 174 passing.
-  - **Narrower exception handling.** `admin/routes.py` table-row-count
-    loop's bare `except:` → `except SQLAlchemyError:` with
-    `logger.exception`. Four unannotated `except Exception:` blocks
-    in `webhooks/storage.py` (rate-limit increment, cache write,
-    counter clear, expired-row sweep) tightened to
-    `except SQLAlchemyError:` so KeyboardInterrupt / MemoryError /
-    programming errors surface instead of getting swallowed and
-    re-raised as opaque DB failures.
-- May 02, 2026. Landing page redesign — Jony-Ive-inspired minimalist
-  ("SoloDolo.") brand:
-  - Replaced `templates/index.html` (was 965-line Bootstrap landing) with
-    a clean Apple-style page following the uploaded `freelance-dash` UI
-    design and using its copy verbatim ("Focus on the work. We'll handle
-    the rest.", "A frictionless environment for independent
-    professionals…", "Exceptional by design.", three pillars Intuitive
-    view / Zero friction / Absolute privacy, "Start building" CTA, "Open
-    App" nav, "Designed with intent." footer).
-  - All styles live under a `.lp-root` scope in `static/css/style.css`
-    (~340 new lines) so they cannot leak into the authenticated app.
-    Inter Variable is loaded from `cdn.jsdelivr.net` via `@fontsource-
-    variable/inter` (CSP-allowed origin).
-  - The landing escapes the base.html `.container` with a full-bleed
-    `position:relative; left:50%; margin-left:-50vw` wrapper so the
-    section bands (off-white hero / white features / white footer) span
-    the full viewport, with `overflow-x:hidden` to suppress sidescroll.
-  - Auth-aware CTAs preserved: unauth → register / login, auth →
-    dashboard. Brand label kept as "SoloDolo." per the uploaded design;
-    rest of the app continues to brand as SoloDolo / WorkVista.
-  - Two CSS gotchas solved during implementation, documented inline:
-    1. `.lp-root a { color: inherit }` (specificity 0,1,1) was beating
-       `.lp-cta-primary` (0,1,0) and rendering the "Start building"
-       button text invisible — fixed by removing the color half of the
-       reset; every link class now sets its own color explicitly.
-    2. The project's regex CSS minifier in `asset_bundler.py` strips
-       whitespace around `:` and would mangle `.lp-root :where(a)` into
-       `.lp-root:where(a)` (descendant → element-with-pseudo). Avoided
-       `:where()` for landing styles for that reason.
-  - Post-review hardening (architect feedback):
-    - **Real CSS isolation**: every landing selector is now prefixed with
-      `.lp-root ` (59 rules), so the section truly cannot leak into the
-      authenticated app even if class names collide later.
-    - **Scrollbar-safe full-bleed**: replaced `width:100vw + left:50% +
-      margin-left:-50vw` with `margin-inline: calc(50% - 50vw)` (no
-      `width`); the element auto-fills the viewport without forcing an
-      extra scrollbar-width column of horizontal overflow.
-    - **WCAG AA contrast**: split the muted token in two —
-      `--lp-text-muted` (`#6e6e73`, 4.66:1 on white) for body text
-      (feature descriptions, footer); `--lp-text-muted-soft` (`#86868b`,
-      Apple's gray, AA only for large text) for the hero h1 second line
-      and the 24px subtitle.
-    - **Removed dead nav links**: `Stories` (`#testimonials`) and
-      `Pricing` (`#pricing`) had no destination sections — kept only
-      `Features` to avoid misleading clicks. Slight deviation from the
-      uploaded design's nav copy, in service of UX integrity.
-
-
-- May 02, 2026. Centralized duration conversions (`utils/duration.py`):
-  - All minutes ↔ hours / minutes ↔ timedelta math now routes through one
-    module. The same conversion was previously scattered across
-    `admin/routes.py`, `projects/routes.py` (~10 spots, including a
-    nested `def format_duration`), and inline `{% set hours = ... // 60 %}`
-    in two templates — exactly the duplication that let the C2 `/3600`
-    bug under-report admin hours by 60× for as long as it did.
-  - Public API: `minutes_to_hours`, `hours_to_minutes`, `timedelta_to_minutes`
-    (raises on negative deltas so corrupt time entries fail loud),
-    `split_minutes`, `format_duration`. All tolerate `None` and treat
-    negative values as zero.
-  - `format_duration` and `minutes_to_hours` are registered as Jinja
-    filters in `app.py`, so templates can write
-    `{{ entry.duration|format_duration }}` instead of duplicating the
-    division.
-  - `templates/projects/time_statistics.html` and `task_detail.html`
-    migrated to the filter; `projects/routes.py` and `admin/routes.py`
-    migrated to the helpers.
-  - 35 new tests in `tests/test_duration.py` cover every helper
-    (including None / negative / garbage input), the round-trip
-    `hours → minutes → hours` invariant, and verify the Jinja filters
-    are wired up. Suite is now 71 passing.
-- May 03, 2026. Task #30: Polar.sh subscriptions enabled (Free + Professional only):
-  - `polar/polar_api.py` rewritten against the real Polar v1 API at
-    `https://api.polar.sh`: `POST /v1/checkouts/`, `GET /v1/checkouts/{id}`,
-    `GET /v1/subscriptions/{id}`, `PATCH /v1/subscriptions/{id}` (graceful
-    cancel via `cancel_at_period_end=true`). Removed the previous fictional
-    endpoints (`subscription/tiers`, `checkout/session`,
-    `subscriptions/{id}/cancel`, `subscriptions/{id}/upgrade`).
-  - Webhook signature verification implemented per the standard-webhooks
-    spec (`webhook-id` / `webhook-timestamp` / `webhook-signature`,
-    HMAC-SHA256, base64, 5-minute replay window). `whsec_<base64>` secrets
-    are decoded; raw secrets also accepted.
-  - `polar/routes.py` rewritten: two-tier catalog (Free $0, Professional
-    $13/mo or $130/yr — exclusive of taxes; Polar is merchant of record
-    and adds VAT/sales tax at checkout). `?billing=monthly|annual` selects
-    the price id. Checkout stamps `metadata={user_id, tier_id, billing_interval}`
-    so the subsequent webhook can attach the Subscription row to the right
-    user. Webhook handles `subscription.created/updated/active/uncanceled/
-    canceled/revoked`; manual cancel button still works against the API.
-  - `app.py`: `import polar` re-enabled and `polar.init_app(app)` called.
-    Only the webhook view function is CSRF-exempted (not the whole
-    blueprint), so the Cancel form keeps its Flask-WTF token.
-  - `templates/base.html`: account dropdown link to Subscription is back.
-  - `templates/polar/subscription.html`: Business tier removed; copy is
-    Free + Professional only; tax disclaimer added; Subscribe monthly /
-    Subscribe annually buttons render even when Polar isn't yet configured
-    (disabled with a warning banner) so the page is browseable.
-  - `tests/test_polar_webhook.py` (6 tests): missing-sig → 401, wrong-sig
-    → 401, missing secret → 503, valid `subscription.created` upserts a
-    row + log, `subscription.canceled` flips status, unhandled event
-    types are no-ops. Suite is now 19 passing on the Polar slice.
-- May 02, 2026. Feature gating split into `has_feature` + `get_feature_limit`:
-  - New `polar/features.py` is the single source of truth for the feature
-    schema (`FEATURE_SCHEMA` + per-tier overrides). `Subscription.get_features`
-    and the new `User._resolve_features` both delegate to it, so the
-    duplicated free-tier defaults that used to live in both `models.py` and
-    `polar/models.py` are gone.
-  - `User.has_feature(name) -> bool` for boolean flags, and
-    `User.get_feature_limit(name) -> Optional[int]` for numeric caps where
-    `None` means *unlimited*. This replaces the legacy `0 == unlimited`
-    sentinel — which was indistinguishable from a real cap of zero
-    (e.g. `team_members=0` on free tier).
-  - `clients/routes.py` and `projects/routes.py` migrated to
-    `get_feature_limit(...)`, treating `None` as "no cap" and skipping the
-    DB count entirely. Defensive `int(...)` wrappers removed. Fixed a latent
-    bug in `projects/routes.py` where `count >= bool/int` could compare
-    oddly when the old method returned a bool.
-  - `User.has_subscription_feature` kept as a deprecation shim
-    (`DeprecationWarning`, bug-compatible: returns `0` for unlimited
-    limits and `0` for unknown `*_limit` names).
-  - 12 new tests in `tests/test_feature_gating.py` cover free/pro/business
-    tiers, `None` translation, contract-violation guards, schema-key
-    agreement, the shim's deprecation warning, and unknown-limit
-    legacy preservation. Suite is now 35 passing.
-- May 02, 2026. Hardening pass from code review (C1–C4, I8–I10):
-  - **WebhookEvent.metadata → event_metadata** (C1): the previous attribute
-    name collided with SQLAlchemy's reserved `MetaData` registry on
-    `DeclarativeBase`, so security/audit metadata never persisted. Added
-    Alembic migration `0001_add_event_metadata` and a model round-trip test.
-  - **Admin hours math** (C2): `TimeEntry.duration` is in minutes, not
-    seconds — replaced `/3600` with `/60.0` in `admin/routes.py` (was
-    under-reporting totals 60×). Added unit test.
-  - **Open-redirect filter** (C3): added `utils/security.is_safe_url` that
-    rejects `javascript:`, `data:`, `vbscript:`, protocol-relative `//host`
-    and backslash-host payloads. `auth/login` uses it for `?next=`. 16-case
-    test covers safe + dangerous payloads.
-  - **403 error logging** (I8): fixed `current_user` lookup that was always
-    logging "Unknown" because it was reading from `current_app` instead of
-    `flask_login`.
-  - **Production hardening** (I9/I10): app refuses to start without
-    `FLASK_SECRET_KEY` in production; cookie `Secure` flag is now tied to
-    explicit `IS_PRODUCTION` rather than `app.debug`.
-  - **Email reliability** (C4): `send_email_async` now wraps every send in
-    `app.app_context()`, retries 3× with exponential backoff, and persists
-    every attempt to a new `EmailDeliveryLog` table (recipient, subject,
-    status, attempts, last_error, sent_at). Foundation for the queue-based
-    delivery system planned next.
-  - **Tests**: added pytest harness (`tests/conftest.py` w/ in-memory
-    SQLite). 21 tests passing.
-- May 02, 2026. Task #17: "Continue with Google" sign-in (additive OAuth).
-  - Added `oauth_provider` + `oauth_provider_id` columns on `User` with a
-    composite `UNIQUE (oauth_provider, oauth_provider_id)` so two app
-    accounts can never both claim the same Google identity. Migration
-    `0005_add_user_oauth_columns` (idempotent, reversible).
-  - New `google_auth.py` blueprint adapted from Replit's
-    `flask_google_oauth` integration but with: Google `sub` (not email)
-    as the stable identifier; three-step lookup (provider+id → email
-    link → create with collision-safe generated username); session-
-    bound CSRF state; `is_safe_url`-validated `next` redirect carried
-    across the round-trip via session; 409 refusal to relink an account
-    already bound to a different Google identity.
-  - Blueprint is registered conditionally on
-    `GOOGLE_OAUTH_CLIENT_ID/SECRET` so the app boots in environments
-    without OAuth credentials. Templates check the
-    `google_oauth_enabled` context flag to show/hide the
-    "Continue with Google" button on `/auth/login` and `/auth/register`.
-  - New read-only `/settings/sign-in-methods` page surfaces which auth
-    methods (password, magic link, Google) are linked to the account.
-    Linked from the user dropdown.
-  - 19 new tests in `tests/test_google_oauth.py`; full suite is now
-    157 passing.
-- December 07, 2025. Added project completion feature and deadline alert system
-  - Projects can now be marked as "completed" or reopened with a single click
-  - Configurable deadline alerts (7 days, 3 days, 1 day, or custom interval)
-  - Color-coded urgency indicators on dashboard (red/orange/yellow)
-  - Deadline alert settings accessible from user dropdown menu
-- July 03, 2025. Initial setup
-
-## User Preferences
-
+## User preferences
 Preferred communication style: Simple, everyday language.
+I prefer to receive detailed explanations about complex technical concepts.
+
+## Gotchas
+- **Production Secret Key**: The application will refuse to start in production without `FLASK_SECRET_KEY` set.
+- **Image Upload Limits**: User-uploaded images are subject to `MAX_CONTENT_LENGTH=4MB`, 8000x8000 pixel dimensions, and `PNG/JPEG/GIF` format whitelist.
+- **NATS Health**: If NATS JetStream is configured but unhealthy, the application falls back to inline notification delivery.
+- **Alembic Migrations**: Column changes require Alembic migrations (`flask db upgrade`) to avoid data loss in production.
+- **Minifier Compatibility**: The custom CSS minifier might mangle CSS with `:where()` selectors if not carefully managed.
+
+## Pointers
+- **Flask Documentation**: [https://flask.palletsprojects.com/](https://flask.palletsprojects.com/)
+- **SQLAlchemy Documentation**: [https://docs.sqlalchemy.org/](https://docs.sqlalchemy.org/)
+- **Bootstrap 5 Documentation**: [https://getbootstrap.com/docs/5.3/](https://getbootstrap.com/docs/5.3/)
+- **NATS Documentation**: `docs/nats.md`
+- **Polar.sh API Documentation**: [https://docs.polar.sh/api/](https://docs.polar.sh/api/)
+- **ReportLab User Guide**: [https://www.reportlab.com/docs/reportlab-userguide.pdf](https://www.reportlab.com/docs/reportlab-userguide.pdf)
