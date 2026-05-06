@@ -6,7 +6,7 @@ SoloDolo is a comprehensive SaaS platform for freelancers, offering end-to-end p
 - **Build**: _Populate as you build_
 - **Typecheck**: _Populate as you build_
 - **Codegen**: _Populate as you build_
-- **DB Push**: `flask db upgrade` (for migrations); `db.create_all()` still creates new tables idempotently.
+- **DB Push**: `flask db upgrade` is the **only** path for schema changes. `app.py` no longer runs `db.create_all()` or inline `ALTER TABLE` blocks at boot — it only logs a stderr WARNING if Alembic `current` != `head`.
 
 **Required Environment Variables**:
 - `FLASK_SECRET_KEY`: **Required in production**; app refuses to start without it.
@@ -51,6 +51,7 @@ SoloDolo is a comprehensive SaaS platform for freelancers, offering end-to-end p
 - **Strict CSP Implementation**: Employs per-request nonces for `script-src` and `style-src` to enhance security and prevent XSS, avoiding `unsafe-inline`.
 - **Centralized Duration Conversion**: All time-related math (minutes ↔ hours ↔ timedelta) is consolidated into `utils/duration.py` to ensure consistency and prevent conversion bugs.
 - **Image Upload Hardening**: Implemented robust checks against decompression bombs, size limits, and format whitelisting for user-uploaded images.
+- **Alembic-Only Schema Management**: Migrations in `migrations/versions/` are the single source of truth. The previous inline-`ALTER TABLE`-at-boot escape hatch in `app.py` has been removed (consolidated into `0007_consolidate_startup_alters`). Operators must run `flask db upgrade` before serving traffic; a stderr WARNING fires at boot if not.
 
 ## Product
 - **User Management**: Registration, login, password reset, OAuth (Google).
@@ -68,7 +69,8 @@ I prefer to receive detailed explanations about complex technical concepts.
 - **Production Secret Key**: The application will refuse to start in production without `FLASK_SECRET_KEY` set.
 - **Image Upload Limits**: User-uploaded images are subject to `MAX_CONTENT_LENGTH=4MB`, 8000x8000 pixel dimensions, and `PNG/JPEG/GIF` format whitelist.
 - **NATS Health**: If NATS JetStream is configured but unhealthy, the application falls back to inline notification delivery.
-- **Alembic Migrations**: Column changes require Alembic migrations (`flask db upgrade`) to avoid data loss in production.
+- **Alembic Migrations**: Every schema change MUST go through Alembic — there is no `db.create_all()` or inline `ALTER TABLE` fallback at boot anymore. Run `flask db upgrade` after pulling new migrations; if you skip it, the app still boots but logs a high-visibility WARNING to stderr.
+- **Fresh DB Bootstrap**: There is no baseline migration yet — migrations 0001–0006 each `ALTER` tables that pre-existed via the old `db.create_all()` call. To bootstrap a brand-new database, run `python -c "from app import app, db; app.app_context().push(); import models; db.create_all()"` once, then `flask db stamp head`. (TODO: replace with a real `0000_baseline` migration so `flask db upgrade` works from empty.)
 - **Minifier Compatibility**: The custom CSS minifier might mangle CSS with `:where()` selectors if not carefully managed.
 
 ## Pointers

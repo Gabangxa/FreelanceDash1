@@ -393,155 +393,46 @@ def inject_google_oauth_flag():
 
 # Polar.sh integration is initialized above (next to its CSRF exemption).
 
-# Create database tables
+# Schema managed exclusively by Alembic -- run: flask db upgrade
 with app.app_context():
-    # Import models to ensure they're registered with SQLAlchemy
-    import models
-    
-    # Check which tables are already created
-    from sqlalchemy import inspect
-    inspector = inspect(db.engine)
-    existing_tables = inspector.get_table_names()
-    
-    # Create all tables that don't exist
-    db.create_all()
+    # Import models so SQLAlchemy's metadata is populated for any code
+    # that introspects ``db.metadata`` later in the boot sequence.
+    import models  # noqa: F401
 
-    # db.create_all() does NOT ALTER existing tables, so add any new
-    # UserSettings branding columns to a previously-provisioned database.
-    # Idempotent (skips columns that already exist) and dialect-aware:
-    # Postgres uses BYTEA, SQLite uses BLOB. Each column is added in its
-    # own statement so a single failure can't strand the others, and we
-    # log per-column outcomes rather than swallowing a batch failure.
+    # Warn loudly (but don't refuse to boot) if the operator forgot to
+    # run migrations. We can't hard-fail because a brand-new install on
+    # a fresh DB needs the app to be importable in order to run
+    # ``flask db upgrade`` in the first place. The warning is duplicated
+    # to stderr so it surfaces in container logs even if the application
+    # logger is filtered.
     try:
-        _fresh_inspector = inspect(db.engine)
-        if 'user_settings' in _fresh_inspector.get_table_names():
-            _existing_cols = {c['name'] for c in _fresh_inspector.get_columns('user_settings')}
-            _dialect = db.engine.dialect.name  # 'postgresql' / 'sqlite' / 'mysql' / ...
-            _binary_type = 'BLOB' if _dialect == 'sqlite' else 'BYTEA'
-            _column_defs = [
-                ('invoice_signature',          _binary_type),
-                ('invoice_signature_mimetype', 'VARCHAR(30)'),
-                ('invoice_font',               "VARCHAR(20) DEFAULT 'helvetica'"),
-                # Feature flag for the "Invoice from time entries" shortcut.
-                # Default TRUE so existing users get the feature on by default.
-                ('time_to_invoice_enabled',    'BOOLEAN DEFAULT TRUE NOT NULL'),
-            ]
-            _missing = [(name, sql_type) for name, sql_type in _column_defs
-                        if name not in _existing_cols]
-            if _missing:
-                from sqlalchemy import text as _sa_text
-                for _name, _sql_type in _missing:
-                    try:
-                        with db.engine.begin() as _conn:
-                            _conn.execute(_sa_text(
-                                f"ALTER TABLE user_settings ADD COLUMN {_name} {_sql_type}"
-                            ))
-                        logger.info(
-                            "user_settings: added column %s %s (dialect=%s)",
-                            _name, _sql_type, _dialect,
-                        )
-                    except Exception:  # noqa: BLE001 - per-column safety
-                        logger.exception(
-                            "Failed to ADD COLUMN %s on user_settings; the "
-                            "settings/invoice pages will fall back to "
-                            "defaults until this is resolved.",
-                            _name,
-                        )
-    except Exception:  # noqa: BLE001 - top-level safety net
-        logger.exception(
-            "Schema bootstrap for user_settings branding columns failed"
-        )
+        from alembic.config import Config as _AlembicConfig
+        from alembic.script import ScriptDirectory as _AlembicScriptDir
+        from alembic.runtime.migration import MigrationContext as _AlembicCtx
 
-    # Add the Task #28 columns on time_entry that record which entries
-    # have already been rolled into an invoice. Idempotent ALTER block
-    # mirroring the user_settings one above so previously-provisioned
-    # databases pick up ``invoiced_at`` / ``invoice_id`` without
-    # operators having to run a manual migration. Each column is
-    # added in its own statement so a single failure can't strand the
-    # other.
-    #
-    # Legacy note: time entries that the v1 "From Time Entries" flow
-    # marked as invoiced by flipping ``billable`` to FALSE are NOT
-    # backfilled here -- we cannot reliably tell them apart from
-    # entries the user genuinely marked non-chargeable. Those rows
-    # remain invisible to the new query (``billable=True AND
-    # invoiced_at IS NULL``), which preserves the v1 behaviour.
-    try:
-        _fresh_inspector = inspect(db.engine)
-        if 'time_entry' in _fresh_inspector.get_table_names():
-            _existing_cols = {
-                c['name'] for c in _fresh_inspector.get_columns('time_entry')
-            }
-            _te_columns = [
-                ('invoiced_at', 'TIMESTAMP'),
-                ('invoice_id', 'INTEGER REFERENCES invoice(id)'),
-            ]
-            _missing = [(name, sql_type) for name, sql_type in _te_columns
-                        if name not in _existing_cols]
-            if _missing:
-                from sqlalchemy import text as _sa_text
-                for _name, _sql_type in _missing:
-                    try:
-                        with db.engine.begin() as _conn:
-                            _conn.execute(_sa_text(
-                                f"ALTER TABLE time_entry ADD COLUMN {_name} {_sql_type}"
-                            ))
-                        logger.info(
-                            "time_entry: added column %s %s",
-                            _name, _sql_type,
-                        )
-                    except Exception:  # noqa: BLE001 - per-column safety
-                        logger.exception(
-                            "Failed to ADD COLUMN %s on time_entry; the "
-                            "From-Time-Entries flow may misbehave until "
-                            "this is resolved.",
-                            _name,
-                        )
-    except Exception:  # noqa: BLE001 - top-level safety net
+        _alembic_cfg = _AlembicConfig("migrations/alembic.ini")
+        _alembic_cfg.set_main_option("script_location", "migrations")
+        _script = _AlembicScriptDir.from_config(_alembic_cfg)
+        _heads = set(_script.get_heads())
+        with db.engine.connect() as _conn:
+            _ctx = _AlembicCtx.configure(_conn)
+            _current = set(_ctx.get_current_heads())
+        if _current != _heads:
+            import sys
+            _msg = (
+                "[startup] WARNING: Alembic schema is not at head "
+                f"(current={sorted(_current) or 'EMPTY'}, "
+                f"head={sorted(_heads)}). "
+                "Run `flask db upgrade` before serving traffic."
+            )
+            print(_msg, file=sys.stderr, flush=True)
+            logger.warning(
+                "Alembic schema is behind head: current=%s head=%s",
+                sorted(_current) or 'EMPTY', sorted(_heads),
+            )
+    except Exception:  # noqa: BLE001 - never let a bad alembic check block boot
         logger.exception(
-            "Schema bootstrap for time_entry invoiced columns failed"
-        )
-
-    # Add the Task #27 column on project that stores the per-project
-    # default hourly rate used to pre-fill the "From Time Entries"
-    # invoice flow. Idempotent ALTER block mirroring the user_settings
-    # / time_entry ones above so previously-provisioned databases pick
-    # up ``default_hourly_rate`` without operators having to run a
-    # manual migration. Numeric maps to NUMERIC on Postgres and to the
-    # affinity-equivalent on SQLite.
-    try:
-        _fresh_inspector = inspect(db.engine)
-        if 'project' in _fresh_inspector.get_table_names():
-            _existing_cols = {
-                c['name'] for c in _fresh_inspector.get_columns('project')
-            }
-            _proj_columns = [
-                ('default_hourly_rate', 'NUMERIC(12, 2)'),
-            ]
-            _missing = [(name, sql_type) for name, sql_type in _proj_columns
-                        if name not in _existing_cols]
-            if _missing:
-                from sqlalchemy import text as _sa_text
-                for _name, _sql_type in _missing:
-                    try:
-                        with db.engine.begin() as _conn:
-                            _conn.execute(_sa_text(
-                                f"ALTER TABLE project ADD COLUMN {_name} {_sql_type}"
-                            ))
-                        logger.info(
-                            "project: added column %s %s",
-                            _name, _sql_type,
-                        )
-                    except Exception:  # noqa: BLE001 - per-column safety
-                        logger.exception(
-                            "Failed to ADD COLUMN %s on project; the "
-                            "default-hourly-rate prefill will fall back "
-                            "to empty until this is resolved.",
-                            _name,
-                        )
-    except Exception:  # noqa: BLE001 - top-level safety net
-        logger.exception(
-            "Schema bootstrap for project default_hourly_rate column failed"
+            "Alembic head-check raised; proceeding without schema warning"
         )
 
     # Initialise the webhook security storage backend (Redis if
