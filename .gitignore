@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual envs
+.venv/
+venv/
+env/
+.pythonlibs/
+
+# Local SQLite / instance
+instance/
+*.sqlite
+*.sqlite3
+*.db
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/tmp/logs/
+
+# Replit-local working files
+.local/
+
+# Backup files
+*.bak
+
+# Pasted screenshots, logs, and zips dropped into the chat — these
+# are never referenced at runtime (verified via ripgrep) and they
+# bloat the repo with binary blobs.
+attached_assets/
