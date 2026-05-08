@@ -591,11 +591,13 @@ def create_time_entry():
         start_time_str = request.form.get('start_time')
         if start_time_str:
             try:
-                # Try to parse with time if provided
-                if ' ' in start_time_str:
-                    start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M')
+                # Accept either HTML5 datetime-local ("YYYY-MM-DDTHH:MM"),
+                # space-separated ("YYYY-MM-DD HH:MM"), or date-only.
+                normalized = start_time_str.replace('T', ' ', 1)
+                if ' ' in normalized:
+                    start_time = datetime.strptime(normalized, '%Y-%m-%d %H:%M')
                 else:
-                    start_time = datetime.strptime(start_time_str, '%Y-%m-%d')
+                    start_time = datetime.strptime(normalized, '%Y-%m-%d')
             except ValueError as e:
                 proj_logger.warning(f"Invalid start_time format: {start_time_str} - {str(e)}")
                 flash('Invalid start time format. Please use YYYY-MM-DD or YYYY-MM-DD HH:MM', 'danger')
@@ -614,11 +616,12 @@ def create_time_entry():
         # If end_time is provided, parse and calculate duration
         if end_time_str:
             try:
-                # Try to parse with time if provided
-                if ' ' in end_time_str:
-                    end_time = datetime.strptime(end_time_str, '%Y-%m-%d %H:%M')
+                # Accept HTML5 datetime-local, space-separated, or date-only.
+                normalized_end = end_time_str.replace('T', ' ', 1)
+                if ' ' in normalized_end:
+                    end_time = datetime.strptime(normalized_end, '%Y-%m-%d %H:%M')
                 else:
-                    end_time = datetime.strptime(end_time_str, '%Y-%m-%d')
+                    end_time = datetime.strptime(normalized_end, '%Y-%m-%d')
                     
                 # Validate ordering BEFORE asking the duration helper to
                 # convert -- timedelta_to_minutes refuses negative deltas
