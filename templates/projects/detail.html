@@ -116,6 +116,7 @@
 
                 <!-- Timer Entry Form -->
                 <form id="timer-form" method="POST" action="{{ url_for('projects.create_time_entry') }}" class="mt-3">
+                    {{ csrf_form.hidden_tag() }}
                     <input type="hidden" name="project_id" value="{{ project.id }}">
                     <input type="hidden" name="duration" id="timer-duration" value="0">
 
@@ -149,6 +150,7 @@
                 <!-- Manual Time Entry -->
                 <h6 class="text-muted mb-3">Manual Time Entry</h6>
                 <form id="manual-form" method="POST" action="{{ url_for('projects.create_time_entry') }}">
+                    {{ csrf_form.hidden_tag() }}
                     <input type="hidden" name="project_id" value="{{ project.id }}">
                     <input type="hidden" name="duration" id="manual-duration" value="0">
 

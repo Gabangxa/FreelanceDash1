@@ -452,12 +452,14 @@ def view_task(id):
         billable_minutes = sum(entry.duration or 0 for entry in time_entries if entry.billable)
         billable_hours = round(minutes_to_hours(billable_minutes), 2)
         
+        csrf_form = EmptyForm()
         return render_template(
             'projects/task_detail.html', 
             task=task, 
             time_entries=time_entries,
             total_hours=total_hours,
-            billable_hours=billable_hours
+            billable_hours=billable_hours,
+            csrf_form=csrf_form
         )
         
     except SQLAlchemyError as e:

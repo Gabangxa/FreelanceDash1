@@ -226,6 +226,7 @@
             </div>
             <div class="modal-body">
                 <form action="{{ url_for('projects.create_time_entry') }}" method="POST" id="time-entry-form">
+                    {{ csrf_form.hidden_tag() }}
                     <input type="hidden" name="project_id" value="{{ task.project_id }}">
                     <input type="hidden" name="task_id" value="{{ task.id }}">
                     
