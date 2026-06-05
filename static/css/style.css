@@ -2119,6 +2119,8 @@ code {
     display: inline-flex;
     align-items: center;
     gap: 4px;
+    padding: 8px 16px;
+    border-radius: 999px;
     color: var(--lp-text);
     font-size: 15px;
     font-weight: 500;
