@@ -401,11 +401,18 @@ def _process_subscription_upsert(data: dict, *, log_event: str) -> None:
             polar_subscription_id, user_id, log_event,
         )
     except IntegrityError:
-        # Race: a sibling worker inserted the same polar_subscription_id
-        # between our SELECT and our INSERT. Roll back, re-fetch, and
-        # retry the field updates onto the row that won the race. Polar
-        # retries failed webhooks, so this would otherwise eventually
-        # 500-loop on us in production.
+        # Race: a sibling worker inserted a competing row between our
+        # SELECT and our INSERT. Two flavors:
+        #   1. Same polar_subscription_id (Polar resent the same event) --
+        #      the winning row matches our id.
+        #   2. Same user_id (the user double-checked-out and Polar fired
+        #      two distinct subscription.created events at once) -- the
+        #      winning row has the *other* polar_subscription_id but the
+        #      same user_id, and the unique index on subscription.user_id
+        #      is what tripped us.
+        # Either way: roll back, re-fetch the surviving row, and retry
+        # the field updates onto it. Polar retries failed webhooks, so
+        # this would otherwise eventually 500-loop on us in production.
         db.session.rollback()
         logger.warning(
             "IntegrityError upserting Polar sub %s; retrying as update",
@@ -415,11 +422,16 @@ def _process_subscription_upsert(data: dict, *, log_event: str) -> None:
             polar_subscription_id=polar_subscription_id
         ).first()
         if existing is None:
+            existing = Subscription.query.filter_by(user_id=user_id).first()
+        if existing is None:
             logger.exception(
                 "Polar sub %s integrity error but no winning row found",
                 polar_subscription_id,
             )
             raise
+        # We may now be claiming this user's row for a brand-new Polar
+        # subscription id (case 2 above), so update it too.
+        existing.polar_subscription_id = polar_subscription_id
         existing.status = data.get("status") or existing.status
         if amount is not None:
             existing.amount = amount

@@ -10,8 +10,18 @@ class Subscription(db.Model):
     """Subscription model to store user subscription information."""
     
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
-    
+    # ``unique=True`` enforces the one-subscription-per-user invariant the
+    # rest of the app already assumes (``User.subscription`` is uselist=False
+    # and routes call ``.first()``). Without this, two parallel checkouts
+    # racing through ``subscription.created`` across gunicorn workers could
+    # both insert a row for the same user. The DB-level unique index is the
+    # last line of defense; the IntegrityError path in
+    # ``_process_subscription_upsert`` recovers from a losing race.
+    user_id = db.Column(
+        db.Integer, db.ForeignKey('user.id'),
+        nullable=False, unique=True, index=True,
+    )
+
     # Subscription details
     polar_subscription_id = db.Column(db.String(100), unique=True, nullable=False, index=True)
     tier_id = db.Column(db.String(50), nullable=False)

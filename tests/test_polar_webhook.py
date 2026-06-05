@@ -180,6 +180,97 @@ def test_subscription_canceled_flips_status(client, webhook_user, app):
         ).count() == 1
 
 
+def test_concurrent_subscription_created_for_same_user_keeps_one_row(
+    app, webhook_user, monkeypatch
+):
+    """Two parallel ``subscription.created`` deliveries for the same user
+    must collapse to a single Subscription row.
+
+    We can't faithfully race two threads against the same in-memory
+    SQLite, so we simulate the race deterministically:
+
+    1. Worker A wins -- a subscription row already exists in the DB.
+    2. Worker B's webhook fires. Inside ``_load_or_create`` the
+       ``filter_by(user_id=...)`` lookup is patched to return None just
+       once, mimicking the stale read worker B would have done before A
+       committed. Worker B then attempts an INSERT, which trips the new
+       unique index on ``subscription.user_id`` and raises
+       IntegrityError. The recovery path must re-fetch the surviving row
+       and finish the upsert without exploding -- and we must end with
+       exactly one Subscription row for that user.
+    """
+    from flask_sqlalchemy.query import Query as FSAQuery
+    from polar import routes as polar_routes
+
+    with app.app_context():
+        winner = Subscription(
+            user_id=webhook_user,
+            polar_subscription_id="sub_polar_winner",
+            tier_id="professional", tier_name="Professional",
+            status="active", amount=13, currency="USD",
+            billing_interval="month",
+        )
+        db.session.add(winner)
+        db.session.commit()
+
+    real_filter_by = FSAQuery.filter_by
+    state = {"stale_done": False}
+
+    def patched_filter_by(self, **kwargs):
+        # Mimic the stale read exactly once: the first user_id-only
+        # lookup against the Subscription table sees nothing, forcing
+        # _load_or_create to attempt an INSERT that races into the
+        # unique index. Subsequent lookups (including the post-rollback
+        # re-fetch in the IntegrityError handler) hit the real DB.
+        if not state["stale_done"] and list(kwargs.keys()) == ["user_id"]:
+            try:
+                entity = self.column_descriptions[0]["entity"]
+            except (AttributeError, IndexError, KeyError):
+                entity = None
+            if entity is Subscription:
+                state["stale_done"] = True
+                # Return a query that is guaranteed to match no rows.
+                return real_filter_by(self, user_id=-1)
+        return real_filter_by(self, **kwargs)
+
+    monkeypatch.setattr(FSAQuery, "filter_by", patched_filter_by)
+
+    with app.app_context():
+        polar_routes._process_subscription_upsert(
+            data={
+                "id": "sub_polar_loser",
+                "status": "active",
+                "amount": 1300,
+                "currency": "USD",
+                "recurring_interval": "month",
+                "started_at": "2026-05-03T12:00:00Z",
+                "current_period_end": "2026-06-03T12:00:00Z",
+                "product": {"name": "Professional"},
+                "metadata": {
+                    "user_id": str(webhook_user),
+                    "tier_id": "professional",
+                    "billing_interval": "monthly",
+                },
+            },
+            log_event="webhook_created",
+        )
+
+    assert state["stale_done"], (
+        "Test bug: stale-read patch never fired, so the race wasn't "
+        "actually simulated."
+    )
+    with app.app_context():
+        rows = Subscription.query.filter_by(user_id=webhook_user).all()
+        assert len(rows) == 1, (
+            f"Expected exactly one Subscription per user; got {len(rows)}: "
+            f"{[r.polar_subscription_id for r in rows]}"
+        )
+        # The IntegrityError recovery should claim the surviving row for
+        # the most-recent webhook's polar_subscription_id so subsequent
+        # webhooks for that id keep landing on the right row.
+        assert rows[0].polar_subscription_id == "sub_polar_loser"
+
+
 def test_unhandled_event_type_returns_200_without_dbwrite(
     client, webhook_user, app
 ):
