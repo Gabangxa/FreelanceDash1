@@ -39,7 +39,7 @@ import time
 from datetime import datetime, timedelta
 from typing import Optional
 
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 logger = logging.getLogger(__name__)
 
@@ -87,6 +87,23 @@ class WebhookStorageBackend(abc.ABC):
     @abc.abstractmethod
     def cache_set(self, key: str, value: str, ttl_seconds: int) -> None:
         """Store ``value`` under ``key`` with the given TTL."""
+
+    @abc.abstractmethod
+    def cache_add(self, key: str, value: str, ttl_seconds: int) -> bool:
+        """Atomically set ``key`` to ``value`` only if it is not already
+        present (treating an expired entry as absent).
+
+        Return ``True`` if this call created the entry (the caller won the
+        race) and ``False`` if a live entry already existed. This is the
+        atomic "set-if-absent" / compare-and-set primitive that lets two
+        truly-concurrent identical webhook deliveries be collapsed to one:
+        only the single winner gets ``True``."""
+
+    @abc.abstractmethod
+    def cache_delete(self, key: str) -> None:
+        """Remove ``key`` from the cache if present. Used to release a
+        key claimed via :meth:`cache_add` when the work it guarded failed,
+        so a retry can re-claim and reprocess it."""
 
     @abc.abstractmethod
     def clear_counters(self) -> None:
@@ -187,6 +204,21 @@ class RedisWebhookStorage(WebhookStorageBackend):
 
     def cache_set(self, key: str, value: str, ttl_seconds: int) -> None:
         self._redis.setex(self._CACHE_PREFIX + key, ttl_seconds, value)
+
+    def cache_add(self, key: str, value: str, ttl_seconds: int) -> bool:
+        # SET key value NX EX ttl: atomically writes only if the key is
+        # absent. Redis returns truthy on a successful write and ``None``
+        # when the key already exists, so the second of two simultaneous
+        # writers loses the race and gets ``False``. Expired keys have
+        # already been evicted by Redis, so an expired entry counts as
+        # absent automatically.
+        result = self._redis.set(
+            self._CACHE_PREFIX + key, value, nx=True, ex=ttl_seconds
+        )
+        return bool(result)
+
+    def cache_delete(self, key: str) -> None:
+        self._redis.delete(self._CACHE_PREFIX + key)
 
     # -- admin --------------------------------------------------------------
     def clear_counters(self) -> None:
@@ -382,6 +414,53 @@ class DBWebhookStorage(WebhookStorageBackend):
             else:
                 entry.value = value
                 entry.expires_at = expires
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+
+    def cache_add(self, key: str, value: str, ttl_seconds: int) -> bool:
+        from app import db
+        from models import WebhookCacheEntry
+
+        now = self._now()
+        expires = now + timedelta(seconds=ttl_seconds)
+        try:
+            # Clear an expired row first so the key can be re-claimed. If a
+            # *live* row exists, this deletes nothing and the INSERT below
+            # trips the primary-key constraint -> IntegrityError -> we lose
+            # the race. The DELETE+INSERT runs as one committed unit, so two
+            # truly-concurrent callers can't both INSERT: the database's
+            # unique primary key serialises them and exactly one wins.
+            db.session.query(WebhookCacheEntry).filter(
+                WebhookCacheEntry.cache_key == key,
+                WebhookCacheEntry.expires_at.isnot(None),
+                WebhookCacheEntry.expires_at <= now,
+            ).delete(synchronize_session=False)
+
+            entry = WebhookCacheEntry()
+            entry.cache_key = key
+            entry.value = value
+            entry.expires_at = expires
+            db.session.add(entry)
+            db.session.commit()
+            return True
+        except IntegrityError:
+            # Lost the race: a live row already exists under this key.
+            db.session.rollback()
+            return False
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+
+    def cache_delete(self, key: str) -> None:
+        from app import db
+        from models import WebhookCacheEntry
+
+        try:
+            db.session.query(WebhookCacheEntry).filter(
+                WebhookCacheEntry.cache_key == key
+            ).delete(synchronize_session=False)
             db.session.commit()
         except SQLAlchemyError:
             db.session.rollback()
@@ -661,6 +740,64 @@ class JetStreamKVStorage(WebhookStorageBackend):
             self._cache.put(key, payload)
         except Exception as exc:  # noqa: BLE001 - non-fatal cache write
             logger.warning("kv cache_set failed for %s: %s", key, exc)
+
+    def cache_add(self, key: str, value: str, ttl_seconds: int) -> bool:
+        # ``KeyWrongLastSequenceError`` is the *definitive* "key already
+        # exists" signal from JetStream's create-if-absent. We must treat
+        # ONLY that as a lost claim (return False). Every other exception
+        # (timeout, transient KV error, ambiguous failure) is re-raised so
+        # the caller's fail-open path processes the webhook -- silently
+        # returning False on a transient error would drop a legitimate
+        # first-time delivery as a phantom duplicate.
+        from nats.js.errors import KeyWrongLastSequenceError
+
+        wrapper = {"v": value, "exp": time.time() + ttl_seconds}
+        payload = json.dumps(wrapper, separators=(",", ":")).encode()
+        try:
+            self._cache.create(key, payload)
+            return True
+        except KeyWrongLastSequenceError:
+            # Definitive: a live entry already exists under this key.
+            pass
+
+        # The key exists. Treat a *logically expired* entry as absent: read
+        # it and, if past its ``exp``, overwrite via a CAS update so the
+        # claim can be reacquired. The CAS (``last=revision``) keeps two
+        # racing reclaimers from both winning.
+        entry = self._cache.get(key)
+        if entry is None:
+            # Vanished between create and get -- retry the create once. A
+            # second definitive conflict means we lost; anything else
+            # propagates (fail-open).
+            try:
+                self._cache.create(key, payload)
+                return True
+            except KeyWrongLastSequenceError:
+                return False
+        try:
+            wrapper_existing = json.loads(entry.value)
+        except (json.JSONDecodeError, TypeError, ValueError):
+            wrapper_existing = None
+        exp = (
+            wrapper_existing.get("exp")
+            if isinstance(wrapper_existing, dict)
+            else None
+        )
+        if exp is not None and isinstance(exp, (int, float)) and exp <= time.time():
+            try:
+                self._cache.update(key, payload, last=entry.revision)
+                return True
+            except KeyWrongLastSequenceError:
+                # Someone else reclaimed the expired slot first -> it's
+                # now live and owned by them; we lost the claim.
+                return False
+        return False
+
+    def cache_delete(self, key: str) -> None:
+        try:
+            self._cache.delete(key)
+        except Exception as exc:  # noqa: BLE001 - non-fatal cache delete
+            logger.warning("kv cache_delete failed for %s: %s", key, exc)
 
     # -- admin API ---------------------------------------------------------
     def clear_counters(self) -> None:

@@ -55,40 +55,55 @@ def _webhook_id_from_headers(headers) -> Optional[str]:
     return None
 
 
-def _webhook_already_processed(webhook_id: str) -> bool:
-    """Return True if this ``webhook-id`` was already accepted recently.
+def _claim_webhook(webhook_id: str) -> bool:
+    """Atomically claim this ``webhook-id`` so only one delivery proceeds.
 
-    Failures talking to the dedup store are swallowed (fail-open): a
-    storage hiccup must never turn a legitimate webhook into a silent
-    drop. The worst case on failure is that a duplicate slips through,
-    which is the pre-existing behaviour.
+    Uses the storage backend's atomic set-if-absent primitive
+    (``cache_add``): the first of N truly-concurrent identical deliveries
+    writes the dedup record and gets ``True``; every other delivery sees
+    the record already present and gets ``False``. This closes the
+    check-then-set race a plain read+write left open, where two deliveries
+    could both pass the read before either wrote.
+
+    Failures talking to the dedup store are swallowed (fail-open) and
+    treated as a successful claim: a storage hiccup must never turn a
+    legitimate webhook into a silent drop. The worst case on failure is
+    that a duplicate slips through, which is the pre-existing behaviour.
     """
     try:
         from webhooks.storage import get_storage
 
-        return get_storage().cache_get(
-            _WEBHOOK_DEDUP_KEY_PREFIX + webhook_id
-        ) is not None
-    except Exception:  # noqa: BLE001 - dedup is best-effort, never load-bearing
-        logger.exception(
-            "Polar webhook dedup lookup failed (continuing as not-seen)"
-        )
-        return False
-
-
-def _mark_webhook_processed(webhook_id: str) -> None:
-    """Record that this ``webhook-id`` has been accepted, with a TTL."""
-    try:
-        from webhooks.storage import get_storage
-
-        get_storage().cache_set(
+        return get_storage().cache_add(
             _WEBHOOK_DEDUP_KEY_PREFIX + webhook_id,
             "1",
             _WEBHOOK_DEDUP_TTL_SECONDS,
         )
     except Exception:  # noqa: BLE001 - dedup is best-effort, never load-bearing
         logger.exception(
-            "Polar webhook dedup record failed for %s (continuing)",
+            "Polar webhook dedup claim failed for %s (processing anyway)",
+            webhook_id,
+        )
+        return True
+
+
+def _release_webhook(webhook_id: Optional[str]) -> None:
+    """Release a previously-claimed ``webhook-id``.
+
+    Called when processing a claimed delivery fails, so Polar's retry of
+    the same ``webhook-id`` can re-claim and reprocess it instead of being
+    short-circuited as a false duplicate. Best-effort: a failure here is
+    swallowed so it can't mask the original processing error (the claim's
+    TTL will eventually expire and let a later retry through regardless).
+    """
+    if not webhook_id:
+        return
+    try:
+        from webhooks.storage import get_storage
+
+        get_storage().cache_delete(_WEBHOOK_DEDUP_KEY_PREFIX + webhook_id)
+    except Exception:  # noqa: BLE001 - dedup is best-effort, never load-bearing
+        logger.exception(
+            "Polar webhook dedup release failed for %s (continuing)",
             webhook_id,
         )
 
@@ -297,11 +312,15 @@ def webhook():
 
     # Deduplicate re-delivered / replayed events. The signature check above
     # only bounds *when* a signed request is acceptable (5-minute window);
-    # it happily re-accepts the exact same delivery twice. Short-circuit any
-    # webhook-id we've already accepted with a 200 no-op *before* any DB
-    # writes happen so Polar treats it as handled and stops retrying.
+    # it happily re-accepts the exact same delivery twice. We *atomically*
+    # claim the webhook-id here -- set-if-absent -- so that of N truly
+    # concurrent identical deliveries only one wins the claim and proceeds;
+    # the rest short-circuit with a 200 no-op *before* any DB writes happen
+    # so Polar treats them as handled and stops retrying. This closes the
+    # check-then-set race where two simultaneous deliveries could both pass
+    # a plain read before either wrote the dedup record.
     webhook_id = _webhook_id_from_headers(request.headers)
-    if webhook_id and _webhook_already_processed(webhook_id):
+    if webhook_id and not _claim_webhook(webhook_id):
         logger.info(
             "Polar webhook %s already processed; skipping (duplicate)",
             webhook_id,
@@ -312,29 +331,33 @@ def webhook():
         event = request.get_json(force=True, silent=False) or {}
     except Exception:  # noqa: BLE001 -- get_json may raise BadRequest
         logger.warning("Polar webhook had unparseable JSON body")
+        # We claimed the id above; release it so a corrected redelivery
+        # isn't mistaken for an already-handled duplicate.
+        _release_webhook(webhook_id)
         return jsonify({"error": "invalid json"}), 400
 
     event_type = event.get("type")
     data = event.get("data") or {}
     logger.info("Polar webhook event: type=%s", event_type)
 
-    if event_type == "subscription.created":
-        _process_subscription_upsert(data, log_event="webhook_created")
-    elif event_type in ("subscription.updated", "subscription.active",
-                        "subscription.uncanceled"):
-        _process_subscription_upsert(data, log_event=f"webhook_{event_type.split('.')[1]}")
-    elif event_type in ("subscription.canceled", "subscription.cancelled",
-                        "subscription.revoked"):
-        _process_subscription_cancellation(data, event_type=event_type)
-    else:
-        logger.info("Unhandled Polar webhook event type: %s", event_type)
-
-    # Record this delivery only after we've processed it without raising.
-    # A handler that throws (DB error -> 500) is intentionally NOT marked,
-    # so Polar's retry can reprocess it; only cleanly-handled deliveries
-    # are remembered as duplicates.
-    if webhook_id:
-        _mark_webhook_processed(webhook_id)
+    # The claim was taken up-front so it's atomic against concurrent
+    # deliveries. If processing raises (DB error -> 500), release the claim
+    # so Polar's retry of the same webhook-id can reprocess it rather than
+    # being short-circuited as a false duplicate.
+    try:
+        if event_type == "subscription.created":
+            _process_subscription_upsert(data, log_event="webhook_created")
+        elif event_type in ("subscription.updated", "subscription.active",
+                            "subscription.uncanceled"):
+            _process_subscription_upsert(data, log_event=f"webhook_{event_type.split('.')[1]}")
+        elif event_type in ("subscription.canceled", "subscription.cancelled",
+                            "subscription.revoked"):
+            _process_subscription_cancellation(data, event_type=event_type)
+        else:
+            logger.info("Unhandled Polar webhook event type: %s", event_type)
+    except Exception:
+        _release_webhook(webhook_id)
+        raise
 
     return jsonify({"status": "ok"}), 200
 

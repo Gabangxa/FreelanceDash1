@@ -415,6 +415,14 @@ class _SyncKV:
     def put(self, key: str, value: bytes) -> int:
         return int(self._run(self._bucket.put(key, value)))
 
+    def create(self, key: str, value: bytes) -> int:
+        """Atomically write ``key`` only if it does not already exist.
+
+        Mirrors ``KeyValue.create``: raises if the key is already present
+        (the underlying client surfaces a wrong-last-sequence error), which
+        callers use as a set-if-absent primitive."""
+        return int(self._run(self._bucket.create(key, value)))
+
     def update(self, key: str, value: bytes, last: int) -> int:
         return int(self._run(self._bucket.update(key, value, last=last)))
 

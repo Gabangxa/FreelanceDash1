@@ -184,6 +184,71 @@ def test_duplicate_webhook_id_is_processed_once(client, webhook_user, app):
         ).count() == 1
 
 
+def test_concurrent_duplicate_webhook_deliveries_collapse_to_one(
+    client, webhook_user, app, monkeypatch
+):
+    """Two *concurrent* identical deliveries (same webhook-id) must result
+    in exactly one Subscription + one log row.
+
+    A faithful two-thread race against in-memory SQLite isn't reliable, so
+    we reproduce the concurrent interleave deterministically: while the
+    first delivery is still inside ``_process_subscription_upsert`` (i.e.
+    before the old check-then-set scheme would ever have *marked* the id),
+    we fire the second identical delivery. The new atomic up-front claim
+    must already have locked the webhook-id, so the second delivery loses
+    the claim and short-circuits as a 200 duplicate that never writes.
+
+    Under the old read-then-write code this test would fail: the second
+    delivery's read would see "not yet processed" and process the event a
+    second time, producing a duplicate SubscriptionLog row.
+    """
+    from webhooks.storage import reset_storage_for_tests
+    from polar import routes as polar_routes
+
+    with app.app_context():
+        reset_storage_for_tests()
+
+    event = _subscription_event(
+        "subscription.created", user_id=webhook_user,
+        polar_sub_id="sub_polar_concurrent_1",
+    )
+    msg_id = "evt_concurrent_" + str(int(time.time() * 1000))
+
+    real_upsert = polar_routes._process_subscription_upsert
+    state = {"reentered": False, "second_status": None, "second_json": None}
+
+    def reentrant_upsert(data, *, log_event):
+        if not state["reentered"]:
+            state["reentered"] = True
+            # Fire the second identical delivery mid-flight of the first.
+            second = _post_event(client, event, msg_id=msg_id)
+            state["second_status"] = second.status_code
+            state["second_json"] = second.get_json()
+        return real_upsert(data, log_event=log_event)
+
+    monkeypatch.setattr(
+        polar_routes, "_process_subscription_upsert", reentrant_upsert
+    )
+
+    first = _post_event(client, event, msg_id=msg_id)
+    assert first.status_code == 200, first.get_data(as_text=True)
+
+    assert state["reentered"], (
+        "Test bug: the second delivery never fired mid-processing, so the "
+        "concurrent interleave wasn't actually exercised."
+    )
+    # The concurrent second delivery must have lost the atomic claim and
+    # short-circuited as a no-op duplicate.
+    assert state["second_status"] == 200
+    assert state["second_json"].get("duplicate") is True
+
+    with app.app_context():
+        assert Subscription.query.filter_by(user_id=webhook_user).count() == 1
+        assert SubscriptionLog.query.filter_by(
+            user_id=webhook_user, event_type="webhook_created"
+        ).count() == 1
+
+
 def test_subscription_canceled_flips_status(client, webhook_user, app):
     # First seed an active subscription via the same path.
     create_event = _subscription_event(

@@ -101,6 +101,42 @@ def assert_cache_get_returns_none_after_short_ttl(backend) -> None:
     assert backend.cache_get("contract:ttl") is None
 
 
+def assert_cache_add_claims_when_absent(backend) -> None:
+    # First claim on a fresh key wins; the value becomes readable.
+    assert backend.cache_add("contract:add1", "v", 60) is True
+    assert backend.cache_get("contract:add1") == "v"
+
+
+def assert_cache_add_loses_when_present(backend) -> None:
+    # Exactly one of two claims on the same key may win. This is the
+    # atomic set-if-absent guarantee the webhook dedup relies on.
+    assert backend.cache_add("contract:add2", "first", 60) is True
+    assert backend.cache_add("contract:add2", "second", 60) is False
+    # The losing claim must NOT overwrite the winner's value.
+    assert backend.cache_get("contract:add2") == "first"
+
+
+def assert_cache_add_reclaims_after_expiry(backend) -> None:
+    # An expired entry is treated as absent, so the key can be re-claimed.
+    assert backend.cache_add("contract:add3", "old", 1) is True
+    time.sleep(1.5)
+    assert backend.cache_add("contract:add3", "new", 60) is True
+    assert backend.cache_get("contract:add3") == "new"
+
+
+def assert_cache_delete_releases_claim(backend) -> None:
+    assert backend.cache_add("contract:del1", "v", 60) is True
+    # Once deleted, the key can be claimed again.
+    backend.cache_delete("contract:del1")
+    assert backend.cache_get("contract:del1") is None
+    assert backend.cache_add("contract:del1", "v2", 60) is True
+
+
+def assert_cache_delete_missing_is_noop(backend) -> None:
+    # Deleting a key that was never set must not raise.
+    backend.cache_delete("contract:del-missing")
+
+
 # ---------------------------------------------------------------------------
 # Convenience: run them all
 # ---------------------------------------------------------------------------
@@ -115,6 +151,10 @@ ALL_CONTRACTS = [
     assert_cache_get_returns_none_for_missing,
     assert_cache_set_and_get_roundtrip,
     assert_cache_set_overwrites_existing,
-    # ttl test deliberately not in the default list -- callers opt in
-    # because it's slow.
+    assert_cache_add_claims_when_absent,
+    assert_cache_add_loses_when_present,
+    assert_cache_delete_releases_claim,
+    assert_cache_delete_missing_is_noop,
+    # ttl tests (cache_get + cache_add reclaim) deliberately not in the
+    # default list -- callers opt in because they're slow.
 ]
