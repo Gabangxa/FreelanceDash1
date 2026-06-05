@@ -1,0 +1,1 @@
+- [Dev DB suspension 500s](dev-db-suspension.md) — a 500 on any DB-backed route (incl. /google_login/callback) often means the dev Neon endpoint was suspended, not a code bug.
