@@ -4,6 +4,19 @@ from wtforms import StringField, TextAreaField, SelectField, SubmitField, Hidden
 from wtforms.validators import Optional, Email, Length, URL, DataRequired, EqualTo, ValidationError
 from flask_login import current_user
 import os
+import re
+
+
+def _normalize_url(value):
+    """Prepend https:// when the user omits the scheme (e.g. 'www.rbnk.com')
+    so the WTForms URL validator accepts it. Runs before validators."""
+    if not value:
+        return value
+    value = value.strip()
+    if value and not re.match(r'^[a-zA-Z][a-zA-Z0-9+.-]*://', value):
+        value = 'https://' + value
+    return value
+
 
 class CompanySettingsForm(FlaskForm):
     company_name = StringField('Company Name', validators=[
@@ -23,7 +36,7 @@ class CompanySettingsForm(FlaskForm):
         Email(message="Please enter a valid email address"),
         Length(max=120, message="Email must be less than 120 characters")
     ])
-    company_website = StringField('Company Website', validators=[
+    company_website = StringField('Company Website', filters=[_normalize_url], validators=[
         Optional(),
         URL(message="Please enter a valid URL"),
         Length(max=120, message="Website URL must be less than 120 characters")
