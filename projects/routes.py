@@ -735,7 +735,7 @@ def edit_time_entry(id):
                     # Ensure end time is after start time
                     if form.end_time.data <= form.start_time.data:
                         flash('End time must be after start time', 'danger')
-                        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
+                        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry, csrf_form=EmptyForm())
                     
                     time_diff = form.end_time.data - form.start_time.data
                     duration = timedelta_to_minutes(time_diff)
@@ -780,7 +780,7 @@ def edit_time_entry(id):
             form.description.data = time_entry.description
             form.billable.data = time_entry.billable
         
-        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry)
+        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry, csrf_form=EmptyForm())
         
     except (SQLAlchemyError, KeyError, ValueError) as e:
         db.session.rollback()

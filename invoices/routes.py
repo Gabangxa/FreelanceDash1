@@ -4,7 +4,7 @@ from flask_login import login_required, current_user
 from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from app import db, logger
 from models import Invoice, InvoiceItem, Client, Project, TimeEntry
-from invoices.forms import InvoiceForm, InvoiceItemForm, TimeEntryToInvoiceForm
+from invoices.forms import InvoiceForm, InvoiceItemForm, TimeEntryToInvoiceForm, EmptyForm
 from invoices.pdf_generator import generate_invoice_pdf
 from invoices import get_pdf_executor
 from io import BytesIO
@@ -54,11 +54,11 @@ def list_invoices():
                     .filter(Client.user_id == current_user.id)
                     .order_by(Invoice.created_at.desc())
                     .all())
-        return render_template('list.html', invoices=invoices)
+        return render_template('list.html', invoices=invoices, csrf_form=EmptyForm())
     except SQLAlchemyError as e:
         logger.exception("Database error in list_invoices")
         flash('An error occurred while loading invoices. Please try again.', 'danger')
-        return render_template('list.html', invoices=[])
+        return render_template('list.html', invoices=[], csrf_form=EmptyForm())
 
 @invoices_bp.route('/new', methods=['GET', 'POST'])
 @login_required
@@ -210,7 +210,7 @@ def view_invoice(id):
 
             return redirect(url_for('invoices.view_invoice', id=id))
 
-        return render_template('detail.html', invoice=invoice)
+        return render_template('detail.html', invoice=invoice, csrf_form=EmptyForm())
 
     except SQLAlchemyError as e:
         logger.exception(f"Database error viewing invoice {id}")

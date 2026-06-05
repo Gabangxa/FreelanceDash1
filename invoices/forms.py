@@ -17,6 +17,11 @@ from wtforms.validators import DataRequired, NumberRange, Length, Optional, Vali
 from datetime import datetime
 
 
+class EmptyForm(FlaskForm):
+    """Empty form for CSRF protection on simple POST actions."""
+    pass
+
+
 class InvoiceItemForm(FlaskForm):
     description = TextAreaField('Description', validators=[
         DataRequired(message="Description is required"),

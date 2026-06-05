@@ -131,6 +131,7 @@
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form action="{{ url_for('projects.delete_time_entry', id=time_entry.id) }}" method="POST">
+                    {{ csrf_form.hidden_tag() }}
                     <button type="submit" class="btn btn-danger">Delete Time Entry</button>
                 </form>
             </div>

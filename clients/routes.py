@@ -4,7 +4,7 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 from datetime import datetime
 from app import db, logger
 from models import Client, Project
-from clients.forms import ClientForm
+from clients.forms import ClientForm, EmptyForm
 from errors import handle_db_errors, UserFriendlyError
 
 clients_bp = Blueprint('clients', __name__, url_prefix='/clients')
@@ -27,7 +27,7 @@ def view_client(id):
             user_id=current_user.id,
         ).all()
         
-        return render_template('clients/detail.html', client=client, projects=projects)
+        return render_template('clients/detail.html', client=client, projects=projects, csrf_form=EmptyForm())
     except SQLAlchemyError as e:
         logger.exception(f"Error viewing client {id}")
         flash('Error loading client details. Please try again.', 'danger')
@@ -40,11 +40,11 @@ def list_clients():
     try:
         # Optimized query with eager loading
         clients = Client.query.filter_by(user_id=current_user.id).all()
-        return render_template('clients/list.html', clients=clients)
+        return render_template('clients/list.html', clients=clients, csrf_form=EmptyForm())
     except SQLAlchemyError as e:
         logger.exception("Database error in list_clients")
         flash('Error loading clients. Please try again.', 'danger')
-        return render_template('clients/list.html', clients=[])
+        return render_template('clients/list.html', clients=[], csrf_form=EmptyForm())
 
 @clients_bp.route('/new', methods=['GET', 'POST'])
 @login_required

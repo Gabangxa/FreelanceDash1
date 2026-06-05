@@ -11,6 +11,11 @@ from wtforms import (
 from wtforms.validators import DataRequired, Email, Length, Optional
 
 
+class EmptyForm(FlaskForm):
+    """Empty form for CSRF protection on simple POST actions."""
+    pass
+
+
 class InitialProjectForm(Form):
     """Nested sub-form for the optional initial project on client creation.
 
