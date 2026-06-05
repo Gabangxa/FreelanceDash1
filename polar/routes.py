@@ -27,6 +27,7 @@ from .models import Subscription, SubscriptionLog
 from .polar_api import (
     PolarAPIError, WebhookVerificationError, get_polar_api, get_webhook_url,
     is_polar_api_configured, verify_webhook_signature,
+    WEBHOOK_TOLERANCE_SECONDS,
 )
 
 logger = logging.getLogger(__name__)
@@ -35,6 +36,61 @@ bp = Blueprint("subscriptions", __name__, url_prefix="/subscriptions")
 
 # Tier ID used inside the app + Subscription.tier_id column.
 PROFESSIONAL_TIER_ID = "professional"
+
+# Keys recording every accepted Polar ``webhook-id`` live in the shared
+# webhook storage cache (NATS KV > Redis > DB). The TTL must comfortably
+# exceed the signature replay tolerance so a re-delivered (or replayed)
+# signed request is still remembered as a duplicate for as long as it
+# could possibly pass signature verification. We use 2x the tolerance to
+# absorb clock skew at the edges of the window.
+_WEBHOOK_DEDUP_KEY_PREFIX = "polar_webhook_id:"
+_WEBHOOK_DEDUP_TTL_SECONDS = WEBHOOK_TOLERANCE_SECONDS * 2
+
+
+def _webhook_id_from_headers(headers) -> Optional[str]:
+    """Case-insensitively pull the standard-webhooks ``webhook-id`` header."""
+    for key, value in headers.items():
+        if key.lower() == "webhook-id":
+            return value
+    return None
+
+
+def _webhook_already_processed(webhook_id: str) -> bool:
+    """Return True if this ``webhook-id`` was already accepted recently.
+
+    Failures talking to the dedup store are swallowed (fail-open): a
+    storage hiccup must never turn a legitimate webhook into a silent
+    drop. The worst case on failure is that a duplicate slips through,
+    which is the pre-existing behaviour.
+    """
+    try:
+        from webhooks.storage import get_storage
+
+        return get_storage().cache_get(
+            _WEBHOOK_DEDUP_KEY_PREFIX + webhook_id
+        ) is not None
+    except Exception:  # noqa: BLE001 - dedup is best-effort, never load-bearing
+        logger.exception(
+            "Polar webhook dedup lookup failed (continuing as not-seen)"
+        )
+        return False
+
+
+def _mark_webhook_processed(webhook_id: str) -> None:
+    """Record that this ``webhook-id`` has been accepted, with a TTL."""
+    try:
+        from webhooks.storage import get_storage
+
+        get_storage().cache_set(
+            _WEBHOOK_DEDUP_KEY_PREFIX + webhook_id,
+            "1",
+            _WEBHOOK_DEDUP_TTL_SECONDS,
+        )
+    except Exception:  # noqa: BLE001 - dedup is best-effort, never load-bearing
+        logger.exception(
+            "Polar webhook dedup record failed for %s (continuing)",
+            webhook_id,
+        )
 
 
 def _professional_price_id(billing: str) -> Optional[str]:
@@ -239,6 +295,19 @@ def webhook():
         logger.warning("Polar webhook signature verification failed: %s", exc)
         return jsonify({"error": "invalid signature"}), 401
 
+    # Deduplicate re-delivered / replayed events. The signature check above
+    # only bounds *when* a signed request is acceptable (5-minute window);
+    # it happily re-accepts the exact same delivery twice. Short-circuit any
+    # webhook-id we've already accepted with a 200 no-op *before* any DB
+    # writes happen so Polar treats it as handled and stops retrying.
+    webhook_id = _webhook_id_from_headers(request.headers)
+    if webhook_id and _webhook_already_processed(webhook_id):
+        logger.info(
+            "Polar webhook %s already processed; skipping (duplicate)",
+            webhook_id,
+        )
+        return jsonify({"status": "ok", "duplicate": True}), 200
+
     try:
         event = request.get_json(force=True, silent=False) or {}
     except Exception:  # noqa: BLE001 -- get_json may raise BadRequest
@@ -259,6 +328,13 @@ def webhook():
         _process_subscription_cancellation(data, event_type=event_type)
     else:
         logger.info("Unhandled Polar webhook event type: %s", event_type)
+
+    # Record this delivery only after we've processed it without raising.
+    # A handler that throws (DB error -> 500) is intentionally NOT marked,
+    # so Polar's retry can reprocess it; only cleanly-handled deliveries
+    # are remembered as duplicates.
+    if webhook_id:
+        _mark_webhook_processed(webhook_id)
 
     return jsonify({"status": "ok"}), 200
 

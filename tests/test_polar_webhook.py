@@ -55,9 +55,11 @@ def _sign(secret: str, msg_id: str, ts: int, body: bytes) -> str:
 
 
 def _post_event(client, event: dict, *, sign: bool = True,
-                wrong_sig: bool = False, secret: str = WEBHOOK_SECRET_PLAIN):
+                wrong_sig: bool = False, secret: str = WEBHOOK_SECRET_PLAIN,
+                msg_id: str = None):
     body = json.dumps(event).encode("utf-8")
-    msg_id = "evt_test_" + str(int(time.time() * 1000))
+    if msg_id is None:
+        msg_id = "evt_test_" + str(int(time.time() * 1000))
     ts = int(time.time())
     headers = {"Content-Type": "application/json"}
     if sign:
@@ -148,6 +150,35 @@ def test_subscription_created_persists_row_and_log(
         assert float(sub.amount) == pytest.approx(13.00)
         assert sub.currency == "USD"
         assert sub.billing_interval == "month"
+        assert SubscriptionLog.query.filter_by(
+            user_id=webhook_user, event_type="webhook_created"
+        ).count() == 1
+
+
+def test_duplicate_webhook_id_is_processed_once(client, webhook_user, app):
+    """Posting the exact same signed delivery twice (same webhook-id) must
+    only create a single Subscription + log row; the second delivery is a
+    200 no-op that never touches the DB."""
+    from webhooks.storage import reset_storage_for_tests
+
+    with app.app_context():
+        reset_storage_for_tests()
+
+    event = _subscription_event(
+        "subscription.created", user_id=webhook_user,
+        polar_sub_id="sub_polar_dup_1",
+    )
+    msg_id = "evt_dup_" + str(int(time.time() * 1000))
+
+    first = _post_event(client, event, msg_id=msg_id)
+    assert first.status_code == 200, first.get_data(as_text=True)
+
+    second = _post_event(client, event, msg_id=msg_id)
+    assert second.status_code == 200, second.get_data(as_text=True)
+    assert second.get_json().get("duplicate") is True
+
+    with app.app_context():
+        assert Subscription.query.filter_by(user_id=webhook_user).count() == 1
         assert SubscriptionLog.query.filter_by(
             user_id=webhook_user, event_type="webhook_created"
         ).count() == 1
