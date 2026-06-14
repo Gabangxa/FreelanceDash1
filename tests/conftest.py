@@ -16,6 +16,15 @@ os.environ["FLASK_ENV"] = "test"
 os.environ["FLASK_SECRET_KEY"] = "test-secret-key-do-not-use-in-prod"
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 
+# The Google OAuth blueprint only registers when these are present at app
+# import time (app.py); without them the /google_login/* routes 404 and the
+# callback tests fail on any machine that lacks the real secrets. Dummy
+# values register the routes; tests that exercise the "not configured" path
+# delete these via monkeypatch, which works because the enabled/disabled
+# check reads the environment per-request, not at import.
+os.environ["GOOGLE_OAUTH_CLIENT_ID"] = "test-google-client-id"
+os.environ["GOOGLE_OAUTH_CLIENT_SECRET"] = "test-google-client-secret"
+
 import pytest
 
 from app import app as flask_app, db

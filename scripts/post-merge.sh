@@ -28,7 +28,8 @@ if [ -f migrations/alembic.ini ] && [ -d migrations/versions ]; then
     # Don't fail the whole merge on a no-op upgrade against an empty DB.
     FLASK_APP="${FLASK_APP:-app:app}" uv run flask db upgrade || {
         echo "[post-merge] WARNING: flask db upgrade returned non-zero." >&2
-        echo "[post-merge] If this is a fresh DB, db.create_all() at boot will catch up." >&2
+        echo "[post-merge] Schema is Alembic-only (no db.create_all() at boot)," >&2
+        echo "[post-merge] so the app may 500 on missing columns until this succeeds." >&2
     }
 else
     echo "[post-merge] no migrations/ dir found; skipping migrations."

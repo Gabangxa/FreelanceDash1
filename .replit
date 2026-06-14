@@ -6,7 +6,16 @@ packages = ["freetype", "glibcLocales", "lcms2", "libimagequant", "libjpeg", "li
 
 [deployment]
 deploymentTarget = "autoscale"
-run = ["gunicorn", "--bind", "0.0.0.0:5000", "main:app"]
+# Run migrations before serving so a schema-changing deploy can't boot
+# against a stale database. app.py only WARNS when behind head; it does
+# not refuse to start. The [postMerge] hook below upgrades the *dev*
+# workspace DB, but production autoscale deploys never run it -- they run
+# only this command -- so the upgrade has to live here too. Migrations are
+# existence-guarded, so concurrent autoscale instances racing through
+# `flask db upgrade` converge safely. Flags mirror the "Production Server"
+# workflow: --timeout 120 so gunicorn's 30s default doesn't kill PDF
+# requests at the render budget (_PDF_RENDER_TIMEOUT_SECONDS=30).
+run = ["sh", "-c", "FLASK_APP=app:app flask db upgrade && exec gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 --access-logfile - --error-logfile - main:app"]
 
 [workflows]
 runButton = "Project"
