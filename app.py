@@ -130,6 +130,13 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Disable to improve perfo
 # anything bigger is rejected by Werkzeug with HTTP 413 before the view runs.
 app.config["MAX_CONTENT_LENGTH"] = 4 * 1024 * 1024
 
+# Auth-endpoint rate limiting (utils/rate_limit.py) is on by default. The
+# test suite disables it via conftest because every request there shares one
+# client IP, which would otherwise trip the limiter across unrelated tests.
+app.config["AUTH_RATE_LIMIT_ENABLED"] = os.environ.get(
+    "AUTH_RATE_LIMIT_ENABLED", "true"
+).lower() in ("1", "true", "yes")
+
 # Initialize extensions with app
 db.init_app(app)
 migrate.init_app(app, db)
@@ -235,8 +242,24 @@ def add_security_headers_and_log_timing(response):
     # Add comprehensive security headers
     response.headers['X-Content-Type-Options'] = 'nosniff'  # Prevents MIME type sniffing
     response.headers['X-Frame-Options'] = 'SAMEORIGIN'  # Prevents clickjacking
-    response.headers['X-XSS-Protection'] = '1; mode=block'  # Browser XSS filtering
-    
+    # X-XSS-Protection is deliberately disabled. The legacy auditor-based XSS
+    # filter it toggles is deprecated (removed from Chrome/Edge) and could be
+    # abused to introduce vulnerabilities on browsers that still honor it. The
+    # strict nonce-based CSP below is the real XSS defense. OWASP now
+    # recommends sending '0'.
+    response.headers['X-XSS-Protection'] = '0'
+
+    # HTTP Strict Transport Security. Only emitted in production (behind
+    # HTTPS): sending it over plain-HTTP dev would pin browsers to https on
+    # localhost. No `preload` — that's an irreversible public-list commitment
+    # inappropriate for an app that may run on a shared *.replit.app parent
+    # domain. includeSubDomains is safe because it only descends to
+    # subdomains of THIS host; it can never reach sibling *.replit.app apps.
+    if IS_PRODUCTION:
+        response.headers['Strict-Transport-Security'] = (
+            'max-age=31536000; includeSubDomains'
+        )
+
     # Add Content Security Policy.
     #
     # Rollout note: both script-src and style-src enforce a per-request nonce
@@ -248,12 +271,12 @@ def add_security_headers_and_log_timing(response):
     nonce = getattr(g, 'csp_nonce', '')
     csp_directives = [
         "default-src 'self'",  # Default policy for fetching content
-        f"script-src 'self' https://cdn.jsdelivr.net https://cdnjs.buymeacoffee.com https://cdnjs.cloudflare.com 'nonce-{nonce}'",
+        f"script-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'nonce-{nonce}'",
         f"style-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'nonce-{nonce}'",
-        "img-src 'self' data: https://cdnjs.buymeacoffee.com",
+        "img-src 'self' data:",
         "font-src 'self' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com",
         "connect-src 'self'",
-        "frame-src 'self' https://cdnjs.buymeacoffee.com"
+        "frame-src 'self'"
     ]
     response.headers['Content-Security-Policy'] = "; ".join(csp_directives)
     
