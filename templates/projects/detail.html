@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_form_helpers.html" import required_label %}
 
 {% block title %}{{ project.name if project else 'New Project' }} - SoloDolo{% endblock %}
 
@@ -245,17 +246,53 @@
                                 </td>
                                 <td>
                                     <div class="btn-group">
-                                        <a href="{{ url_for('projects.edit_task', id=task.id) }}" 
-                                           class="btn btn-sm btn-outline-primary">
+                                        <a href="{{ url_for('projects.edit_task', id=task.id) }}"
+                                           class="btn btn-sm btn-outline-primary" title="Edit">
                                             <i class="fas fa-edit"></i>
                                         </a>
-                                        <button class="btn btn-sm btn-outline-danger">
+                                        <button type="button" class="btn btn-sm btn-outline-danger" title="Delete"
+                                                data-bs-toggle="modal" data-bs-target="#deleteTaskModal{{ task.id }}">
                                             <i class="fas fa-trash"></i>
                                         </button>
+                                    </div>
+
+                                    <!-- Delete Task Modal -->
+                                    <div class="modal fade" id="deleteTaskModal{{ task.id }}" tabindex="-1"
+                                         aria-labelledby="deleteTaskModalLabel{{ task.id }}" aria-hidden="true">
+                                        <div class="modal-dialog modal-dialog-centered">
+                                            <div class="modal-content">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title" id="deleteTaskModalLabel{{ task.id }}">
+                                                        <i class="fas fa-exclamation-triangle text-danger me-2"></i>Confirm Delete
+                                                    </h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p>Are you sure you want to delete task <strong>{{ task.title }}</strong>?</p>
+                                                    <p class="text-danger mb-0"><i class="fas fa-info-circle me-1"></i>This action cannot be undone.</p>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                    <form action="{{ url_for('projects.delete_task', id=task.id) }}" method="POST">
+                                                        {{ csrf_form.hidden_tag() }}
+                                                        <button type="submit" class="btn btn-danger">
+                                                            <i class="fas fa-trash me-1"></i>Delete
+                                                        </button>
+                                                    </form>
+                                                </div>
+                                            </div>
+                                        </div>
                                     </div>
                                 </td>
                             </tr>
                             {% endfor %}
+                            {% if project.tasks|length == 0 %}
+                            <tr>
+                                <td colspan="4" class="text-center py-3 text-muted">
+                                    No tasks yet — add one to start tracking work for this project.
+                                </td>
+                            </tr>
+                            {% endif %}
                         </tbody>
                     </table>
                 </div>
@@ -372,7 +409,7 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
+                        {{ required_label(form.name) }}
                         {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
                         {% for error in form.name.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
@@ -384,7 +421,7 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            {{ form.start_date.label(class="form-label") }}
+                            {{ required_label(form.start_date) }}
                             {{ form.start_date(class="form-control", type="date") }}
                         </div>
                         <div class="col-md-6 mb-3">
@@ -393,7 +430,7 @@
                         </div>
                     </div>
                     <div class="mb-3">
-                        {{ form.client_id.label(class="form-label") }}
+                        {{ required_label(form.client_id) }}
                         {{ form.client_id(class="form-select") }}
                     </div>
                     <div class="mb-3">

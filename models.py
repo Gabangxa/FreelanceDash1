@@ -8,6 +8,8 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from sqlalchemy import Index, event
 from sqlalchemy.exc import SQLAlchemyError
 import secrets
+import hashlib
+import hmac
 import time
 
 _models_logger = logging.getLogger(__name__)
@@ -23,7 +25,14 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(256))
     is_admin = db.Column(db.Boolean, default=False, index=True)
     created_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
-    reset_token = db.Column(db.String(100), nullable=True, index=True)
+    # Password-reset token is stored as a SHA-256 digest, never plaintext,
+    # so a database leak alone can't be replayed to reset accounts. The raw
+    # token is 256-bit (secrets.token_urlsafe(32)); at that entropy an
+    # unsalted fast hash is safe (offline brute force is infeasible) and it
+    # keeps O(1) lookup-by-digest -- unlike the salted KDF used for
+    # passwords/magic-links, which forces a per-user lookup. Indexed for that
+    # lookup.
+    reset_token_hash = db.Column(db.String(64), nullable=True, index=True)
     reset_token_expiry = db.Column(db.DateTime, nullable=True)
     magic_link_token_hash = db.Column(db.String(256), nullable=True)
     magic_link_token_expiry = db.Column(db.DateTime, nullable=True)
@@ -67,26 +76,85 @@ class User(UserMixin, db.Model):
             return False
         return check_password_hash(self.password_hash, password)
         
+    @staticmethod
+    def _hash_reset_token(token):
+        """Return the hex SHA-256 digest used to store and look up a reset token."""
+        return hashlib.sha256(token.encode('utf-8')).hexdigest()
+
     def generate_reset_token(self, expires_in=3600):
-        """Generate a secure password reset token valid for 'expires_in' seconds."""
-        self.reset_token = secrets.token_urlsafe(32)
+        """Issue a single-use password-reset token.
+
+        Returns the raw token (to embed in the emailed URL); only its
+        SHA-256 digest is persisted. Calling this again rotates and
+        invalidates any prior outstanding token for this user.
+        """
+        raw_token = secrets.token_urlsafe(32)
+        self.reset_token_hash = self._hash_reset_token(raw_token)
         self.reset_token_expiry = datetime.utcnow() + timedelta(seconds=expires_in)
-        return self.reset_token
-        
+        return raw_token
+
     def verify_reset_token(self, token):
-        """Check if the reset token is valid and not expired."""
-        if self.reset_token is None or self.reset_token_expiry is None:
+        """Constant-time check that ``token`` matches the stored digest and
+        is not expired. Does NOT clear the token -- callers use
+        ``consume_reset_token`` to burn it atomically."""
+        if not token:
             return False
-        if self.reset_token != token:
+        if self.reset_token_hash is None or self.reset_token_expiry is None:
             return False
         if datetime.utcnow() > self.reset_token_expiry:
             return False
-        return True
-        
+        return hmac.compare_digest(self.reset_token_hash, self._hash_reset_token(token))
+
     def clear_reset_token(self):
-        """Clear the reset token after it's been used."""
-        self.reset_token = None
+        """Invalidate the outstanding reset token (single-use)."""
+        self.reset_token_hash = None
         self.reset_token_expiry = None
+
+    @classmethod
+    def find_by_reset_token(cls, token):
+        """Read-only lookup for the reset page's GET render. Returns the
+        matching User or None; does not lock or mutate. O(1) via the indexed
+        digest column."""
+        if not token:
+            return None
+        user = cls.query.filter_by(
+            reset_token_hash=cls._hash_reset_token(token)
+        ).first()
+        # The digest match already proves token identity; verify_reset_token
+        # is re-called to enforce expiry (its hash compare is redundant here
+        # but cheap).
+        if user is None or not user.verify_reset_token(token):
+            return None
+        return user
+
+    @classmethod
+    def consume_reset_token(cls, token, new_password):
+        """Atomically verify a reset token, set the new password, and burn
+        the token in one locked transaction.
+
+        Mirrors ``consume_magic_link_token``: a row lock held across
+        verify+set+clear stops two near-simultaneous submits (user click plus
+        a mailbox link-prefetch, or a double-tap) from both succeeding.
+        Returns the User on success, or None if the token was missing, wrong,
+        expired, or already consumed.
+        """
+        if not token:
+            return None
+        try:
+            user = cls.query.filter_by(
+                reset_token_hash=cls._hash_reset_token(token)
+            ).with_for_update().first()
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
+        if user is None or not user.verify_reset_token(token):
+            # Release the row lock without mutating anything.
+            db.session.rollback()
+            return None
+        user.set_password(new_password)
+        user.clear_reset_token()
+        db.session.commit()
+        return user
 
     def generate_magic_link_token(self, expires_in=900):
         """Issue a single-use magic-link sign-in token.
@@ -543,6 +611,28 @@ class WebhookEvent(db.Model):
     __table_args__ = (
         Index('idx_webhook_source_type', 'source', 'event_type'),
         Index('idx_webhook_processed', 'processed', 'created_at'),
+    )
+
+
+class AuthRateLimitEvent(db.Model):
+    """Per-attempt marker for auth-endpoint sliding-window rate limits.
+
+    One row per auth attempt (login / register / password-reset request /
+    magic-link request), keyed by client IP or by target email. ``utils.
+    rate_limit.hit`` inserts a row, prunes rows older than the window for the
+    same key, then counts what remains. Kept in Postgres (guaranteed on this
+    deploy target, unlike Redis) so limits are correct across gunicorn
+    workers and autoscale instances; auth endpoints are low-QPS so the
+    insert+count per attempt is negligible.
+    """
+    __tablename__ = 'auth_rate_limit_event'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rate_key = db.Column(db.String(200), nullable=False)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.utcnow)
+
+    __table_args__ = (
+        Index('idx_auth_rl_key_ts', 'rate_key', 'created_at'),
     )
 
 

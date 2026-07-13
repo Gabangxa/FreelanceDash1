@@ -36,6 +36,10 @@ def app():
         TESTING=True,
         WTF_CSRF_ENABLED=False,
         SQLALCHEMY_DATABASE_URI="sqlite:///:memory:",
+        # Off by default: the whole suite shares one client IP, so the auth
+        # rate limiter would otherwise trip across unrelated tests. The
+        # dedicated rate-limit test flips this on for its own scope.
+        AUTH_RATE_LIMIT_ENABLED=False,
     )
     with flask_app.app_context():
         db.create_all()

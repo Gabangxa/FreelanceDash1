@@ -55,7 +55,7 @@
     <!-- Pricing Plans -->
     <div class="row row-cols-1 row-cols-md-2 g-4 mb-3 justify-content-center">
         {% for tier in subscription_tiers %}
-        <div class="col" style="max-width: 420px;">
+        <div class="col subscription-tier-col">
             <div class="card h-100 {% if subscription and subscription.is_active() and subscription.tier_id == tier.id %}border-primary{% else %}border{% endif %}">
                 <div class="card-body d-flex flex-column">
                     <h5 class="card-title text-center">{{ tier.name }}</h5>

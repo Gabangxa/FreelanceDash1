@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_form_helpers.html" import required_label %}
 
 {% block title %}Edit Project - SoloDolo{% endblock %}
 
@@ -13,7 +14,7 @@
                 <form method="POST">
                     {{ form.hidden_tag() }}
                     <div class="mb-3">
-                        {{ form.name.label(class="form-label") }}
+                        {{ required_label(form.name) }}
                         {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
                         {% for error in form.name.errors %}
                             <div class="invalid-feedback">
@@ -32,7 +33,7 @@
                     </div>
                     <div class="row">
                         <div class="col-md-6 mb-3">
-                            {{ form.start_date.label(class="form-label") }}
+                            {{ required_label(form.start_date) }}
                             {{ form.start_date(class="form-control", type="date") }}
                             {% for error in form.start_date.errors %}
                                 <div class="invalid-feedback">
@@ -52,7 +53,7 @@
                         </div>
                     </div>
                     <div class="mb-4">
-                        {{ form.client_id.label(class="form-label") }}
+                        {{ required_label(form.client_id) }}
                         {{ form.client_id(class="form-select") }}
                         {% for error in form.client_id.errors %}
                             <div class="invalid-feedback">

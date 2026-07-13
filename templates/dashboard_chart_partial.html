@@ -1,13 +1,14 @@
 {% if daily_hours|sum > 0 %}
     <canvas id="timeTrackingChart" height="100" data-hours="{{ daily_hours|tojson }}"></canvas>
 {% else %}
-    <div class="text-center py-5 text-muted">
-        <i class="fas fa-chart-line fa-3x mb-3"></i>
-        <p>No time tracking data available for this week.</p>
-        <p>
-            <a href="{{ url_for('projects.batch_time_entries') }}" class="btn btn-sm btn-primary">
-                <i class="fas fa-plus me-1"></i>Add Time Entries
-            </a>
-        </p>
+    <div class="empty-state-modern empty-state-compact">
+        <div class="empty-icon">
+            <i class="fas fa-chart-bar"></i>
+        </div>
+        <h3>No time data this week</h3>
+        <p>Start tracking your time to see your productivity insights</p>
+        <a href="{{ url_for('projects.batch_time_entries') }}" class="quick-action-btn primary">
+            <i class="fas fa-plus"></i>Add Time Entry
+        </a>
     </div>
 {% endif %}

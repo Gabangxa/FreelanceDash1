@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "_form_helpers.html" import required_label %}
 
 {% block title %}New Invoice - SoloDolo{% endblock %}
 
@@ -14,7 +15,7 @@
                     {{ form.hidden_tag() }}
 
                     <div class="mb-3">
-                        {{ form.client_id.label(class_="form-label") }}
+                        {{ required_label(form.client_id) }}
                         {{ form.client_id(class_="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
                         {% for error in form.client_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
@@ -22,7 +23,7 @@
                     </div>
 
                     <div class="mb-3">
-                        {{ form.project_id.label(class_="form-label") }}
+                        {{ required_label(form.project_id) }}
                         {{ form.project_id(class_="form-select" + (" is-invalid" if form.project_id.errors else "")) }}
                         {% for error in form.project_id.errors %}
                             <div class="invalid-feedback">{{ error }}</div>
@@ -45,7 +46,7 @@
                             {% endfor %}
                         </div>
                         <div class="col-md-4 mb-3">
-                            {{ form.due_date.label(class_="form-label") }}
+                            {{ required_label(form.due_date) }}
                             {{ form.due_date(class_="form-control", type="date") }}
                             {% for error in form.due_date.errors %}
                                 <div class="invalid-feedback">{{ error }}</div>
@@ -65,15 +66,15 @@
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-12 mb-3">
-                                        <label class="form-label">Description</label>
+                                        {{ required_label(item_form.form.description) }}
                                         {{ item_form.form.description(class_="form-control description") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label">Quantity</label>
+                                        {{ required_label(item_form.form.quantity) }}
                                         {{ item_form.form.quantity(class_="form-control quantity") }}
                                     </div>
                                     <div class="col-md-4 mb-3">
-                                        <label class="form-label">Rate</label>
+                                        {{ required_label(item_form.form.rate) }}
                                         {{ item_form.form.rate(class_="form-control rate") }}
                                     </div>
                                     <div class="col-md-4 mb-3">

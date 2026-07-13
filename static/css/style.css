@@ -608,6 +608,13 @@ code {
     margin-top: var(--space-2);
 }
 
+/* Required-field marker, used next to .form-label text via the
+   required_label() macro in templates/_form_helpers.html */
+.required-marker {
+    color: var(--color-danger);
+    font-weight: 700;
+}
+
 .form-check-input {
     width: 1rem;
     height: 1rem;
@@ -1978,6 +1985,9 @@ code {
 /* Logo previews on invoice template settings page */
 .logo-thumb-100 { max-height: 100px; }
 .logo-preview-50 { max-height: 50px; }
+
+/* Subscription pricing tier column (was style="max-width: 420px;") */
+.subscription-tier-col { max-width: 420px; }
 
 /* Invoice template preview block (dynamic colors are injected via a
    per-request nonced <style> block on the page itself, see

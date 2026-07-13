@@ -9,10 +9,36 @@ from werkzeug.security import generate_password_hash
 from errors import handle_db_errors, UserFriendlyError
 from mail import send_welcome_email, send_password_reset_email, send_magic_link_email
 from utils.security import is_safe_url
+from utils.rate_limit import hit as _rate_limit_hit, client_ip
 import re
 import smtplib
 
 auth_bp = Blueprint('auth', __name__, url_prefix='/auth')
+
+# Sliding-window rate-limit policy as (limit, window_seconds). Endpoints are
+# keyed per-IP and, where an email is known, also per-email -- so a botnet
+# spread across many IPs still can't brute-force or email-bomb one specific
+# account past the per-email cap.
+# Per-IP login cap is deliberately loose so a NAT'd office (many legit users
+# behind one egress IP) can't collectively trip it; the tight per-email cap is
+# the real brute-force control against any single account.
+_LOGIN_IP_LIMIT = (20, 300)          # 20 attempts / 5 min per client IP
+_LOGIN_EMAIL_LIMIT = (5, 300)        # 5 attempts / 5 min per targeted account
+_REGISTER_IP_LIMIT = (5, 3600)       # 5 sign-ups / hour per client IP
+_EMAIL_SEND_IP_LIMIT = (5, 3600)     # 5 reset/magic-link requests / hour per IP
+_EMAIL_SEND_EMAIL_LIMIT = (3, 3600)  # 3 emails / hour to a given address
+
+_RATE_LIMIT_MSG = 'Too many attempts. Please wait a few minutes and try again.'
+
+
+def _rate_limited(scope, identifier, policy):
+    """Return True when this attempt should be BLOCKED (limit exceeded).
+
+    ``policy`` is a ``(limit, window_seconds)`` tuple. Keys are namespaced by
+    ``scope`` so login, register, and email-send counters never collide.
+    """
+    limit, window = policy
+    return not _rate_limit_hit(f"{scope}:{identifier}", limit, window)
 
 @auth_bp.route('/login', methods=['GET', 'POST'])
 @handle_db_errors
@@ -22,8 +48,16 @@ def login():
 
     form = LoginForm()
     if form.validate_on_submit():
+        email = form.email.data.lower().strip()
+        # Count the attempt BEFORE checking the password so a brute-forcer
+        # can't get unlimited tries. Keyed per-IP and per-target-email.
+        if (_rate_limited('login:ip', client_ip(), _LOGIN_IP_LIMIT)
+                or _rate_limited('login:email', email, _LOGIN_EMAIL_LIMIT)):
+            logger.warning("Login rate limit hit (ip=%s)", client_ip())
+            flash(_RATE_LIMIT_MSG, 'warning')
+            return redirect(url_for('auth.login'))
         try:
-            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+            user = User.query.filter_by(email=email).first()
             if user is None or not user.check_password(form.password.data):
                 flash('Invalid email or password', 'danger')
                 # Log failed login attempts but avoid exposing which field was wrong
@@ -58,6 +92,11 @@ def register():
 
     form = RegistrationForm()
     if form.validate_on_submit():
+        # Throttle sign-ups per IP to blunt automated account creation.
+        if _rate_limited('register:ip', client_ip(), _REGISTER_IP_LIMIT):
+            logger.warning("Registration rate limit hit (ip=%s)", client_ip())
+            flash(_RATE_LIMIT_MSG, 'warning')
+            return redirect(url_for('auth.register'))
         try:
             # Additional validation for username and password strength
             if not form.username.data or not re.match(r'^[a-zA-Z0-9_]+$', form.username.data):
@@ -130,8 +169,14 @@ def magic_link_request():
 
     form = MagicLinkRequestForm()
     if form.validate_on_submit():
+        email = form.email.data.lower().strip()
+        if (_rate_limited('magic:ip', client_ip(), _EMAIL_SEND_IP_LIMIT)
+                or _rate_limited('magic:email', email, _EMAIL_SEND_EMAIL_LIMIT)):
+            logger.warning("Magic-link request rate limit hit (ip=%s)", client_ip())
+            flash(_RATE_LIMIT_MSG, 'warning')
+            return redirect(url_for('auth.login'))
         try:
-            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
+            user = User.query.filter_by(email=email).first()
 
             if user:
                 # Issue a fresh single-use token (rotates any prior outstanding one).
@@ -247,9 +292,15 @@ def reset_password_request():
         
     form = ResetPasswordRequestForm()
     if form.validate_on_submit():
+        email = form.email.data.lower().strip()
+        if (_rate_limited('reset:ip', client_ip(), _EMAIL_SEND_IP_LIMIT)
+                or _rate_limited('reset:email', email, _EMAIL_SEND_EMAIL_LIMIT)):
+            logger.warning("Password-reset request rate limit hit (ip=%s)", client_ip())
+            flash(_RATE_LIMIT_MSG, 'warning')
+            return redirect(url_for('auth.login'))
         try:
-            user = User.query.filter_by(email=form.email.data.lower().strip()).first()
-            
+            user = User.query.filter_by(email=email).first()
+
             # Always show success message even if email not found for security
             if user:
                 # Generate a secure reset token
@@ -281,40 +332,41 @@ def reset_password(token):
     if current_user.is_authenticated:
         return redirect(url_for('projects.dashboard'))
         
-    # Find user with this token
-    user = None
+    # Read-only lookup (by token digest) to decide whether to render the
+    # form. The token is only *burned* on a successful POST, via
+    # consume_reset_token, which locks the row for an atomic verify+set+clear.
     try:
-        # Search for user with this reset token
-        user = User.query.filter(User.reset_token == token).first()
-        
-        # Check if token is valid
-        if not user or not user.verify_reset_token(token):
-            logger.warning(f"Invalid or expired password reset token: {token}")
-            flash('The password reset link is invalid or has expired.', 'danger')
-            return redirect(url_for('auth.reset_password_request'))
-            
-    except SQLAlchemyError as e:
+        user = User.find_by_reset_token(token)
+    except SQLAlchemyError:
         logger.exception("Database error during password reset token verification")
         flash('A system error occurred. Please try again later.', 'danger')
         return redirect(url_for('auth.reset_password_request'))
-    
+
+    if user is None:
+        # Deliberately does not log the token value.
+        logger.warning("Invalid or expired password reset token presented")
+        flash('The password reset link is invalid or has expired.', 'danger')
+        return redirect(url_for('auth.reset_password_request'))
+
     # Token is valid, proceed with password reset
     form = ResetPasswordForm()
     if form.validate_on_submit():
         try:
-            # Update password
-            user.set_password(form.password.data)
-            # Clear the reset token
-            user.clear_reset_token()
-            db.session.commit()
-            
-            logger.info(f"Password reset successful for user: {user.username} (ID: {user.id})")
-            flash('Your password has been reset successfully. You can now log in with your new password.', 'success')
-            return redirect(url_for('auth.login'))
-            
-        except SQLAlchemyError as e:
+            consumed = User.consume_reset_token(token, form.password.data)
+        except SQLAlchemyError:
             db.session.rollback()
             logger.exception("Database error during password reset")
             flash('A system error occurred. Please try again later.', 'danger')
-    
+            return render_template('auth/reset_password.html', title='Reset Password', form=form, token=token)
+
+        if consumed is None:
+            # Token was valid on GET but was consumed or expired before this
+            # POST completed (double-submit / prefetch race).
+            flash('The password reset link is invalid or has expired.', 'danger')
+            return redirect(url_for('auth.reset_password_request'))
+
+        logger.info(f"Password reset successful for user: {consumed.username} (ID: {consumed.id})")
+        flash('Your password has been reset successfully. You can now log in with your new password.', 'success')
+        return redirect(url_for('auth.login'))
+
     return render_template('auth/reset_password.html', title='Reset Password', form=form, token=token)
