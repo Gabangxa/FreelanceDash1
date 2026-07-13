@@ -34,6 +34,9 @@ Thumbs.db
 # Replit-local working files
 .local/
 
+# Agent-local scratch / memory (Claude Code subagents) — never runtime code
+.claude/
+
 # Backup files
 *.bak
 
