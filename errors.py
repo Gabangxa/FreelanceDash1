@@ -12,22 +12,28 @@ from sqlalchemy.exc import SQLAlchemyError, IntegrityError
 
 # Setup logging
 def setup_logging(app):
-    """Configure application logging with console and file handlers."""
-    
-    # Ensure logs directory exists
-    logs_dir = os.path.join(app.root_path, 'logs')
-    if not os.path.exists(logs_dir):
-        os.makedirs(logs_dir)
-    
+    """Configure application logging.
+
+    stdout is the primary sink: on Railway (and most container platforms)
+    the filesystem is ephemeral and only stdout/stderr is captured, so
+    file logs written to ``logs/`` are silently wiped on every redeploy and
+    invisible in the platform's log view -- and concurrent RotatingFileHandler
+    rotation across gunicorn workers races. File logging is therefore
+    opt-in via ``LOG_TO_FILES`` (useful for a long-lived VM or local dev);
+    by default only the stdout console handler is attached.
+    """
+
+    log_to_files = os.environ.get("LOG_TO_FILES", "").lower() in ("1", "true", "yes")
+
     # Configure the root logger
     logger = logging.getLogger()
-    
+
     # Clear existing handlers to avoid duplicate logs
     if logger.handlers:
         logger.handlers.clear()
-    
+
     logger.setLevel(logging.INFO if not app.debug else logging.DEBUG)
-    
+
     # Create formatters
     verbose_formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] [%(name)s] %(message)s [in %(pathname)s:%(lineno)d]'
@@ -35,13 +41,31 @@ def setup_logging(app):
     simple_formatter = logging.Formatter(
         '%(asctime)s [%(levelname)s] %(message)s'
     )
-    
-    # Console handler - for all environments
+
+    # Console handler (stdout) -- always on, the primary sink in production.
+    # Use the verbose formatter in production so aggregated stdout carries the
+    # source location that previously only reached the files.
     console_handler = logging.StreamHandler()
-    console_handler.setFormatter(simple_formatter)
+    console_handler.setFormatter(simple_formatter if app.debug else verbose_formatter)
     console_handler.setLevel(logging.DEBUG if app.debug else logging.INFO)
     logger.addHandler(console_handler)
-    
+
+    if not log_to_files:
+        # stdout-only (the Railway default). Still quiet noisy libraries and
+        # log the startup line, then return before touching the filesystem.
+        logging.getLogger('sqlalchemy.engine').setLevel(logging.WARNING)
+        logging.getLogger('werkzeug').setLevel(logging.WARNING)
+        app.logger.info(
+            "Application logging configured (stdout only). "
+            "Mode: %s", 'Debug' if app.debug else 'Production'
+        )
+        return logger
+
+    # --- Opt-in file logging (LOG_TO_FILES) --------------------------------
+    logs_dir = os.path.join(app.root_path, 'logs')
+    if not os.path.exists(logs_dir):
+        os.makedirs(logs_dir)
+
     # File handler - info level and above
     info_file_handler = RotatingFileHandler(
         os.path.join(logs_dir, 'info.log'), 
