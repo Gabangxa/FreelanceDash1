@@ -1,0 +1,15 @@
+# Explicit Railway/nixpacks build configuration.
+#
+# Why this file exists: nixpacks' Python provider auto-detects the install
+# path by lockfile precedence (uv.lock > requirements.txt > pyproject). Because
+# uv.lock is committed for local development, nixpacks would install via uv and
+# silently ignore the pinned requirements.txt. Pinning the install command here
+# makes the deploy install exactly the frozen, fully-pinned requirements.txt
+# (generated from uv.lock via `uv export --frozen`), independent of nixpacks'
+# provider heuristics or version. The interpreter is pinned by .python-version.
+#
+# Regenerate requirements.txt whenever uv.lock changes:
+#   uv export --frozen --no-emit-project --no-hashes -o requirements.txt
+
+[phases.install]
+cmds = ["pip install -r requirements.txt"]
