@@ -119,9 +119,14 @@ app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_pre_ping": True,
 }
 if not _is_sqlite:
+    # Each sync/gthread gunicorn worker holds its own pool, so a large
+    # per-process pool multiplied by the worker count can exhaust Railway
+    # Postgres' connection ceiling ("FATAL: too many clients"). A sync
+    # worker needs ~1 connection per in-flight request, so keep the
+    # per-worker pool small; tune via env if a plan allows more.
     app.config["SQLALCHEMY_ENGINE_OPTIONS"].update({
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_size": int(os.environ.get("DB_POOL_SIZE", "5")),
+        "max_overflow": int(os.environ.get("DB_MAX_OVERFLOW", "5")),
     })
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False  # Disable to improve performance
 
