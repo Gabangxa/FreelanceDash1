@@ -1,0 +1,44 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          # Pinned interpreter (matches the Railway build) via .python-version.
+          python-version-file: .python-version
+          cache: pip
+
+      - name: Install dependencies (frozen)
+        # Install the exact pinned set the deploy uses, so CI tests what ships.
+        run: pip install -r requirements.txt
+
+      - name: Run test suite
+        # conftest.py force-sets FLASK_ENV/SECRET_KEY/DATABASE_URL/OAuth at
+        # import, so the suite needs no env here and runs on in-memory SQLite.
+        run: python -m pytest tests/ -q
+
+      - name: Assert a single Alembic head
+        # A second migration head silently breaks `flask db upgrade` on deploy
+        # (cf. commit f2d5703). Fail the build instead of finding out on Railway.
+        env:
+          FLASK_ENV: test
+          FLASK_SECRET_KEY: ci-secret-not-used-in-prod
+          DATABASE_URL: sqlite:///ci.db
+          GOOGLE_OAUTH_CLIENT_ID: ci
+          GOOGLE_OAUTH_CLIENT_SECRET: ci
+        run: |
+          heads="$(flask --app main db heads 2>/dev/null | grep -c '(head)')"
+          echo "Alembic heads found: ${heads}"
+          if [ "${heads}" -ne 1 ]; then
+            echo "::error::Expected exactly 1 Alembic head, found ${heads}. Merge the heads before deploying."
+            exit 1
+          fi
