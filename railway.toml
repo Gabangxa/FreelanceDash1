@@ -18,6 +18,13 @@ builder = "nixpacks"
 [deploy]
 # gunicorn settings (bind $PORT, gthread workers, timeouts, stdout logs) live
 # in gunicorn.conf.py so they can be tuned per plan via env without a code edit.
+#
+# Email delivery: send_email enqueues to the EmailDeliveryLog outbox and an
+# in-process drainer thread (started at boot) sends queued mail every
+# EMAIL_DRAIN_INTERVAL_SECONDS (default 60s). No extra service is required.
+# To run the drainer as a dedicated Railway cron service instead, set
+# EMAIL_DRAINER_ENABLED=0 on the web service and add a second service whose
+# command is `flask --app main drain-emails` on a "*/1 * * * *" schedule.
 startCommand = "flask --app main db upgrade && exec gunicorn -c gunicorn.conf.py main:app"
 healthcheckPath = "/"
 healthcheckTimeout = 100

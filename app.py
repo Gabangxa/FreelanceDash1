@@ -522,20 +522,13 @@ with app.app_context():
     except Exception:  # noqa: BLE001 - top-level safety net for sweeper start  # pragma: no cover - thread start shouldn't fail here
         logger.exception("Webhook storage background sweeper failed to start")
 
-    # Bring up the NATS client (if NATS_URL is set). This is a no-op
-    # when NATS_URL is unset, so dev / test environments are unaffected.
-    # init() never raises -- a wedged NATS server must not prevent boot.
-    # Skip during tests so the asyncio loop thread doesn't try to phone
-    # home over the network from CI.
-    if os.environ.get("FLASK_ENV", "").lower() != "test":
-        try:
-            import nats_client as _nats_client
-            _nats_client.init()
-        except Exception:  # noqa: BLE001 - top-level safety net
-            logger.exception(
-                "NATS client init raised (publishers will no-op until "
-                "the connection recovers)"
-            )
+    # Start the in-process email-outbox drainer. send_email only enqueues,
+    # so without this (or an external `flask --app main drain-emails` cron with
+    # EMAIL_DRAINER_ENABLED=0) no mail is ever sent. No-op under FLASK_ENV=test.
+    try:
+        mail.start_email_drainer(app)
+    except Exception:  # noqa: BLE001 - top-level safety net for drainer start  # pragma: no cover
+        logger.exception("Email outbox drainer failed to start")
 
     if (
         os.environ.get("FLASK_ENV", "").lower() != "test"

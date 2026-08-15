@@ -70,8 +70,6 @@ markupsafe==3.0.2
     #   mako
     #   werkzeug
     #   wtforms
-nats-py==2.14.0
-    # via repl-nix-workspace
 oauthlib==3.3.1
     # via repl-nix-workspace
 packaging==24.2

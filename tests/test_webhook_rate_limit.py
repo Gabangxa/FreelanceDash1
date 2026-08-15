@@ -47,10 +47,10 @@ def _isolated_db_storage(app):
 
 
 # ---------------------------------------------------------------------------
-# Shared backend contract -- run the same suite that test_storage_contract_nats
-# runs against JetStream so the DB and NATS backends provably satisfy the
-# same WebhookStorageBackend semantics. New backends only need to wire
-# this in once.
+# Shared backend contract -- run the generic ``WebhookStorageBackend``
+# contract suite against the DB backend so it provably satisfies the same
+# semantics as any other backend. New backends only need to wire this in
+# once.
 # ---------------------------------------------------------------------------
 @pytest.mark.parametrize("contract_fn", storage_contract.ALL_CONTRACTS)
 def test_db_backend_satisfies_storage_contract(app, contract_fn):

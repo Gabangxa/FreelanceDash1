@@ -3,15 +3,14 @@ Shared contract tests for any ``WebhookStorageBackend`` implementation.
 
 Each function takes a ``backend`` argument and asserts a single
 behaviour. Backend-specific test files (``test_webhook_rate_limit.py``
-for the DB backend, ``test_storage_contract_nats.py`` for the NATS
-backend) wire these up with their own fixtures.
+for the DB backend) wire these up with their own fixtures.
 
-Why a shared module instead of pytest parametrize? Because the
-DB-backed tests need an app context and the NATS-backed tests need a
-live NATS server -- two very different fixtures. Keeping the contract
-as plain functions lets each backend test file decide how to set up
-the backend without coupling the contract definition to pytest's
-fixture system.
+Why a shared module instead of pytest parametrize? Because different
+backends may need different fixtures (e.g. an app context for the
+DB-backed tests vs. a live external service for a future backend).
+Keeping the contract as plain functions lets each backend test file
+decide how to set up the backend without coupling the contract
+definition to pytest's fixture system.
 """
 from __future__ import annotations
 

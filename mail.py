@@ -1,34 +1,35 @@
 """
 Email functionality for the SoloDolo application.
 
-Outbound email is sent on a background thread so it doesn't block the
-request handler. Every send attempt is recorded in the ``EmailDeliveryLog``
-table with status, attempt count, and last error so failures are visible to
-operations even before a real job queue is wired up.
+Outbound email is a durable outbox backed by the ``EmailDeliveryLog`` table:
+``send_email`` renders the message and ENQUEUES it (status ``pending``); a
+separate drainer, ``drain_email_outbox`` -- run on a schedule via the
+``drain-emails`` Flask CLI command (Railway cron) -- sends the queued rows.
+
+This replaces the old daemon-thread sender, which gunicorn's worker recycle
+could kill mid-send, silently losing password resets and magic links with
+only an orphaned 'pending' row as evidence. Because the full rendered message
+is now persisted, a fresh drainer process can always send what a request
+enqueued, and every attempt's status/attempts/last_error stay visible.
 
 Important transactional design:
-    The EmailDeliveryLog rows are written through an *isolated* SQLAlchemy
-    session bound to the same engine, NOT through ``db.session``. This is
-    deliberate: ``db.session`` is the request-scoped session, and calling
-    ``db.session.commit()`` from here would commit any other pending
-    changes the request handler had staged. The dedicated session keeps
-    delivery-log writes atomic and side-effect-free.
-
-NOTE: Threading is a transitional implementation. Under multi-worker gunicorn
-this is fragile: a worker reload mid-send loses the in-flight thread. The
-``EmailDeliveryLog`` rows let a future queue worker (Celery/RQ/APScheduler)
-pick up rows where ``status='failed'`` and re-attempt, which is the planned
-next step.
+    The enqueue writes its EmailDeliveryLog row through an *isolated*
+    SQLAlchemy session bound to the same engine, NOT through ``db.session``.
+    This is deliberate: ``db.session`` is the request-scoped session, and
+    committing it from here would commit any other pending changes the
+    request handler had staged. The dedicated session keeps the enqueue
+    atomic and side-effect-free. The drainer, by contrast, runs in its own
+    request-less context and uses ``db.session`` directly.
 """
 import os
 import smtplib
-import time
 import logging
+import threading
 from contextlib import contextmanager
-from datetime import datetime
-from threading import Thread
+from datetime import datetime, timedelta
 
-from flask import current_app, render_template
+import click
+from flask import render_template
 from flask_mail import Mail, Message
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session as SASession
@@ -36,12 +37,19 @@ from sqlalchemy.orm import Session as SASession
 # Initialize mail extension
 mail = Mail()
 
+# Set by start_email_drainer; guards against starting a second drainer thread.
+_drainer_thread = None
+
 # Setup logger
 logger = logging.getLogger('mail')
 
-# Retry policy for transient SMTP failures.
+# A message is retried up to this many times across drain runs before it is
+# marked permanently 'failed'.
 MAX_SEND_ATTEMPTS = 3
-RETRY_BACKOFF_SECONDS = (1, 4, 10)  # used for attempts 1, 2, 3 (after-failure sleep)
+
+# Drainer tuning.
+DRAIN_BATCH_LIMIT = 50          # max messages processed per drain run
+STALE_SENDING_MINUTES = 15      # reclaim rows a crashed drainer left 'sending'
 
 
 def init_app(app):
@@ -92,6 +100,15 @@ def init_app(app):
     if not mail_username or not mail_password:
         logger.warning("Mail credentials not set. Email functionality will not work.")
 
+    # Register the outbox drainer as a CLI command so a scheduler (Railway
+    # cron: `flask --app main drain-emails`) can send queued mail out of band.
+    @app.cli.command('drain-emails')
+    def _drain_emails_command():
+        """Send queued emails from the EmailDeliveryLog outbox."""
+        summary = drain_email_outbox()
+        logger.info("Email outbox drain complete: %s", summary)
+        click.echo(f"drain-emails: {summary}")
+
 
 @contextmanager
 def _isolated_session():
@@ -109,155 +126,194 @@ def _isolated_session():
         session.close()
 
 
-def _record_attempt(log_id, status, error=None, increment=True):
-    """Update the EmailDeliveryLog row for the in-flight send.
+def send_email(subject, recipients, text_body, html_body=None, sender=None):
+    """Enqueue an email into the durable outbox (EmailDeliveryLog).
 
-    ``status`` is one of ``'pending'`` | ``'sent'`` | ``'failed'``. When
-    ``increment`` is True (the default for each attempt) the ``attempts``
-    counter is bumped so we get per-retry visibility, not just terminal
-    success/failure.
-    """
-    if log_id is None:
-        return
-    try:
-        from models import EmailDeliveryLog
-        with _isolated_session() as session:
-            log = session.get(EmailDeliveryLog, log_id)
-            if not log:
-                return
-            if increment:
-                log.attempts = (log.attempts or 0) + 1
-            log.status = status
-            if error:
-                log.last_error = str(error)[:2000]
-            if status == 'sent':
-                log.sent_at = datetime.utcnow()
-            session.commit()
-    except (SQLAlchemyError, OSError) as e:
-        # Never let logging failures crash the email worker.
-        logger.exception(f"Failed to record email delivery log {log_id}")
-
-
-def send_email_async(app, msg, log_id):
-    """Send an email asynchronously, with retries and persistent logging.
-
-    Always wrapped in ``app.app_context()`` -- without one the Flask-Mail
-    send call cannot resolve the configured SMTP settings.
-
-    The outermost ``except Exception`` is a deliberate safety net: this
-    function runs in a daemon thread, and any uncaught exception would
-    silently kill the worker with no log line.
-    """
-    try:
-        try:
-            with app.app_context():
-                last_error = None
-                for attempt in range(1, MAX_SEND_ATTEMPTS + 1):
-                    try:
-                        logger.info(
-                            f"Email attempt {attempt}/{MAX_SEND_ATTEMPTS} to "
-                            f"{msg.recipients} (log_id={log_id})"
-                        )
-                        mail.send(msg)
-                        logger.info(f"Email successfully sent to {msg.recipients} (log_id={log_id})")
-                        _record_attempt(log_id, 'sent')
-                        return
-                    except (smtplib.SMTPException, OSError, ConnectionError) as e:
-                        last_error = e
-                        logger.warning(
-                            f"Email attempt {attempt} failed for {msg.recipients} "
-                            f"(log_id={log_id}): {e}"
-                        )
-
-                        # Hint at the most common misconfiguration without spamming logs.
-                        err_text = str(e)
-                        if "Username and Password not accepted" in err_text:
-                            logger.error(
-                                "SMTP authentication failed. For Gmail use an App "
-                                "Password (Google account → Security → 2-Step "
-                                "Verification → App passwords)."
-                            )
-                        elif "SMTP AUTH extension not supported" in err_text:
-                            logger.error("SMTP server does not support AUTH; check TLS/SSL settings.")
-
-                        if attempt < MAX_SEND_ATTEMPTS:
-                            # Record this failed attempt so attempts/last_error
-                            # reflect every try, not just the terminal outcome.
-                            _record_attempt(log_id, 'pending', error=e)
-                            backoff = RETRY_BACKOFF_SECONDS[min(attempt - 1, len(RETRY_BACKOFF_SECONDS) - 1)]
-                            time.sleep(backoff)
-
-                # All attempts exhausted.
-                logger.error(
-                    f"Email permanently failed after {MAX_SEND_ATTEMPTS} attempts "
-                    f"to {msg.recipients} (log_id={log_id}): {last_error}"
-                )
-                _record_attempt(log_id, 'failed', error=last_error)
-        except RuntimeError as e:
-            # This branch only runs if app_context() itself blew up.
-            logger.exception(f"Failed to set up app context for email (log_id={log_id})")
-            try:
-                with app.app_context():
-                    _record_attempt(log_id, 'failed', error=e, increment=False)
-            except (RuntimeError, SQLAlchemyError, OSError):
-                logger.exception(f"Failed to record final email failure (log_id={log_id})")
-    except Exception:  # noqa: BLE001 - daemon-thread safety net; prevents silent worker death
-        logger.exception(f"Unhandled error in email worker (log_id={log_id})")
-
-
-def _create_delivery_log(recipients, subject):
-    """Create the EmailDeliveryLog row before dispatching the worker thread.
-
-    Uses an isolated session so this never accidentally commits unrelated
-    pending changes from the request handler. Returns the new log id, or
-    ``None`` if persistence fails -- in which case we still attempt to send
-    (logs go to stderr) but cannot track outcome.
+    Does NOT send synchronously -- the scheduled drainer
+    (``drain_email_outbox`` / ``flask --app main drain-emails``) delivers
+    queued rows. Returns True if the message was enqueued, False if even the
+    enqueue failed (in which case there is nothing to retry, so the caller
+    should surface the failure). Args mirror the previous signature so the
+    ``send_*`` wrappers below are unchanged.
     """
     try:
         from models import EmailDeliveryLog
         with _isolated_session() as session:
-            log = EmailDeliveryLog(
+            session.add(EmailDeliveryLog(
                 recipient=', '.join(recipients)[:254],
-                subject=subject[:500],
+                subject=(subject or '')[:500],
+                sender=(sender or None),
+                text_body=text_body,
+                html_body=html_body,
                 status='pending',
                 attempts=0,
-            )
-            session.add(log)
+            ))
             session.commit()
-            return log.id
-    except (SQLAlchemyError, OSError) as e:
-        logger.exception("Failed to create EmailDeliveryLog row")
+        return True
+    except (SQLAlchemyError, OSError, TypeError, ValueError):
+        logger.exception("Failed to enqueue email to the outbox")
+        return False
+
+
+def _deliver_outbox_row(log_id):
+    """Send one claimed outbox row and record the outcome.
+
+    Runs inside the drainer's app context and uses ``db.session`` directly.
+    Returns 'sent', 'retried' (transient failure, still under the attempt
+    cap and re-queued as pending), or 'failed' (attempt cap reached).
+    """
+    from app import db
+    from models import EmailDeliveryLog
+
+    log = db.session.get(EmailDeliveryLog, log_id)
+    if log is None:
+        return 'failed'
+
+    recipients = [r.strip() for r in (log.recipient or '').split(',') if r.strip()]
+    try:
+        msg = Message(log.subject, recipients=recipients, sender=log.sender or None)
+        msg.body = log.text_body or ''
+        if log.html_body:
+            msg.html = log.html_body
+        mail.send(msg)
+    except (smtplib.SMTPException, OSError, ConnectionError, RuntimeError, ValueError) as e:
+        log.attempts = (log.attempts or 0) + 1
+        log.last_error = str(e)[:2000]
+        # Under the cap -> back to 'pending' so the next drain retries it;
+        # at the cap -> terminal 'failed'.
+        log.status = 'failed' if log.attempts >= MAX_SEND_ATTEMPTS else 'pending'
+        db.session.commit()
+        outcome = 'failed' if log.status == 'failed' else 'retried'
+        logger.warning(
+            "Outbox send %s for log_id=%s (attempt %s/%s): %s",
+            outcome, log_id, log.attempts, MAX_SEND_ATTEMPTS, e,
+        )
+        return outcome
+
+    log.attempts = (log.attempts or 0) + 1
+    log.status = 'sent'
+    log.sent_at = datetime.utcnow()
+    db.session.commit()
+    logger.info("Outbox send ok for log_id=%s to %s", log_id, recipients)
+    return 'sent'
+
+
+def drain_email_outbox(batch_limit=DRAIN_BATCH_LIMIT, stale_minutes=STALE_SENDING_MINUTES):
+    """Send queued emails from the EmailDeliveryLog outbox.
+
+    Meant to run on a schedule (Railway cron: ``flask --app main
+    drain-emails``). It (1) reclaims rows a crashed drainer left in
+    'sending' past ``stale_minutes``, then (2) claims 'pending' rows one at
+    a time with an atomic pending->sending flip -- so two overlapping
+    drainers can never send the same message twice -- and delivers each.
+    'sent' rows are never re-selected, making redelivery idempotent.
+    Returns a summary dict.
+    """
+    from app import db
+    from models import EmailDeliveryLog
+
+    summary = {'sent': 0, 'retried': 0, 'failed': 0, 'reclaimed': 0}
+
+    # 1. Reclaim stale claims from a crashed drainer.
+    stale_cutoff = datetime.utcnow() - timedelta(minutes=stale_minutes)
+    reclaimed = (
+        EmailDeliveryLog.query
+        .filter(EmailDeliveryLog.status == 'sending',
+                EmailDeliveryLog.updated_at.isnot(None),
+                EmailDeliveryLog.updated_at < stale_cutoff)
+        .update({'status': 'pending'}, synchronize_session=False)
+    )
+    if reclaimed:
+        db.session.commit()
+        summary['reclaimed'] = reclaimed
+
+    # 2. Snapshot the batch of pending ids up front and process each once.
+    # Snapshotting (rather than re-querying for 'pending' in a loop) means a
+    # row that fails transiently and reverts to 'pending' waits for the NEXT
+    # drain run to retry -- that inter-run gap is the backoff -- instead of
+    # being hammered through its whole attempt budget in a single run.
+    pending_ids = [
+        row.id for row in (
+            EmailDeliveryLog.query
+            .filter_by(status='pending')
+            .order_by(EmailDeliveryLog.created_at)
+            .limit(batch_limit)
+            .all()
+        )
+    ]
+
+    for log_id in pending_ids:
+        # Atomic claim: only the drainer that flips pending->sending sends it.
+        claimed = (
+            EmailDeliveryLog.query
+            .filter_by(id=log_id, status='pending')
+            .update({'status': 'sending', 'updated_at': datetime.utcnow()},
+                    synchronize_session=False)
+        )
+        db.session.commit()
+        if not claimed:
+            continue  # another drainer beat us to it; skip
+
+        outcome = _deliver_outbox_row(log_id)
+        summary[outcome] = summary.get(outcome, 0) + 1
+
+    return summary
+
+
+def start_email_drainer(app, interval_seconds=None):
+    """Start a daemon thread that periodically drains the email outbox.
+
+    This is the in-process consumer for the durable outbox: ``send_email``
+    only enqueues, so without a drainer no mail is ever sent. Unlike the old
+    per-send daemon thread, this is safe: the outbox is durable, so a drainer
+    that dies mid-send loses nothing -- the row stays ``pending``/``sending``
+    and is reclaimed on the next poll or after a restart. Under multiple
+    gunicorn workers each runs one; the atomic ``pending``->``sending`` claim
+    makes concurrent drainers safe (at the cost of some idle polling).
+
+    Mirrors ``webhooks.storage.start_background_sweeper``. Idempotent.
+    Disable knobs (either short-circuits and returns ``None``):
+      * ``EMAIL_DRAINER_ENABLED`` = ``0``/``false``/``no`` -- opt out, e.g.
+        when running ``flask --app main drain-emails`` from an external
+        Railway cron service instead.
+      * ``FLASK_ENV=test`` -- tests drive ``drain_email_outbox`` directly.
+    Interval is ``EMAIL_DRAIN_INTERVAL_SECONDS`` (default 60, floor 15).
+    """
+    global _drainer_thread
+
+    if _drainer_thread is not None and _drainer_thread.is_alive():
+        return None
+    if os.environ.get("FLASK_ENV", "").lower() == "test":
+        return None
+    if os.environ.get("EMAIL_DRAINER_ENABLED", "1").lower() in ("0", "false", "no"):
+        logger.info("In-process email drainer disabled via EMAIL_DRAINER_ENABLED")
         return None
 
+    if interval_seconds is None:
+        try:
+            interval_seconds = int(os.environ.get("EMAIL_DRAIN_INTERVAL_SECONDS", "60"))
+        except (TypeError, ValueError):
+            interval_seconds = 60
+    interval_seconds = max(15, interval_seconds)
 
-def send_email(subject, recipients, text_body, html_body=None, sender=None):
-    """
-    Send an email with the given parameters.
+    stop = threading.Event()
 
-    Args:
-        subject: The subject of the email
-        recipients: List of recipient email addresses
-        text_body: The plain text version of the email
-        html_body: The HTML version of the email (optional)
-        sender: The sender email address (optional, uses default if not provided)
-    """
-    try:
-        msg = Message(subject, recipients=recipients, sender=sender)
-        msg.body = text_body
-        if html_body:
-            msg.html = html_body
+    def _run():
+        # Sleep first so a fast restart loop doesn't hammer the DB.
+        while not stop.wait(interval_seconds):
+            try:
+                with app.app_context():
+                    summary = drain_email_outbox()
+                if summary.get("sent") or summary.get("failed") or summary.get("reclaimed"):
+                    logger.info("Email drainer: %s", summary)
+            except Exception:  # noqa: BLE001 - a daemon loop must never die on one bad cycle
+                logger.exception("Email drainer cycle failed")
 
-        # Get the underlying Flask app object (not the proxy) to pass into
-        # the worker thread. The proxy is request-bound and won't survive.
-        app = current_app._get_current_object() if hasattr(current_app, '_get_current_object') else current_app
-
-        log_id = _create_delivery_log(recipients, subject)
-        Thread(target=send_email_async, args=(app, msg, log_id), daemon=True).start()
-
-        return True
-    except (TypeError, ValueError, RuntimeError, AssertionError) as e:
-        logger.exception("Error creating email")
-        return False
+    thread = threading.Thread(target=_run, name="email-drainer", daemon=True)
+    thread.start()
+    _drainer_thread = thread
+    logger.info("In-process email drainer started (interval=%ss)", interval_seconds)
+    return thread
 
 
 def send_welcome_email(user):
