@@ -16,7 +16,9 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "flask --app main db upgrade && exec gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 --access-logfile - --error-logfile - main:app"
+# gunicorn settings (bind $PORT, gthread workers, timeouts, stdout logs) live
+# in gunicorn.conf.py so they can be tuned per plan via env without a code edit.
+startCommand = "flask --app main db upgrade && exec gunicorn -c gunicorn.conf.py main:app"
 healthcheckPath = "/"
 healthcheckTimeout = 100
 restartPolicyType = "ON_FAILURE"
