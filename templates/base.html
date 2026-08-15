@@ -256,29 +256,77 @@
                 return;
             }
 
-            let html = '';
+            // Build the list with DOM nodes and textContent rather than an
+            // innerHTML string. notification.title/message/url originate from
+            // webhook payloads, so interpolating them into innerHTML was a
+            // stored-XSS sink; textContent neutralises any markup and
+            // safeNotificationUrl() blocks javascript: hrefs.
+            notificationList.innerHTML = '';
             notifications.forEach(notification => {
                 const iconClass = getNotificationIcon(notification.type);
                 const timeAgo = timeAgoFromISO(notification.created_at);
-                
-                html += `
-                    <a href="${notification.url}" class="dropdown-item notification-item ${!notification.read ? 'unread' : ''}">
-                        <div class="d-flex">
-                            <div class="flex-shrink-0 me-2">
-                                <i class="${iconClass}"></i>
-                            </div>
-                            <div class="flex-grow-1">
-                                <div class="fw-bold notification-title">${notification.title}</div>
-                                <div class="text-muted notification-message">${notification.message}</div>
-                                <small class="text-muted">${timeAgo}</small>
-                            </div>
-                            ${!notification.read ? '<div class="flex-shrink-0"><span class="badge bg-primary">New</span></div>' : ''}
-                        </div>
-                    </a>
-                `;
+
+                const item = document.createElement('a');
+                item.className = 'dropdown-item notification-item' + (!notification.read ? ' unread' : '');
+                item.href = safeNotificationUrl(notification.url);
+
+                const row = document.createElement('div');
+                row.className = 'd-flex';
+
+                const iconWrap = document.createElement('div');
+                iconWrap.className = 'flex-shrink-0 me-2';
+                const icon = document.createElement('i');
+                icon.className = iconClass;
+                iconWrap.appendChild(icon);
+
+                const body = document.createElement('div');
+                body.className = 'flex-grow-1';
+                const titleEl = document.createElement('div');
+                titleEl.className = 'fw-bold notification-title';
+                titleEl.textContent = notification.title || '';
+                const msgEl = document.createElement('div');
+                msgEl.className = 'text-muted notification-message';
+                msgEl.textContent = notification.message || '';
+                const timeEl = document.createElement('small');
+                timeEl.className = 'text-muted';
+                timeEl.textContent = timeAgo;
+                body.append(titleEl, msgEl, timeEl);
+
+                row.append(iconWrap, body);
+
+                if (!notification.read) {
+                    const badgeWrap = document.createElement('div');
+                    badgeWrap.className = 'flex-shrink-0';
+                    const badge = document.createElement('span');
+                    badge.className = 'badge bg-primary';
+                    badge.textContent = 'New';
+                    badgeWrap.appendChild(badge);
+                    row.appendChild(badgeWrap);
+                }
+
+                item.appendChild(row);
+                notificationList.appendChild(item);
             });
-            
-            notificationList.innerHTML = html;
+        }
+
+        // A notification's click target must be a same-origin in-app link.
+        // notification.url can come from a webhook payload, so anything else --
+        // a javascript: URL (XSS), a protocol-relative //host or an external
+        // http(s) URL (open-redirect/phishing) -- collapses to a no-op.
+        function safeNotificationUrl(url) {
+            if (typeof url !== 'string' || url === '') return '#';
+            // Protocol-relative //host is external; reject before the
+            // single-slash relative-path check below.
+            if (url.startsWith('//')) return '#';
+            if (url.startsWith('/')) return url;
+            try {
+                const parsed = new URL(url, window.location.origin);
+                if ((parsed.protocol === 'http:' || parsed.protocol === 'https:')
+                    && parsed.origin === window.location.origin) {
+                    return parsed.href;
+                }
+            } catch (e) { /* malformed URL -> no-op */ }
+            return '#';
         }
 
         // Display error message

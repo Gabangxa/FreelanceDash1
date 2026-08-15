@@ -70,7 +70,7 @@ def create_client():
                 if client_count >= clients_limit:
                     flash(f'You have reached the maximum number of clients ({clients_limit}) for your current plan. '
                           f'Please upgrade your subscription to add more clients.', 'warning')
-                    return redirect(url_for('polar.index'))
+                    return redirect(url_for('subscriptions.index'))
             
             # Create new client
             client = Client(

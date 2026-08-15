@@ -105,8 +105,12 @@
                 <!-- Notification message -->
                 <div class="notification-content">
                     <h6 class="text-muted mb-3">Message:</h6>
-                    <div class="bg-light p-3 rounded">
-                        {{ notification.message|nl2br|safe }}
+                    {# Auto-escaped (message can originate from webhook payloads);
+                       pre-wrap preserves the author's line breaks without the
+                       unregistered nl2br filter, which previously 500'd this page
+                       and would have been a |safe stored-XSS sink if added. #}
+                    <div class="bg-light p-3 rounded" style="white-space: pre-wrap;">
+                        {{ notification.message }}
                     </div>
                 </div>
                 

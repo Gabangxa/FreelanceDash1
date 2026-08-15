@@ -211,7 +211,7 @@ def create_project():
             if project_count >= projects_limit:
                 flash(f'You have reached the maximum number of projects ({projects_limit}) for your current plan. '
                       f'Please upgrade your subscription to add more projects.', 'warning')
-                return redirect(url_for('polar.index'))
+                return redirect(url_for('subscriptions.index'))
             
         form.client_id.choices = [(c.id, c.name) for c in Client.query.filter_by(user_id=current_user.id)]
 
