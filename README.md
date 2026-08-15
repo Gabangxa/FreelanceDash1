@@ -99,9 +99,11 @@ The application automatically creates all necessary database tables on startup u
    ```
    python main.py
    ```
-6. For production deployment, use Gunicorn:
+6. For production deployment, bind to the platform-provided `$PORT` and run
+   migrations first. On Railway this is handled by `railway.toml`; the
+   equivalent command is:
    ```
-   gunicorn --bind 0.0.0.0:5000 --workers 4 --timeout 120 main:app
+   flask --app main db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 main:app
    ```
 
 ## Project Structure

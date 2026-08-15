@@ -17,7 +17,8 @@ except ImportError:  # pragma: no cover - very old Pillow
     class DecompressionBombError(Exception):
         pass
 from app import db
-from models import UserSettings, User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem, NotificationSettings
+from models import User, Client, Project, Task, TimeEntry, Invoice, InvoiceItem, NotificationSettings
+from polar.models import Subscription, SubscriptionLog
 from settings.forms import CompanySettingsForm, InvoiceTemplateForm, DeleteAccountForm, NotificationSettingsForm, DeadlineAlertSettingsForm
 from errors import handle_db_errors
 
@@ -811,47 +812,35 @@ def delete_account():
     
     if form.validate_on_submit():
         try:
-            # Start database transaction
             user_id = current_user.id
             username = current_user.username
-            
-            # Delete all user data in the proper order to respect foreign key constraints
-            # First, delete all invoice items
-            invoice_ids = [invoice.id for invoice in Invoice.query.join(Project).filter(Project.user_id == user_id)]
-            if invoice_ids:
-                InvoiceItem.query.filter(InvoiceItem.invoice_id.in_(invoice_ids)).delete(synchronize_session=False)
-                db.session.flush()
-            
-            # Delete invoices
-            Invoice.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Delete time entries
-            TimeEntry.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Delete tasks
-            Task.query.join(Project).filter(Project.user_id == user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Delete projects
-            Project.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Delete clients
-            Client.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Delete user settings (should cascade with user deletion, but being explicit)
-            UserSettings.query.filter_by(user_id=user_id).delete(synchronize_session=False)
-            db.session.flush()
-            
-            # Finally, delete the user
-            User.query.filter_by(id=user_id).delete(synchronize_session=False)
-            
-            # Commit all changes
+
+            # Subscription and SubscriptionLog reference user.id but declare no
+            # ORM delete cascade (unlike Client, Project, Notification,
+            # UserSettings and NotificationSettings, which the User
+            # relationships cascade). Delete them explicitly first so the
+            # User delete below does not violate their foreign keys.
+            #
+            # Delete them through the session (not a bulk Query.delete()) so
+            # that if the User.subscription backref is already loaded in this
+            # request, the identity-map object is marked deleted consistently.
+            # A bulk delete would leave the loaded instance behind, and the
+            # subsequent User delete would try to NULL its (already-gone)
+            # user_id row, raising StaleDataError and silently rolling back.
+            for sub_log in SubscriptionLog.query.filter_by(user_id=user_id).all():
+                db.session.delete(sub_log)
+            for subscription in Subscription.query.filter_by(user_id=user_id).all():
+                db.session.delete(subscription)
+
+            # Deleting the User cascades to clients, projects (and their tasks,
+            # time entries, invoices and invoice items), notifications, user
+            # settings and notification settings via the relationship cascades
+            # declared on the models. Load the concrete instance so the ORM
+            # walks those cascades (a bulk Query.delete() would not).
+            user = db.session.get(User, user_id)
+            db.session.delete(user)
             db.session.commit()
-            
+
             # Log the account deletion
             logger.info(f"User account deleted: {username} (ID: {user_id})")
             

@@ -37,6 +37,9 @@ Thumbs.db
 # Agent-local scratch / memory (Claude Code subagents) — never runtime code
 .claude/
 
+# Playwright MCP scratch (console logs from E2E runs) — never runtime code
+.playwright-mcp/
+
 # Backup files
 *.bak
 
