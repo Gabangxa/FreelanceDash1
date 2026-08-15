@@ -1,0 +1,23 @@
+# Railway deployment configuration for FreelanceDash.
+#
+# Railway does NOT read Replit's .replit file, so the production start
+# sequence lives here. The startCommand runs database migrations before
+# gunicorn begins serving, so a deploy can never bind against a stale or
+# empty schema. gunicorn imports main:app; the app binds Railway's injected
+# $PORT (main.py itself never runs under gunicorn).
+#
+# Required environment variables (set in the Railway service, see .env.example):
+#   FLASK_SECRET_KEY, DATABASE_URL, APP_URL, MAIL_* , GOOGLE_OAUTH_*,
+#   POLAR_API_KEY, POLAR_WEBHOOK_SECRET, POLAR_PROFESSIONAL_*_PRICE_ID.
+# Do NOT set FLASK_ENV=development in production (it re-enables debug on the
+# `python main.py` entrypoint).
+
+[build]
+builder = "nixpacks"
+
+[deploy]
+startCommand = "flask --app main db upgrade && exec gunicorn --bind 0.0.0.0:$PORT --workers 4 --timeout 120 --access-logfile - --error-logfile - main:app"
+healthcheckPath = "/"
+healthcheckTimeout = 100
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
