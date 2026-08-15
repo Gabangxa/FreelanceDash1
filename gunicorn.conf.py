@@ -23,8 +23,9 @@ def _int_env(name, default):
 bind = f"0.0.0.0:{os.environ.get('PORT', '5000')}"
 
 # Default to a small, memory-bounded fleet; gthread handles concurrency via
-# threads rather than many process copies. WEB_CONCURRENCY (Railway's
-# convention) or GUNICORN_WORKERS override it.
+# threads rather than many process copies. Override with WEB_CONCURRENCY (a
+# common PaaS convention; Railway does not auto-inject it, unlike $PORT) or
+# GUNICORN_WORKERS -- set one explicitly to scale.
 workers = (
     _int_env("WEB_CONCURRENCY", 0)
     or _int_env("GUNICORN_WORKERS", 0)
