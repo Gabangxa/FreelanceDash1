@@ -4,6 +4,7 @@ signature verification, and authentication
 """
 import hmac
 import hashlib
+import os
 import time
 import json
 import logging
@@ -145,16 +146,31 @@ class WebhookSecurity:
     def verify_signature(source, payload, headers):
         """Enhanced signature verification with better error handling"""
         try:
-            # Get webhook secret from environment
-            secret_key = current_app.config.get(f'WEBHOOK_{source.upper()}_SECRET')
-            
+            # Read the secret straight from the environment. It was
+            # previously read from ``current_app.config``, but nothing ever
+            # loaded ``WEBHOOK_*_SECRET`` into config, so the lookup always
+            # returned None and signature verification was silently skipped
+            # for every source.
+            secret_key = os.environ.get(f'WEBHOOK_{source.upper()}_SECRET')
+
             if not secret_key:
-                # In production, require secrets for known services
-                if current_app.config.get('ENV') == 'production' and source in ['github', 'stripe']:
-                    raise WebhookSecurityError(f"Webhook secret required for {source} in production")
-                
-                logger.info(f"No webhook secret configured for {source}, skipping signature verification")
-                return True
+                # A webhook source is authenticated by EITHER a matching IP
+                # allowlist OR a valid signature. Sources we ship an IP
+                # allowlist for (github, stripe) may run without a secret,
+                # relying on that allowlist -- which require_webhook_security
+                # already enforced via validate_ip_allowlist BEFORE this
+                # signature step. Any other source -- notably 'custom', which
+                # has no allowlist and would otherwise be fully
+                # unauthenticated -- must be signed, so refuse the request
+                # when its secret is absent instead of trusting it.
+                if source in ip_ranges.FALLBACK_RANGES:
+                    logger.info(
+                        "No webhook secret for %s; relying on IP allowlist", source
+                    )
+                    return True
+                raise WebhookSecurityError(
+                    f"Webhook secret required for source '{source}'", 401
+                )
             
             # GitHub signature verification
             if source == 'github':
