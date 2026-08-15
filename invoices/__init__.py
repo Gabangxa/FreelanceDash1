@@ -15,8 +15,8 @@ the worker pool. Each render holds ~10-30 MB peak, so 2 in flight per
 worker stays well inside the container budget.
 
 The executor is created **lazily** on first use so it never spins up
-threads in environments that never render PDFs (the test suite, the
-NATS subscriber processes, ad-hoc ``flask shell`` sessions). It is
+threads in environments that never render PDFs (the test suite,
+ad-hoc ``flask shell`` sessions). It is
 shut down at process exit via ``atexit`` so workers can drain in-flight
 renders cleanly on SIGTERM instead of orphaning them.
 """

@@ -23,5 +23,4 @@ dependencies = [
     "pytest>=9.0.3",
     "redis>=5.0.0",
     "oauthlib>=3.3.1",
-    "nats-py>=2.14.0",
 ]

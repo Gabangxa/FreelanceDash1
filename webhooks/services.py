@@ -224,48 +224,7 @@ class WebhookProcessor:
             logger.exception("Error processing generic webhook")
             return False
     
-    # NOTE: ``notification.created`` is published automatically by the
-    # SQLAlchemy after_commit listener registered in ``models.py`` for
-    # every committed ``Notification`` row, so we no longer call
-    # ``events.publish`` from here. We DO still consult the per-id
-    # publish result that the listener leaves on ``session.info`` to
-    # decide between handing delivery off to the bus subscriber and
-    # falling back to inline delivery -- see the cutover logic below.
-    # See ``docs/nats.md`` for the full invariant.
-    @staticmethod
-    def _subscriber_owns_delivery() -> bool:
-        """Phase 1 cutover flag. When true AND the bus is healthy, the
-        web tier skips inline ``deliver_notification`` calls because
-        the subscriber on the Reserved VM will pick the event off the
-        bus and deliver it. See ``subscribers/notifications.py`` and
-        ``docs/nats.md`` for the full cutover sequence.
-
-        Safety interlock: returns False unless JetStream-persisted
-        publish is healthy. Without persistence, a published event
-        only reaches the worker if the worker happens to be online at
-        that exact moment -- and a misconfigured cutover (web flag on,
-        bus down) would silently drop notifications. The interlock
-        forces the inline fallback in that case so we degrade to "slow
-        but reliable" instead of "fast but lossy".
-
-        This does NOT protect against (web flag on + bus healthy +
-        worker process not running). That's a deployment-coordination
-        failure that needs operator-side monitoring (alert on
-        consumer pending count). Documented in docs/nats.md.
-        """
-        import os
-        flag = os.environ.get(
-            "NATS_SUBSCRIBER_DELIVERS_NOTIFICATIONS", ""
-        ).lower() in ("1", "true", "yes")
-        if not flag:
-            return False
-        try:
-            import nats_client
-            return bool(getattr(nats_client, "_jetstream_publish_enabled", False))
-        except Exception:  # noqa: BLE001 - defensive; degrade to inline
-            return False
-
-    def _create_user_notification(self, user_id: int, title: str, message: str, 
+    def _create_user_notification(self, user_id: int, title: str, message: str,
                                 webhook_event: WebhookEvent, notification_type: str = 'webhook',
                                 priority: str = 'normal', action_url: Optional[str] = None) -> bool:
         """Create a notification for a specific user"""
@@ -295,37 +254,11 @@ class WebhookProcessor:
             db.session.add(notification)
             db.session.commit()
 
-            # The after_commit listener in models.py just published
-            # ``notification.created`` for this row and stashed the
-            # per-id success bool on ``session.info``. Look it up so we
-            # can fall back to inline delivery when the publish failed
-            # (publish returns False if JetStream-persisted publish was
-            # unavailable at runtime, in which case the worker won't
-            # see this message).
-            published_ok = db.session.info.get(
-                "_published_notif", {}
-            ).get(notification.id, False)
-
-            # Cutover decision: subscriber owns delivery only when
-            # (a) the operator has flipped the flag, (b) the bus is
-            # healthy at startup, AND (c) THIS specific publish
-            # actually landed in JetStream. Otherwise inline-deliver.
-            if self._subscriber_owns_delivery() and published_ok:
-                logger.info(
-                    f"Created notification {notification.id} for user {user_id}; "
-                    "delivery handed off to the bus subscriber (cutover flag on)."
-                )
-            else:
-                if self._subscriber_owns_delivery() and not published_ok:
-                    # Cutover wanted to hand off but the publish
-                    # failed -- log loudly so the operator sees it.
-                    logger.warning(
-                        f"Cutover ON but bus publish failed for notification "
-                        f"{notification.id}; falling back to inline delivery."
-                    )
-                from notifications.services import NotificationDeliveryService
-                delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
-                logger.info(f"Created notification {notification.id} for user {user_id}. Delivery: {delivery_result}")
+            # Deliver inline -- notifications are always delivered
+            # synchronously in the same request/process that created them.
+            from notifications.services import NotificationDeliveryService
+            delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
+            logger.info(f"Created notification {notification.id} for user {user_id}. Delivery: {delivery_result}")
             return True
             
         except SQLAlchemyError as e:
@@ -378,41 +311,20 @@ class WebhookProcessor:
             db.session.commit()
             notifications_created = len(new_notifications)
             
-            # Deliver notifications for all users who have them
+            # Deliver notifications for all users who have them. Always
+            # inline -- notifications are delivered synchronously in the
+            # same request/process that created them.
             from notifications.services import NotificationDeliveryService
             delivered_count = 0
-            
-            # Get the notifications we just created for delivery.
-            # ``notification.created`` was already published per-row by
-            # the after_commit listener in models.py -- no manual
-            # publish loop needed here.
+
             recent_notifications = Notification.query.filter_by(webhook_event_id=webhook_event.id).all()
 
-            # System-broadcast cutover. We can't capture per-message
-            # publish() results here because the publishes happened
-            # individually inside the per-user loop above. Instead use
-            # the global flag (which already includes the
-            # _jetstream_publish_enabled startup interlock). If the
-            # bus degrades partway through this loop, those
-            # specific notifications will be missed by the worker --
-            # accepted trade-off for system broadcasts, which are
-            # operationally less critical than per-user webhook
-            # notifications. See docs/nats.md "system broadcast"
-            # section.
-            if self._subscriber_owns_delivery():
-                logger.info(
-                    f"Created {notifications_created} system notifications; "
-                    "delivery handed off to the bus subscriber (cutover flag on). "
-                    "Note: per-message publish failures during system broadcast "
-                    "are not retried inline."
-                )
-            else:
-                for notification in recent_notifications:
-                    delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
-                    if any(r.get('status') == 'success' for r in delivery_result.values() if isinstance(r, dict)):
-                        delivered_count += 1
+            for notification in recent_notifications:
+                delivery_result = NotificationDeliveryService.deliver_notification(notification.id)
+                if any(r.get('status') == 'success' for r in delivery_result.values() if isinstance(r, dict)):
+                    delivered_count += 1
 
-                logger.info(f"Created {notifications_created} system notifications, delivered {delivered_count}")
+            logger.info(f"Created {notifications_created} system notifications, delivered {delivered_count}")
             return True
             
         except SQLAlchemyError as e:

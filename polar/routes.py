@@ -38,7 +38,7 @@ bp = Blueprint("subscriptions", __name__, url_prefix="/subscriptions")
 PROFESSIONAL_TIER_ID = "professional"
 
 # Keys recording every accepted Polar ``webhook-id`` live in the shared
-# webhook storage cache (NATS KV > Redis > DB). The TTL must comfortably
+# webhook storage cache (Redis > DB). The TTL must comfortably
 # exceed the signature replay tolerance so a re-delivered (or replayed)
 # signed request is still remembered as a duplicate for as long as it
 # could possibly pass signature verification. We use 2x the tolerance to
