@@ -646,6 +646,19 @@ def create_time_entry():
                 flash('Duration must be a positive number', 'danger')
                 return redirect(url_for('projects.view_project', id=project.id))
             duration = duration_input
+            # Store an end_time too so the entry is complete everywhere
+            # end_time is read. A posted start_time anchors the entry; the
+            # timer form posts none, and its minutes have just elapsed.
+            try:
+                if start_time_str:
+                    end_time = start_time + timedelta(minutes=duration)
+                else:
+                    end_time = datetime.utcnow()
+                    start_time = end_time - timedelta(minutes=duration)
+            except OverflowError:
+                proj_logger.warning(f"Duration out of range: {duration_input}")
+                flash('Duration is too large', 'danger')
+                return redirect(url_for('projects.view_project', id=project.id))
         # If neither end_time nor duration is provided
         else:
             proj_logger.warning("Neither end_time nor duration provided")
@@ -744,10 +757,19 @@ def edit_time_entry(id):
                     duration = time_entry.duration
                 
                 # Update time entry
+                end_time = form.end_time.data
+                if not end_time and form.start_time.data and duration:
+                    # Keep duration-only entries complete (see create_time_entry).
+                    try:
+                        end_time = form.start_time.data + timedelta(minutes=duration)
+                    except OverflowError:
+                        flash('Start time and duration run past the supported date range', 'danger')
+                        return render_template('projects/edit_time_entry.html', form=form, time_entry=time_entry, csrf_form=EmptyForm())
+
                 time_entry.project_id = form.project_id.data
                 time_entry.task_id = form.task_id.data if form.task_id.data > 0 else None
                 time_entry.start_time = form.start_time.data
-                time_entry.end_time = form.end_time.data
+                time_entry.end_time = end_time
                 time_entry.duration = duration
                 time_entry.description = form.description.data
                 time_entry.billable = form.billable.data

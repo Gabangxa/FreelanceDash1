@@ -51,7 +51,7 @@ class TimeEntryForm(FlaskForm):
     project_id = SelectField('Project', coerce=int, validators=[DataRequired()])
     task_id = SelectField('Task', coerce=int)
     start_time = DateTimeField('Start Time', validators=[DataRequired()], format='%Y-%m-%d %H:%M')
-    end_time = DateTimeField('End Time', format='%Y-%m-%d %H:%M')
+    end_time = DateTimeField('End Time', validators=[Optional()], format='%Y-%m-%d %H:%M')
     description = TextAreaField('Description')
     billable = BooleanField('Billable', default=True)
     submit = SubmitField('Record Time')
