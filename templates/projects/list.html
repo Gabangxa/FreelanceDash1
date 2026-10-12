@@ -42,23 +42,24 @@
     </div>
 </div>
 
-<!-- Quick Filter Tabs -->
-<div class="mb-4">
-    <ul class="nav nav-pills nav-fill bg-light rounded p-1 project-filter-tabs" id="project-filter-tabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="all-tab" data-bs-toggle="pill" data-bs-target="#all-projects" type="button" role="tab">
+<!-- Quick filter: client-side, same idiom as the invoices list. These are
+     toggle buttons, not Bootstrap tabs -- there is one list, no tab panes. -->
+<div class="mb-4" id="project-filter" role="group" aria-label="Filter projects by status">
+    <ul class="nav nav-pills nav-fill bg-light rounded p-1 project-filter-tabs">
+        <li class="nav-item">
+            <button class="nav-link active" type="button" data-filter="all" aria-pressed="true">
                 <i class="fas fa-list me-1"></i>All Projects
                 <span class="badge bg-secondary ms-1">{{ projects|length }}</span>
             </button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="active-tab" data-bs-toggle="pill" data-bs-target="#active-projects" type="button" role="tab">
+        <li class="nav-item">
+            <button class="nav-link" type="button" data-filter="active" aria-pressed="false">
                 <i class="fas fa-play-circle me-1"></i>Active
                 <span class="badge bg-success ms-1">{{ projects|selectattr('status', 'equalto', 'active')|list|length }}</span>
             </button>
         </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="completed-tab" data-bs-toggle="pill" data-bs-target="#completed-projects" type="button" role="tab">
+        <li class="nav-item">
+            <button class="nav-link" type="button" data-filter="completed" aria-pressed="false">
                 <i class="fas fa-check-circle me-1"></i>Completed
                 <span class="badge bg-info ms-1">{{ projects|selectattr('status', 'equalto', 'completed')|list|length }}</span>
             </button>
@@ -70,7 +71,7 @@
 <div class="card">
     <div class="card-body p-0">
         {% for project in projects %}
-        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card text-decoration-none list-item-flush {% if loop.first %}list-item-flush-mid{% endif %}">
+        <a href="{{ url_for('projects.view_project', id=project.id) }}" class="list-item-card project-item text-decoration-none list-item-flush {% if loop.first %}list-item-flush-mid{% endif %}" data-status="{{ project.status }}">
             <div class="item-icon item-icon-bg-project">
                 <i class="fas fa-folder text-primary"></i>
             </div>
@@ -100,6 +101,14 @@
             </div>
         </a>
         {% endfor %}
+
+        <div id="projects-no-results" class="text-center py-5 d-none" role="status">
+            <i class="fas fa-search fa-3x text-muted mb-3"></i>
+            <h5>No projects match this filter</h5>
+            <button type="button" class="quick-action-btn secondary" id="projects-show-all">
+                <i class="fas fa-list"></i>Show All Projects
+            </button>
+        </div>
     </div>
 </div>
 {% else %}
@@ -118,4 +127,38 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+document.addEventListener('DOMContentLoaded', function() {
+    const filterButtons = document.querySelectorAll('#project-filter [data-filter]');
+    const showAllButton = document.getElementById('projects-show-all');
+    const projectRows = document.querySelectorAll('.project-item');
+    const noResults = document.getElementById('projects-no-results');
+
+    function applyFilter(filter) {
+        let visibleRows = 0;
+        projectRows.forEach(row => {
+            const matches = filter === 'all' || row.dataset.status === filter;
+            row.classList.toggle('d-none', !matches);
+            if (matches) visibleRows++;
+        });
+
+        filterButtons.forEach(button => {
+            const selected = button.dataset.filter === filter;
+            button.classList.toggle('active', selected);
+            button.setAttribute('aria-pressed', selected ? 'true' : 'false');
+        });
+
+        if (noResults) noResults.classList.toggle('d-none', visibleRows > 0);
+    }
+
+    // Native <button>s already handle Enter/Space, so no keypress handlers.
+    filterButtons.forEach(button => {
+        button.addEventListener('click', () => applyFilter(button.dataset.filter));
+    });
+    if (showAllButton) showAllButton.addEventListener('click', () => applyFilter('all'));
+});
+</script>
 {% endblock %}

@@ -2,7 +2,7 @@ import os
 import logging
 import time
 from datetime import datetime, timedelta
-from flask import Flask, render_template, request, g, session, flash, redirect, url_for
+from flask import Flask, render_template, request, g, session, flash, redirect, url_for, has_request_context
 from flask_sqlalchemy import SQLAlchemy
 from flask_migrate import Migrate
 from flask_login import LoginManager, current_user
@@ -14,6 +14,7 @@ from errors import setup_logging, register_error_handlers, register_user_friendl
 from performance import PerformanceMonitor
 import mail
 import asset_bundler
+from utils.nav import nav_section
 from pathlib import Path
 from dotenv import load_dotenv
 import jinja2
@@ -211,7 +212,10 @@ def inject_common_variables():
         'current_year': datetime.now().year,
         # Per-request CSP nonce. Templates emit `nonce="{{ csp_nonce }}"` on
         # inline <script> tags so they execute under the strict script-src.
-        'csp_nonce': getattr(g, 'csp_nonce', '')
+        'csp_nonce': getattr(g, 'csp_nonce', ''),
+        # render_template can run with only an app context (CLI commands,
+        # background jobs), where reading request.endpoint would raise.
+        'active_nav': nav_section(request.endpoint) if has_request_context() else None,
     }
 
 
