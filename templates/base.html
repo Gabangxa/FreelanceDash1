@@ -30,7 +30,7 @@
 </head>
 <body class="{% if current_user.is_authenticated %}lp-app{% endif %}">
     {% if current_user.is_authenticated %}
-    <nav class="navbar navbar-expand-lg lp-app-nav">
+    <nav class="navbar navbar-expand-lg lp-app-nav" aria-label="Main">
         <div class="container">
             <a class="navbar-brand fw-bold" href="{{ url_for('projects.dashboard') }}">
                 SoloDolo.
@@ -41,40 +41,33 @@
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav me-auto">
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if request.endpoint == 'projects.dashboard' else '' }}" href="{{ url_for('projects.dashboard') }}">
+                        <a class="nav-link {{ 'active' if active_nav == 'dashboard' else '' }}" href="{{ url_for('projects.dashboard') }}"{% if active_nav == 'dashboard' %} aria-current="page"{% endif %}>
                             <i class="fas fa-chart-line me-1"></i>Dashboard
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if 'projects' in request.endpoint else '' }}" href="{{ url_for('projects.list_projects') }}">
+                        <a class="nav-link {{ 'active' if active_nav == 'projects' else '' }}" href="{{ url_for('projects.list_projects') }}"{% if active_nav == 'projects' %} aria-current="page"{% endif %}>
                             <i class="fas fa-project-diagram me-1"></i>Projects
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if 'clients' in request.endpoint else '' }}" href="{{ url_for('clients.list_clients') }}">
+                        <a class="nav-link {{ 'active' if active_nav == 'clients' else '' }}" href="{{ url_for('clients.list_clients') }}"{% if active_nav == 'clients' %} aria-current="page"{% endif %}>
                             <i class="fas fa-users me-1"></i>Clients
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if 'invoices' in request.endpoint else '' }}" href="{{ url_for('invoices.list_invoices') }}">
+                        <a class="nav-link {{ 'active' if active_nav == 'invoices' else '' }}" href="{{ url_for('invoices.list_invoices') }}"{% if active_nav == 'invoices' %} aria-current="page"{% endif %}>
                             <i class="fas fa-file-invoice-dollar me-1"></i>Invoices
                         </a>
                     </li>
-                    <li class="nav-item dropdown">
-                        <a class="nav-link dropdown-toggle {{ 'active' if 'time' in request.endpoint else '' }}" href="#" id="timeDropdown" role="button" data-bs-toggle="dropdown">
-                            <i class="fas fa-clock me-1"></i>Time Tracking
+                    <li class="nav-item">
+                        <a class="nav-link {{ 'active' if active_nav == 'time' else '' }}" href="{{ url_for('projects.batch_time_entries') }}"{% if active_nav == 'time' %} aria-current="page"{% endif %}>
+                            <i class="fas fa-clock me-1"></i>Time
                         </a>
-                        <ul class="dropdown-menu">
-                            <li>
-                                <a class="dropdown-item" href="{{ url_for('projects.time_entry_statistics') }}">
-                                    <i class="fas fa-chart-bar me-2"></i>Time Statistics
-                                </a>
-                            </li>
-                        </ul>
                     </li>
                     {% if current_user.is_admin %}
                     <li class="nav-item">
-                        <a class="nav-link {{ 'active' if 'admin' in request.endpoint else '' }}" href="{{ url_for('admin.dashboard') }}">
+                        <a class="nav-link {{ 'active' if active_nav == 'admin' else '' }}" href="{{ url_for('admin.dashboard') }}"{% if active_nav == 'admin' %} aria-current="page"{% endif %}>
                             <i class="fas fa-shield-alt me-1"></i>Admin
                         </a>
                     </li>
