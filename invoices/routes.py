@@ -413,11 +413,12 @@ def invoice_from_time_entries():
         project_choices += [(p.id, p.name) for p in projects]
     form.project_id.choices = project_choices
 
-    # Load the unbilled, completed time entries for the chosen project.
-    # Only entries with end_time set (no running timers), billable=True,
-    # and not already rolled into an invoice (Task #28: ``invoiced_at``
-    # stays NULL until the entry is invoiced; the v1 flow that flipped
-    # ``billable`` to FALSE is no longer in use).
+    # Load the unbilled time entries for the chosen project: billable=True
+    # with a positive duration (billing uses duration only; the timer runs in
+    # the browser, so a stored entry is never "still running" and duration-only
+    # entries may have no end_time), and not already rolled into an invoice
+    # (Task #28: ``invoiced_at`` stays NULL until the entry is invoiced; the
+    # v1 flow that flipped ``billable`` to FALSE is no longer in use).
     entries = []
     if selected_project_id:
         entries = (
@@ -428,7 +429,7 @@ def invoice_from_time_entries():
                 Project.user_id == current_user.id,
                 TimeEntry.billable.is_(True),
                 TimeEntry.invoiced_at.is_(None),
-                TimeEntry.end_time.isnot(None),
+                TimeEntry.duration > 0,
             )
             .order_by(TimeEntry.start_time.asc())
             .all()
@@ -463,6 +464,8 @@ def invoice_from_time_entries():
                 selected_project_id=selected_project_id,
             )
 
+        # duration > 0 means every line item below has positive hours; the
+        # total_hours check further down stays as a backstop.
         chosen_entries = (
             TimeEntry.query
             .join(Project, TimeEntry.project_id == Project.id)
@@ -472,7 +475,7 @@ def invoice_from_time_entries():
                 Project.user_id == current_user.id,
                 TimeEntry.billable.is_(True),
                 TimeEntry.invoiced_at.is_(None),
-                TimeEntry.end_time.isnot(None),
+                TimeEntry.duration > 0,
             )
             .all()
         )
@@ -521,25 +524,6 @@ def invoice_from_time_entries():
             )
             db.session.add(invoice)
             db.session.flush()
-
-            # Reject the whole submission if any selected entry has
-            # zero/negative duration so the flash message and billed-flag
-            # mutations always match the user's selection exactly (one
-            # InvoiceItem per selected entry, no silent skips).
-            zero_duration = [e for e in chosen_entries
-                             if _format_minutes_as_hours(e.duration or 0) <= 0]
-            if zero_duration:
-                db.session.rollback()
-                flash(
-                    'One or more selected entries have zero duration. '
-                    'Edit or deselect them and try again.',
-                    'danger',
-                )
-                return render_template(
-                    'from_time_entries.html', form=form, entries=entries,
-                    selected_client_id=selected_client_id,
-                    selected_project_id=selected_project_id,
-                )
 
             total_amount = Decimal('0')
             total_hours = Decimal('0')
