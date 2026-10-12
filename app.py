@@ -292,15 +292,18 @@ def add_security_headers_and_log_timing(response):
     # Add Referrer Policy
     response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
     
-    # Add Feature Policy (now called Permissions Policy) to limit features
-    feature_policies = [
-        "geolocation 'none'",
-        "microphone 'none'",
-        "camera 'none'",
-        "payment 'none'",
-        "usb 'none'"
+    # Permissions-Policy is a structured header: `feature=()` denies the
+    # feature to every origin. The legacy Feature-Policy form
+    # ("geolocation 'none'") fails to parse, and browsers then ignore the
+    # whole header, so none of these restrictions would apply.
+    permissions_policy = [
+        "geolocation=()",
+        "microphone=()",
+        "camera=()",
+        "payment=()",
+        "usb=()",
     ]
-    response.headers['Permissions-Policy'] = ", ".join(feature_policies)
+    response.headers['Permissions-Policy'] = ", ".join(permissions_policy)
     
     # Session security - ensure sessions are marked as permanent to apply lifetime
     if current_user.is_authenticated and request.endpoint != 'static':
